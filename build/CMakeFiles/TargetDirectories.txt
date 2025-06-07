@@ -1,3 +1,0 @@
-/mnt/c/Users/Макс/cpp-backend/sprint1/problems/final_task/solution/build/CMakeFiles/game_server.dir
-/mnt/c/Users/Макс/cpp-backend/sprint1/problems/final_task/solution/build/CMakeFiles/edit_cache.dir
-/mnt/c/Users/Макс/cpp-backend/sprint1/problems/final_task/solution/build/CMakeFiles/rebuild_cache.dir
