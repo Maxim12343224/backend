@@ -44,8 +44,8 @@ namespace http_server {
     }
 
     void Session::Close() {
-        beast::error_code ec;
-        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+        
+        stream_.socket().shutdown(tcp::socket::shutdown_send);
     }
 
     void ReportError(beast::error_code ec, std::string_view what) {
