@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# 1. Переходим в корень проекта
+cd /c/backend || exit
+
+# 2. Добавляем только нужные файлы
+git add sprint1/problems/cafeteria/solution
+
+# 3. Проверяем .gitignore
+if ! grep -q "build/" .gitignore; then
+    echo "build/" >> .gitignore
+fi
+if ! grep -q "bin/" .gitignore; then
+    echo "bin/" >> .gitignore
+fi
+git add .gitignore
+
+# 4. Фиксируем изменения
+git commit -m "Тестирование решения cafeteria"
+
+# 5. Отправляем на GitHub
+git push origin main
+
+echo "✅ Код отправлен на тестирование!"
+echo "Проверяйте результаты здесь:"
+echo "https://github.com/Maxim12343224/backend/actions"

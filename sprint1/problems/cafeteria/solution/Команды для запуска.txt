@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Переходим в папку сборки
+cd /mnt/c/backend/sprint1/problems/cafeteria/solution/build
+
+# Проверяем существование исполняемого файла
+if [ -f "./bin/cafeteria" ]; then
+    echo "Запускаем программу..."
+    ./bin/cafeteria
+else
+    echo "Ошибка: исполняемый файл не найден."
+    echo "Сначала соберите проект командой:"
+    echo "cd /mnt/c/backend/sprint1/problems/cafeteria/solution/build && cmake --build . --config Release"
+fi
