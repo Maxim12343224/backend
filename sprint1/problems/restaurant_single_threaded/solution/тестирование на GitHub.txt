@@ -4,7 +4,7 @@
 cd /c/backend || exit
 
 # 2. Добавляем только нужные файлы
-git add sprint1/problems/sync_server/solution
+git add sprint1/problems/restaurant_single_threaded/solution
 
 # 3. Проверяем .gitignore
 if ! grep -q "build/" .gitignore; then
@@ -16,7 +16,7 @@ fi
 git add .gitignore
 
 # 4. Фиксируем изменения
-git commit -m "Тестирование решения sync_server"
+git commit -m "Тестирование решения restaurant_single_threaded"
 
 # 5. Отправляем на GitHub
 git push origin main
