@@ -1,0 +1,19 @@
+# 1. Перейти в папку проекта
+cd /mnt/c/backend/sprint1/problems/sync_server/solution
+
+# 2. Очистить предыдущие сборки
+rm -rf build
+rm -f seabattle_game
+
+# 3. Создать папку сборки
+mkdir build
+cd build
+
+# 4. Установить зависимости
+conan install .. --build=missing
+
+# 5. Настроить проект
+cmake .. -DCMAKE_BUILD_TYPE=Release
+
+# 6. Собрать проект
+cmake --build . --config Release

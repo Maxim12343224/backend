@@ -1,0 +1,46 @@
+#!/bin/bash
+
+# Переходим в директорию с бинарником сервера
+cd /mnt/c/backend/sprint1/problems/sync_server/solution/build/bin
+
+# Запускаем сервер в фоне
+echo "Запуск сервера..."
+./hello > server.log 2>&1 &
+SERVER_PID=$!
+
+# Ждем, пока сервер напишет в лог сообщение о старте
+echo -n "Ожидание старта сервера"
+while ! grep -q "Server has started..." server.log; do
+    echo -n "."
+    sleep 0.1
+    if ! ps -p $SERVER_PID > /dev/null; then
+        echo -e "\nОшибка: Сервер завершился преждевременно"
+        cat server.log
+        exit 1
+    fi
+done
+echo -e "\nСервер запущен (PID: $SERVER_PID)"
+
+# Выполняем тесты
+echo -e "\n=== Тест 1: GET запрос на /Ivan ==="
+curl -v "http://localhost:8080/Ivan"
+
+echo -e "\n\n=== Тест 2: HEAD запрос на /Ivan ==="
+curl -I "http://localhost:8080/Ivan"
+
+echo -e "\n\n=== Тест 3: POST запрос на /Ivan ==="
+curl -X POST "http://localhost:8080/Ivan" -v
+
+echo -e "\n\n=== Тест 4: GET запрос на корень / ==="
+curl -v "http://localhost:8080/"
+
+echo -e "\n\n=== Тест 5: GET запрос с пустым target ==="
+curl -v "http://localhost:8080"
+
+# Останавливаем сервер
+echo -e "\nОстановка сервера..."
+kill $SERVER_PID
+wait $SERVER_PID 2>/dev/null
+rm server.log
+
+echo -e "\nТестирование завершено!"
