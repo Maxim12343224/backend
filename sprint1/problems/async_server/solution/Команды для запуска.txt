@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Переходим в папку сборки
+cd /mnt/c/backend/sprint1/problems/async_server/solution/build
+
+./bin/hello_async
+
+curl -v http://localhost:8080/World
+
+
+curl -I http://localhost:8080/World
+
+curl -X POST -v http://localhost:8080/World

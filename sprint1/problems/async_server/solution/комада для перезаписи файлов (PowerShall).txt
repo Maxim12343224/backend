@@ -1,0 +1,24 @@
+# Установим путь к папке
+$sourcePath = "C:\backend\sprint1\problems\async_server\solution\src"
+$outputFile = Join-Path $sourcePath "Exp.txt"
+
+# Удалим старый Exp.txt, если он есть
+if (Test-Path $outputFile) {
+    Remove-Item $outputFile
+}
+
+# Получим все файлы в папке и отфильтруем по расширению
+$files = Get-ChildItem -Path $sourcePath -File | Where-Object { $_.Extension -in ".cpp", ".h" }
+
+# Если найдены файлы
+if ($files.Count -eq 0) {
+    Write-Output "Нет файлов с расширениями .cpp и .h в $sourcePath"
+} else {
+    foreach ($file in $files) {
+        Add-Content -Path $outputFile -Value "===== $($file.Name) ====="
+        Add-Content -Path $outputFile -Value (Get-Content -Path $file.FullName -Raw)
+        Add-Content -Path $outputFile -Value "`n"
+    }
+
+    Write-Output "Готово! Все данные записаны в $outputFile"
+}
