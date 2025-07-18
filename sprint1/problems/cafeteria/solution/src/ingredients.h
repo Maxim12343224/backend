@@ -1,6 +1,7 @@
 #pragma once
 #include <functional>
 #include <optional>
+#include <atomic>
 
 #include "clock.h"
 #include "gascooker.h"
@@ -116,13 +117,14 @@ private:
 class Store {
 public:
     std::shared_ptr<Bread> GetBread() {
-        return std::make_shared<Bread>(++next_id_);
+        return std::make_shared<Bread>(++next_bread_id_);
     }
 
     std::shared_ptr<Sausage> GetSausage() {
-        return std::make_shared<Sausage>(++next_id_);
+        return std::make_shared<Sausage>(++next_sausage_id_);
     }
 
 private:
-    int next_id_ = 0;
+    std::atomic<int> next_bread_id_{ 0 };
+    std::atomic<int> next_sausage_id_{ 0 };
 };
