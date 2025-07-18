@@ -38,9 +38,9 @@ endmacro()
 #################
 ###  BOOST
 #################
-set(CONAN_BOOST_ROOT "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978")
-set(CONAN_INCLUDE_DIRS_BOOST "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/include")
-set(CONAN_LIB_DIRS_BOOST "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib")
+set(CONAN_BOOST_ROOT "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2")
+set(CONAN_INCLUDE_DIRS_BOOST "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include")
+set(CONAN_LIB_DIRS_BOOST "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/lib")
 set(CONAN_BIN_DIRS_BOOST )
 set(CONAN_RES_DIRS_BOOST )
 set(CONAN_SRC_DIRS_BOOST )
@@ -202,7 +202,7 @@ set(CONAN_SETTINGS_ARCH "x86_64")
 set(CONAN_SETTINGS_ARCH_BUILD "x86_64")
 set(CONAN_SETTINGS_BUILD_TYPE "Release")
 set(CONAN_SETTINGS_COMPILER "gcc")
-set(CONAN_SETTINGS_COMPILER_LIBCXX "libstdc++11")
+set(CONAN_SETTINGS_COMPILER_LIBCXX "libstdc++")
 set(CONAN_SETTINGS_COMPILER_VERSION "11")
 set(CONAN_SETTINGS_OS "Linux")
 set(CONAN_SETTINGS_OS_BUILD "Linux")
@@ -215,11 +215,11 @@ set(CONAN_CMD_SHARED_LINKER_FLAGS ${CONAN_SHARED_LINKER_FLAGS})
 set(CONAN_CMD_C_FLAGS ${CONAN_C_FLAGS})
 # Defining accumulated conan variables for all deps
 
-set(CONAN_INCLUDE_DIRS "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/include"
+set(CONAN_INCLUDE_DIRS "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include"
 			"/home/mkdir/.conan/data/zlib/1.3.1/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/include"
 			"/home/mkdir/.conan/data/bzip2/1.0.8/_/_/package/c32092bf4d4bb47cf962af898e02823f499b017e/include"
 			"/home/mkdir/.conan/data/libbacktrace/cci.20210118/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/include" ${CONAN_INCLUDE_DIRS})
-set(CONAN_LIB_DIRS "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib"
+set(CONAN_LIB_DIRS "/home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/lib"
 			"/home/mkdir/.conan/data/zlib/1.3.1/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib"
 			"/home/mkdir/.conan/data/bzip2/1.0.8/_/_/package/c32092bf4d4bb47cf962af898e02823f499b017e/lib"
 			"/home/mkdir/.conan/data/libbacktrace/cci.20210118/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib" ${CONAN_LIB_DIRS})
