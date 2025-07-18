@@ -9,15 +9,16 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
-#include <chrono>
+#include <chrono> // Добавлено
+#include <thread> // Добавлено
 
 #include "hotdog.h"
 #include "result.h"
 
-using namespace std::chrono_literals; // Добавьте эту строку
-
 namespace net = boost::asio;
 namespace sys = boost::system;
+
+using namespace std::chrono_literals; // Добавлено для поддержки литералов времени
 
 using HotDogHandler = std::function<void(Result<HotDog> hot_dog)>;
 
@@ -48,7 +49,7 @@ public:
             std::exception_ptr error;
         };
 
-        int hot_dog_id = next_hotdog_id_.fetch_add(1, std::memory_order_relaxed);
+        int hot_dog_id = next_hotdog_id_++;
         auto bread = store_.GetBread();
         auto sausage = store_.GetSausage();
         auto state_ptr = std::make_shared<CookState>(hot_dog_id, std::move(handler), io_,
@@ -98,7 +99,7 @@ public:
                         state_ptr->error = std::current_exception();
                     }
                 }
-                if (state_ptr->count.fetch_add(1, std::memory_order_acq_rel) + 1 == 2) {
+                if (++state_ptr->count == 2) {
                     TryAssembleHotDog(state_ptr);
                 }
                 });
@@ -120,7 +121,7 @@ public:
                         state_ptr->error = std::current_exception();
                     }
                 }
-                if (state_ptr->count.fetch_add(1, std::memory_order_acq_rel) + 1 == 2) {
+                if (++state_ptr->count == 2) {
                     TryAssembleHotDog(state_ptr);
                 }
                 });

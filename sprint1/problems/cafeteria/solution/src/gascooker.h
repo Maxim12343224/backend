@@ -8,119 +8,119 @@
 #include <cassert>
 #include <deque>
 #include <memory>
-#include <mutex>
-#include <atomic>
 
 namespace net = boost::asio;
 namespace sys = boost::system;
 
+/*
+Газовая плита - совместно используемый ресурс кафетерия
+Содержит несколько горелок (burner), которые можно асинхронно занимать (метод UseBurner) и
+освобождать (метод ReleaseBurner).
+Если свободных горелок нет, то запрос на занимание горелки ставится в очередь.
+Методы класса можно вызывать из разных потоков.
+*/
 class GasCooker : public std::enable_shared_from_this<GasCooker> {
 public:
     using Handler = std::function<void()>;
 
     GasCooker(net::io_context& io, int num_burners = 8)
-        : io_{ io }
-        , number_of_burners_{ num_burners }
-        , strand_{ net::make_strand(io) } {
-        if (num_burners <= 0) {
-            throw std::invalid_argument("Number of burners must be positive");
-        }
+        : io_{io}
+        , number_of_burners_{num_burners} {
     }
 
     GasCooker(const GasCooker&) = delete;
     GasCooker& operator=(const GasCooker&) = delete;
 
     ~GasCooker() {
-        assert(burners_in_use_ == 0 && "All burners should be released before destruction");
+        assert(burners_in_use_ == 0);
     }
 
+    // Используется для того, чтобы занять горелку. handler будет вызван в момент, когда горелка
+    // занята
+    // Этот метод можно вызывать параллельно с вызовом других методов
     void UseBurner(Handler handler) {
+        // Выполняем работу внутри strand, чтобы изменение состояния горелки выполнялось
+        // последовательно
         net::dispatch(strand_,
-            [this, self = shared_from_this(), handler = std::move(handler)]() mutable {
-                assert(strand_.running_in_this_thread());
+                      // За счёт захвата self в лямбда-функции, время жизни GasCooker будет продлено
+                      // до её вызова
+                      [handler = std::move(handler), self = shared_from_this(), this]() mutable {
+                          assert(strand_.running_in_this_thread());
+                          assert(burners_in_use_ >= 0 && burners_in_use_ <= number_of_burners_);
 
-                if (burners_in_use_ < number_of_burners_) {
-                    ++burners_in_use_;
-                    net::post(io_, std::move(handler));
-                }
-                else {
-                    pending_handlers_.emplace_back(std::move(handler));
-                }
+                          // Есть свободные горелки?
+                          if (burners_in_use_ < number_of_burners_) {
+                              // Занимаем горелку
+                              ++burners_in_use_;
+                              // Асинхронно уведомляем обработчик о том, что горелка занята.
+                              // Используется асинхронный вызов, так как handler может
+                              // выполняться долго, а strand лучше освободить
+                              net::post(io_, std::move(handler));
+                          } else {  // Все горелки заняты
+                              // Ставим обработчик в хвост очереди
+                              pending_handlers_.emplace_back(std::move(handler));
+                          }
 
-                assert(burners_in_use_ >= 0 && burners_in_use_ <= number_of_burners_);
-            });
+                          // Проверка инвариантов класса
+                          assert(burners_in_use_ > 0 && burners_in_use_ <= number_of_burners_);
+                      });
     }
 
     void ReleaseBurner() {
+        // Освобождение выполняем также последовательно
         net::dispatch(strand_, [this, self = shared_from_this()] {
             assert(strand_.running_in_this_thread());
-            assert(burners_in_use_ > 0 && "Cannot release non-used burner");
+            assert(burners_in_use_ > 0 && burners_in_use_ <= number_of_burners_);
 
+            // Есть ли ожидающие обработчики?
             if (!pending_handlers_.empty()) {
+                // Выполняем асинхронно обработчик первый обработчик
                 net::post(io_, std::move(pending_handlers_.front()));
+                // И удаляем его из очереди ожидания
                 pending_handlers_.pop_front();
-            }
-            else {
+            } else {
+                // Освобождаем горелку
                 --burners_in_use_;
             }
-            });
-    }
-
-    int GetAvailableBurners() const {
-        return number_of_burners_ - burners_in_use_.load();
+        });
     }
 
 private:
     using Strand = net::strand<net::io_context::executor_type>;
-
     net::io_context& io_;
-    Strand strand_;
-    const int number_of_burners_;
-    std::atomic<int> burners_in_use_{ 0 };
+    Strand strand_{net::make_strand(io_)};
+    int number_of_burners_;
+    int burners_in_use_ = 0;
     std::deque<Handler> pending_handlers_;
 };
 
+// RAII-класс для автоматического освобождения газовой плиты
 class GasCookerLock {
 public:
     GasCookerLock() = default;
 
     explicit GasCookerLock(std::shared_ptr<GasCooker> cooker) noexcept
-        : cooker_{ std::move(cooker) } {
+        : cooker_{std::move(cooker)} {
     }
 
-    GasCookerLock(GasCookerLock&& other) noexcept
-        : cooker_{ std::exchange(other.cooker_, nullptr) } {
-    }
-
-    GasCookerLock& operator=(GasCookerLock&& rhs) noexcept {
-        if (this != &rhs) {
-            Unlock();
-            cooker_ = std::exchange(rhs.cooker_, nullptr);
-        }
-        return *this;
-    }
+    GasCookerLock(GasCookerLock&& other) = default;
+    GasCookerLock& operator=(GasCookerLock&& rhs) = default;
 
     GasCookerLock(const GasCookerLock&) = delete;
     GasCookerLock& operator=(const GasCookerLock&) = delete;
 
     ~GasCookerLock() {
-        Unlock();
-    }
-
-    void Unlock() noexcept {
-        if (cooker_) {
-            try {
-                cooker_->ReleaseBurner();
-            }
-            catch (...) {
-                // Suppress any exceptions during destruction
-            }
-            cooker_.reset();
+        try {
+            Unlock();
+        } catch (...) {
         }
     }
 
-    explicit operator bool() const noexcept {
-        return cooker_ != nullptr;
+    void Unlock() {
+        if (cooker_) {
+            cooker_->ReleaseBurner();
+            cooker_.reset();
+        }
     }
 
 private:
