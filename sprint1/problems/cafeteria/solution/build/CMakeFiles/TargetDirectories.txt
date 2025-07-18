@@ -1,0 +1,3 @@
+/mnt/c/backend/sprint1/problems/cafeteria/solution/build/CMakeFiles/cafeteria.dir
+/mnt/c/backend/sprint1/problems/cafeteria/solution/build/CMakeFiles/edit_cache.dir
+/mnt/c/backend/sprint1/problems/cafeteria/solution/build/CMakeFiles/rebuild_cache.dir
