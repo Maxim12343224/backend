@@ -1,5 +1,5 @@
 CMakeFiles/cafeteria.dir/src/main.cpp.o: \
- /mnt/c/backend/sprint1/problems/cafeteria/solution/src/main.cpp \
+ /mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/src/main.cpp \
  /usr/include/stdc-predef.h /usr/include/c++/11/iostream \
  /usr/include/x86_64-linux-gnu/c++/11/bits/c++config.h \
  /usr/include/x86_64-linux-gnu/c++/11/bits/os_defines.h \
@@ -213,7 +213,7 @@ CMakeFiles/cafeteria.dir/src/main.cpp.o: \
  /usr/include/c++/11/bits/stl_vector.h \
  /usr/include/c++/11/bits/stl_bvector.h \
  /usr/include/c++/11/bits/vector.tcc \
- /mnt/c/backend/sprint1/problems/cafeteria/solution/src/cafeteria.h \
+ /mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/src/cafeteria.h \
  /home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include/boost/asio/io_context.hpp \
  /home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include/boost/asio/detail/config.hpp \
  /home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include/boost/config.hpp \
@@ -879,12 +879,12 @@ CMakeFiles/cafeteria.dir/src/main.cpp.o: \
  /home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include/boost/asio/detail/strand_service.hpp \
  /home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include/boost/asio/detail/impl/strand_service.hpp \
  /home/mkdir/.conan/data/boost/1.78.0/_/_/package/9bb382e9c85821936d59f1c4ea5134768df38de2/include/boost/asio/detail/impl/strand_service.ipp \
- /mnt/c/backend/sprint1/problems/cafeteria/solution/src/hotdog.h \
+ /mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/src/hotdog.h \
  /usr/include/c++/11/optional \
- /mnt/c/backend/sprint1/problems/cafeteria/solution/src/gascooker.h \
+ /mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/src/gascooker.h \
  /usr/include/c++/11/deque /usr/include/c++/11/bits/stl_deque.h \
  /usr/include/c++/11/bits/deque.tcc \
- /mnt/c/backend/sprint1/problems/cafeteria/solution/src/ingredients.h \
- /mnt/c/backend/sprint1/problems/cafeteria/solution/src/clock.h \
- /mnt/c/backend/sprint1/problems/cafeteria/solution/src/result.h \
+ /mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/src/ingredients.h \
+ /mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/src/clock.h \
+ /mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/src/result.h \
  /usr/include/c++/11/variant

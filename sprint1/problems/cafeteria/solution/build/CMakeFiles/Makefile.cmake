@@ -87,7 +87,7 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/home/mkdir/cmake-3.26.5-linux-x86_64/share/cmake-3.26/Modules/Platform/Linux-GNU.cmake"
   "/home/mkdir/cmake-3.26.5-linux-x86_64/share/cmake-3.26/Modules/Platform/Linux.cmake"
   "/home/mkdir/cmake-3.26.5-linux-x86_64/share/cmake-3.26/Modules/Platform/UnixPaths.cmake"
-  "/mnt/c/backend/sprint1/problems/cafeteria/solution/CMakeLists.txt"
+  "/mnt/c/cafeteria/backend/sprint1/problems/cafeteria/solution/CMakeLists.txt"
   "CMakeFiles/3.26.5/CMakeCXXCompiler.cmake"
   "CMakeFiles/3.26.5/CMakeSystem.cmake"
   "conanbuildinfo.cmake"
