@@ -82,7 +82,7 @@ public:
             }
             };
 
-        // Start cooking sausage
+        
         state_ptr->sausage->StartFry(*gas_cooker_, [state_ptr, TryAssembleHotDog] {
             auto timer = std::make_shared<net::steady_timer>(state_ptr->io, 1500ms);
             timer->async_wait([state_ptr, timer, TryAssembleHotDog](sys::error_code ec) {
@@ -104,7 +104,7 @@ public:
                 });
             });
 
-        // Start baking bread
+        
         state_ptr->bread->StartBake(*gas_cooker_, [state_ptr, TryAssembleHotDog] {
             auto timer = std::make_shared<net::steady_timer>(state_ptr->io, 1000ms);
             timer->async_wait([state_ptr, timer, TryAssembleHotDog](sys::error_code ec) {

@@ -2,6 +2,9 @@
 #include <functional>
 #include <optional>
 
+#include <atomic>
+#include <mutex>
+
 #include "clock.h"
 #include "gascooker.h"
 
@@ -127,7 +130,7 @@ private:
     int next_id_ = 0;
 };*/
 
-class Store {
+/*class Store {
 public:
     std::shared_ptr<Bread> GetBread() {
         return std::make_shared<Bread>(++next_id_);
@@ -139,4 +142,22 @@ public:
 
 private:
     std::atomic<int> next_id_{ 0 };
+};*/
+
+class Store {
+public:
+    std::shared_ptr<Bread> GetBread() { return create<Bread>(); }
+    std::shared_ptr<Sausage> GetSausage() { return create<Sausage>(); }
+
+private:
+    template <typename T>
+    std::shared_ptr<T> create() {
+        static std::mutex mutex;
+        std::lock_guard<std::mutex> lock(mutex);
+        return std::make_shared<T>(++next_id_);
+    }
+
+    static std::atomic<int> next_id_;
 };
+
+std::atomic<int> Store::next_id_{ 1 };

@@ -7,15 +7,10 @@
 #include "gascooker.h"
 #include "ingredients.h"
 
-/*
-Класс Хот-дог.
-*/
+
 class HotDog {
 public:
-    // Минимальная и максимальная длительность выпекания хлеба и приготовления сосиски для
-    // использования в хот-доге.
-    // Если время приготовления ингредиентов хот-дога не попадают в эти интервалы, хот-дог
-    // считается забракованным
+    
 
     constexpr static Clock::duration MIN_SAUSAGE_COOK_DURATION = Milliseconds{1500};
     constexpr static Clock::duration MAX_SAUSAGE_COOK_DURATION = Milliseconds{2000};
