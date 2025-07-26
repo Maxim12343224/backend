@@ -113,7 +113,7 @@ private:
     std::optional<Clock::time_point> baking_end_time_;
 };
 
-class Store {
+/*class Store {
 public:
     std::shared_ptr<Bread> GetBread() {
         return std::make_shared<Bread>(++next_id_);
@@ -125,4 +125,18 @@ public:
 
 private:
     int next_id_ = 0;
+};*/
+
+class Store {
+public:
+    std::shared_ptr<Bread> GetBread() {
+        return std::make_shared<Bread>(++next_id_);
+    }
+
+    std::shared_ptr<Sausage> GetSausage() {
+        return std::make_shared<Sausage>(++next_id_);
+    }
+
+private:
+    std::atomic<int> next_id_{ 0 };
 };
