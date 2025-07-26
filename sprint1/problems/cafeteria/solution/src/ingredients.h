@@ -116,14 +116,13 @@ private:
 class Store {
 public:
     std::shared_ptr<Bread> GetBread() {
-        return std::make_shared<Bread>(++next_bread_id_);  // Инкремент атомарный
+        return std::make_shared<Bread>(++next_id_);
     }
 
     std::shared_ptr<Sausage> GetSausage() {
-        return std::make_shared<Sausage>(++next_sausage_id_);  // Инкремент атомарный
+        return std::make_shared<Sausage>(++next_id_);
     }
 
 private:
-    std::atomic<int> next_bread_id_{ 0 };     // Атомарный счётчик для хлеба
-    std::atomic<int> next_sausage_id_{ 0 };   // Атомарный счётчик для сосисок
+    int next_id_ = 0;
 };

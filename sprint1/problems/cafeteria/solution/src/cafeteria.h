@@ -9,8 +9,8 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
-#include <chrono>
-#include <thread>
+#include <chrono> // Добавлено
+#include <thread> // Добавлено
 
 #include "hotdog.h"
 #include "result.h"
@@ -18,15 +18,14 @@
 namespace net = boost::asio;
 namespace sys = boost::system;
 
-using namespace std::chrono_literals;
+using namespace std::chrono_literals; // Добавлено для поддержки литералов времени
 
 using HotDogHandler = std::function<void(Result<HotDog> hot_dog)>;
 
 class Cafeteria {
 public:
     explicit Cafeteria(net::io_context& io)
-        : io_{ io }
-        , gas_cooker_{ std::make_shared<GasCooker>(io) } {
+        : io_{ io } {
     }
 
     void OrderHotDog(HotDogHandler handler) {
@@ -50,7 +49,7 @@ public:
             std::exception_ptr error;
         };
 
-        int hot_dog_id = next_hotdog_id_.fetch_add(1, std::memory_order_relaxed);
+        int hot_dog_id = next_hotdog_id_++;
         auto bread = store_.GetBread();
         auto sausage = store_.GetSausage();
         auto state_ptr = std::make_shared<CookState>(hot_dog_id, std::move(handler), io_,
@@ -84,10 +83,13 @@ public:
             }
             };
 
+        // Start cooking sausage
         state_ptr->sausage->StartFry(*gas_cooker_, [state_ptr, TryAssembleHotDog] {
             auto timer = std::make_shared<net::steady_timer>(state_ptr->io, 1500ms);
             timer->async_wait([state_ptr, timer, TryAssembleHotDog](sys::error_code ec) {
-                if (ec) return;
+                if (ec) {
+                    return;
+                }
                 try {
                     state_ptr->sausage->StopFry();
                 }
@@ -103,10 +105,13 @@ public:
                 });
             });
 
+        // Start baking bread
         state_ptr->bread->StartBake(*gas_cooker_, [state_ptr, TryAssembleHotDog] {
             auto timer = std::make_shared<net::steady_timer>(state_ptr->io, 1000ms);
             timer->async_wait([state_ptr, timer, TryAssembleHotDog](sys::error_code ec) {
-                if (ec) return;
+                if (ec) {
+                    return;
+                }
                 try {
                     state_ptr->bread->StopBaking();
                 }
@@ -126,6 +131,6 @@ public:
 private:
     net::io_context& io_;
     Store store_;
-    std::shared_ptr<GasCooker> gas_cooker_;
+    std::shared_ptr<GasCooker> gas_cooker_ = std::make_shared<GasCooker>(io_);
     std::atomic<int> next_hotdog_id_{ 1 };
 };
