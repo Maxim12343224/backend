@@ -1,11 +1,9 @@
-// main.cpp
 #include "sdk.h"
 #include <boost/asio/signal_set.hpp>
 #include <iostream>
 #include <mutex>
 #include <thread>
 #include <vector>
-
 #include "http_server.h"
 
 namespace {
@@ -22,8 +20,8 @@ namespace {
         constexpr static std::string_view TEXT_HTML = "text/html"sv;
     };
 
-    StringResponse MakeStringResponse(http::status status, std::string_view body, unsigned http_version,
-        bool keep_alive,
+    StringResponse MakeStringResponse(http::status status, std::string_view body,
+        unsigned http_version, bool keep_alive,
         std::string_view content_type = ContentType::TEXT_HTML) {
         StringResponse response(status, http_version);
         response.set(http::field::content_type, content_type);
@@ -34,31 +32,24 @@ namespace {
     }
 
     StringResponse HandleRequest(StringRequest&& req) {
-        const auto method = req.method();
-        const auto target = req.target();
+        const auto target = std::string(req.target()).substr(1);
 
-        if (method != http::verb::get && method != http::verb::head) {
-            auto response = MakeStringResponse(http::status::method_not_allowed, "Invalid method"sv,
+        if (req.method() == http::verb::get) {
+            return MakeStringResponse(http::status::ok, "Hello, " + target,
                 req.version(), req.keep_alive());
+        }
+        else if (req.method() == http::verb::head) {
+            auto response = MakeStringResponse(http::status::ok, ""sv,
+                req.version(), req.keep_alive());
+            response.content_length(("Hello, " + target).size());
+            return response;
+        }
+        else {
+            auto response = MakeStringResponse(http::status::method_not_allowed,
+                "Invalid method", req.version(), req.keep_alive());
             response.set(http::field::allow, "GET, HEAD");
             return response;
         }
-
-        if (target.empty() || target[0] != '/') {
-            return MakeStringResponse(http::status::bad_request, "Invalid target"sv,
-                req.version(), req.keep_alive());
-        }
-
-        std::string_view name = target.substr(1);
-        std::string body = "Hello, " + std::string(name);
-
-        auto response = MakeStringResponse(http::status::ok, body, req.version(), req.keep_alive());
-
-        if (method == http::verb::head) {
-            response.body().clear();
-        }
-
-        return response;
     }
 
     template <typename Fn>
@@ -76,7 +67,6 @@ namespace {
 
 int main() {
     const unsigned num_threads = std::thread::hardware_concurrency();
-
     net::io_context ioc(num_threads);
 
     net::signal_set signals(ioc, SIGINT, SIGTERM);
@@ -88,6 +78,7 @@ int main() {
 
     const auto address = net::ip::make_address("0.0.0.0");
     constexpr net::ip::port_type port = 8080;
+
     http_server::ServeHttp(ioc, { address, port }, [](auto&& req, auto&& sender) {
         sender(HandleRequest(std::forward<decltype(req)>(req)));
         });
