@@ -9,8 +9,7 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
-#include <chrono> // Добавлено
-#include <thread> // Добавлено
+#include <chrono>
 
 #include "hotdog.h"
 #include "result.h"
@@ -18,7 +17,7 @@
 namespace net = boost::asio;
 namespace sys = boost::system;
 
-using namespace std::chrono_literals; // Добавлено для поддержки литералов времени
+using namespace std::chrono_literals;
 
 using HotDogHandler = std::function<void(Result<HotDog> hot_dog)>;
 
