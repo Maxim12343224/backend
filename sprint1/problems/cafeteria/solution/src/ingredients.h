@@ -1,8 +1,6 @@
 #pragma once
 #include <functional>
 #include <optional>
-#include <atomic>
-#include <mutex>
 
 #include "clock.h"
 #include "gascooker.h"
@@ -11,9 +9,13 @@ class Sausage : public std::enable_shared_from_this<Sausage> {
 public:
     using Handler = std::function<void()>;
 
-    explicit Sausage(int id) : id_(id) {}
+    explicit Sausage(int id)
+        : id_{ id } {
+    }
 
-    int GetId() const { return id_; }
+    int GetId() const {
+        return id_;
+    }
 
     void StartFry(GasCooker& cooker, Handler handler) {
         if (frying_start_time_) {
@@ -52,7 +54,7 @@ public:
     }
 
 private:
-    const int id_;
+    int id_;
     GasCookerLock gas_cooker_lock_;
     std::optional<Clock::time_point> frying_start_time_;
     std::optional<Clock::time_point> frying_end_time_;
@@ -62,9 +64,13 @@ class Bread : public std::enable_shared_from_this<Bread> {
 public:
     using Handler = std::function<void()>;
 
-    explicit Bread(int id) : id_(id) {}
+    explicit Bread(int id)
+        : id_{ id } {
+    }
 
-    int GetId() const { return id_; }
+    int GetId() const {
+        return id_;
+    }
 
     void StartBake(GasCooker& cooker, Handler handler) {
         if (baking_start_time_) {
@@ -101,7 +107,7 @@ public:
     }
 
 private:
-    const int id_;
+    int id_;
     GasCookerLock gas_cooker_lock_;
     std::optional<Clock::time_point> baking_start_time_;
     std::optional<Clock::time_point> baking_end_time_;
@@ -118,6 +124,5 @@ public:
     }
 
 private:
-    std::atomic<int> next_id_{ 0 };
-    std::mutex mutex_;
+    int next_id_ = 0;
 };
