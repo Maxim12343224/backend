@@ -56,7 +56,7 @@ namespace http_handler {
         StringResponse response(status, req.version());
         response.set(http::field::content_type, std::string(content_type));
         response.body() = body;
-        response.prepare_payload();
+        response.content_length(body.size());
         response.keep_alive(req.keep_alive());
         return response;
     }
@@ -67,13 +67,10 @@ namespace http_handler {
             {"code", std::string(code)},
             {"message", std::string(message)}
         };
-        return MakeStringResponse(status, json::serialize(json_res), req);
+        return MakeStringResponse(status, json::serialize(json_res), req, "application/json");
     }
 
     StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
-        // Логирование для отладки
-        std::cerr << "API request: " << req.method_string() << " " << req.target() << std::endl;
-
         if (req.target() == "/api/v1/maps") {
             json::array maps_json;
             for (const auto& map : game_.GetMaps()) {
@@ -87,10 +84,7 @@ namespace http_handler {
         }
 
         if (req.target().starts_with("/api/v1/maps/")) {
-            // Извлекаем ID карты из URL
             std::string target = req.target().to_string();
-
-            // Находим позицию последнего слеша
             size_t last_slash_pos = target.find_last_of('/');
             if (last_slash_pos == std::string::npos || last_slash_pos == target.size() - 1) {
                 return MakeErrorResponse(http::status::bad_request,
@@ -98,22 +92,15 @@ namespace http_handler {
                     "Invalid map ID format", req);
             }
 
-            // Извлекаем подстроку после последнего слеша
             std::string map_id = target.substr(last_slash_pos + 1);
-
-            // Удаляем возможные параметры запроса
             size_t question_pos = map_id.find('?');
             if (question_pos != std::string::npos) {
                 map_id = map_id.substr(0, question_pos);
             }
 
-            // Удаляем завершающий слеш если есть
             if (!map_id.empty() && map_id.back() == '/') {
                 map_id.pop_back();
             }
-
-            // Логирование для отладки
-            std::cerr << "Extracted map ID: '" << map_id << "'" << std::endl;
 
             if (const auto* map = game_.FindMap(model::Map::Id{ map_id })) {
                 json::value map_json{
@@ -140,7 +127,6 @@ namespace http_handler {
                     json::serialize(map_json), req);
             }
 
-            std::cerr << "Map not found: '" << map_id << "'" << std::endl;
             return MakeErrorResponse(http::status::not_found,
                 "mapNotFound",
                 "Map not found", req);
@@ -153,9 +139,6 @@ namespace http_handler {
 
     StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
         try {
-            // Логирование для отладки
-            std::cerr << "Static request: " << req.method_string() << " " << req.target() << std::endl;
-
             auto path = DecodeUrl(req.target());
 
             // Remove leading /
@@ -165,12 +148,16 @@ namespace http_handler {
             }
             path = path.substr(1);
 
+            // Handle root path
+            if (path.empty()) {
+                path = "index.html";
+            }
+
             // Build full path
             auto full_path = fs::weakly_canonical(static_path_ / path);
 
             // Check if path is within static directory
             if (!IsSubPath(full_path, static_path_)) {
-                std::cerr << "Directory traversal attempt: " << full_path << std::endl;
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path: attempted directory traversal",
                     req, "text/plain");
@@ -183,7 +170,6 @@ namespace http_handler {
 
             // Check if file exists
             if (!fs::exists(full_path)) {
-                std::cerr << "File not found: " << full_path << std::endl;
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
@@ -191,7 +177,6 @@ namespace http_handler {
             // Read file content
             std::ifstream file(full_path, std::ios::binary);
             if (!file) {
-                std::cerr << "Failed to open file: " << full_path << std::endl;
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
             }
@@ -199,13 +184,9 @@ namespace http_handler {
             std::string content((std::istreambuf_iterator<char>(file)),
                 std::istreambuf_iterator<char>());
 
-            std::cerr << "Serving file: " << full_path
-                << " (" << content.size() << " bytes)" << std::endl;
-
             return MakeStringResponse(http::status::ok, content, req, GetMimeType(full_path.string()));
         }
         catch (const std::exception& e) {
-            std::cerr << "Exception in static handler: " << e.what() << std::endl;
             return MakeStringResponse(http::status::internal_server_error,
                 "Internal server error", req, "text/plain");
         }
@@ -283,11 +264,9 @@ namespace http_handler {
             const auto norm_path = fs::weakly_canonical(path);
             const auto norm_base = fs::weakly_canonical(base);
 
-            // Проверяем, что базовый путь является префиксом
             auto base_it = norm_base.begin();
             auto path_it = norm_path.begin();
 
-            // Сравниваем компоненты пути
             for (; base_it != norm_base.end(); ++base_it, ++path_it) {
                 if (path_it == norm_path.end() || *path_it != *base_it) {
                     return false;
@@ -296,7 +275,6 @@ namespace http_handler {
             return true;
         }
         catch (const std::exception& e) {
-            std::cerr << "Path normalization error: " << e.what() << std::endl;
             return false;
         }
     }

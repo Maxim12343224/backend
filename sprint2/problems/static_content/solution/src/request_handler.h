@@ -61,5 +61,4 @@ namespace http_handler {
         StringResponse MakeErrorResponse(http::status status, beast::string_view code,
             beast::string_view message, const StringRequest& req);
     };
-
 }  // namespace http_handler
