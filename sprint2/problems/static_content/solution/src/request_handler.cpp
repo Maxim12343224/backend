@@ -79,8 +79,7 @@ namespace http_handler {
                     {"name", map.GetName()}
                     });
             }
-            return MakeStringResponse(http::status::ok,
-                json::serialize(maps_json), req);
+            return MakeStringResponse(http::status::ok, json::serialize(maps_json), req);
         }
 
         if (req.target().starts_with("/api/v1/maps/")) {
@@ -88,8 +87,7 @@ namespace http_handler {
             size_t last_slash_pos = target.find_last_of('/');
             if (last_slash_pos == std::string::npos || last_slash_pos == target.size() - 1) {
                 return MakeErrorResponse(http::status::bad_request,
-                    "badRequest",
-                    "Invalid map ID format", req);
+                    "badRequest", "Invalid map ID format", req);
             }
 
             std::string map_id = target.substr(last_slash_pos + 1);
@@ -123,59 +121,43 @@ namespace http_handler {
                     map_json.as_object()["offices"].as_array().push_back(SerializeOffice(office));
                 }
 
-                return MakeStringResponse(http::status::ok,
-                    json::serialize(map_json), req);
+                return MakeStringResponse(http::status::ok, json::serialize(map_json), req);
             }
 
             return MakeErrorResponse(http::status::not_found,
-                "mapNotFound",
-                "Map not found", req);
+                "mapNotFound", "Map not found", req);
         }
 
         return MakeErrorResponse(http::status::bad_request,
-            "badRequest",
-            "Bad request", req);
+            "badRequest", "Bad request", req);
     }
 
     StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
         try {
-            auto path = DecodeUrl(req.target());
+            auto decoded_path = DecodeUrl(req.target());
 
-            // Remove leading /
-            if (path.empty() || path[0] != '/') {
+            if (decoded_path.empty() || decoded_path[0] != '/') {
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path", req, "text/plain");
             }
-            path = path.substr(1);
 
-            // Handle root path
-            if (path.empty()) {
-                path = "index.html";
+            fs::path file_path = static_path_ / decoded_path.substr(1);
+
+            if (decoded_path.back() == '/') {
+                file_path /= "index.html";
             }
 
-            // Build full path
-            auto full_path = fs::weakly_canonical(static_path_ / path);
-
-            // Check if path is within static directory
-            if (!IsSubPath(full_path, static_path_)) {
+            if (!IsSubPath(file_path, static_path_)) {
                 return MakeStringResponse(http::status::bad_request,
-                    "Invalid path: attempted directory traversal",
-                    req, "text/plain");
+                    "Invalid path: directory traversal attempt", req, "text/plain");
             }
 
-            // If path is directory, append index.html
-            if (fs::is_directory(full_path)) {
-                full_path /= "index.html";
-            }
-
-            // Check if file exists
-            if (!fs::exists(full_path)) {
+            if (!fs::exists(file_path) || !fs::is_regular_file(file_path)) {
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
 
-            // Read file content
-            std::ifstream file(full_path, std::ios::binary);
+            std::ifstream file(file_path, std::ios::binary);
             if (!file) {
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
@@ -184,7 +166,9 @@ namespace http_handler {
             std::string content((std::istreambuf_iterator<char>(file)),
                 std::istreambuf_iterator<char>());
 
-            return MakeStringResponse(http::status::ok, content, req, GetMimeType(full_path.string()));
+            std::string mime_type = GetMimeType(file_path.string());
+
+            return MakeStringResponse(http::status::ok, content, req, mime_type);
         }
         catch (const std::exception& e) {
             return MakeStringResponse(http::status::internal_server_error,
@@ -261,20 +245,16 @@ namespace http_handler {
 
     bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
         try {
-            const auto norm_path = fs::weakly_canonical(path);
-            const auto norm_base = fs::weakly_canonical(base);
+            auto canonical_path = fs::weakly_canonical(path);
+            auto canonical_base = fs::weakly_canonical(base);
 
-            auto base_it = norm_base.begin();
-            auto path_it = norm_path.begin();
+            auto [base_end, path_end] = std::mismatch(
+                canonical_base.begin(), canonical_base.end(),
+                canonical_path.begin(), canonical_path.end());
 
-            for (; base_it != norm_base.end(); ++base_it, ++path_it) {
-                if (path_it == norm_path.end() || *path_it != *base_it) {
-                    return false;
-                }
-            }
-            return true;
+            return base_end == canonical_base.end();
         }
-        catch (const std::exception& e) {
+        catch (const std::exception&) {
             return false;
         }
     }
