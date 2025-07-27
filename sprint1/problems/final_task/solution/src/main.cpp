@@ -11,7 +11,6 @@ using namespace std::literals;
 namespace net = boost::asio;
 
 namespace {
-
     template <typename Fn>
     void RunWorkers(unsigned n, const Fn& fn) {
         n = std::max(1u, n);
@@ -22,7 +21,6 @@ namespace {
         }
         fn();
     }
-
 }  // namespace
 
 int main(int argc, const char* argv[]) {
@@ -33,7 +31,14 @@ int main(int argc, const char* argv[]) {
 
     try {
         // 1. Загружаем карту из файла
+        std::cout << "Loading game from: " << argv[1] << std::endl;
         model::Game game = json_loader::LoadGame(argv[1]);
+
+        // Логирование загруженных карт
+        std::cout << "Successfully loaded " << game.GetMaps().size() << " maps:" << std::endl;
+        for (const auto& map : game.GetMaps()) {
+            std::cout << "  - " << *map.GetId() << " (" << map.GetName() << ")" << std::endl;
+        }
 
         // 2. Инициализируем io_context
         const unsigned num_threads = std::thread::hardware_concurrency();
@@ -43,6 +48,7 @@ int main(int argc, const char* argv[]) {
         net::signal_set signals(ioc, SIGINT, SIGTERM);
         signals.async_wait([&ioc](const boost::system::error_code& ec, [[maybe_unused]] int signal_number) {
             if (!ec) {
+                std::cout << "Server shutting down..." << std::endl;
                 ioc.stop();
             }
             });
@@ -58,7 +64,7 @@ int main(int argc, const char* argv[]) {
             });
 
         // Сообщаем о готовности сервера
-        std::cout << "Server has started..."sv << std::endl;
+        std::cout << "Server has started on http://" << address << ":" << port << std::endl;
 
         // 6. Запускаем обработку запросов
         RunWorkers(std::max(1u, num_threads), [&ioc] {
@@ -67,7 +73,7 @@ int main(int argc, const char* argv[]) {
 
     }
     catch (const std::exception& ex) {
-        std::cerr << ex.what() << std::endl;
+        std::cerr << "Fatal error: " << ex.what() << std::endl;
         return EXIT_FAILURE;
     }
 }
