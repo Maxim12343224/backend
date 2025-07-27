@@ -134,36 +134,51 @@ namespace http_handler {
 
     StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
         try {
-            std::string target = req.target().to_string();
+            // Используем beast::string_view вместо std::string_view
+            beast::string_view target = req.target();
 
-            // Check for empty path or path not starting with /
+            // Проверяем базовые условия
             if (target.empty() || target[0] != '/') {
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path", req, "text/plain");
             }
 
-            // Decode URL path
-            std::string decoded_path = DecodeUrl(target);
+            // Преобразуем в std::string для дальнейшей обработки
+            std::string path = DecodeUrl(target);
 
-            // Remove leading slash
-            if (decoded_path.size() > 1 && decoded_path[0] == '/') {
-                decoded_path = decoded_path.substr(1);
+            // Удаляем ведущий слэш
+            if (path.size() > 1 && path[0] == '/') {
+                path = path.substr(1);
             }
 
-            // Handle root path
-            if (decoded_path.empty()) {
-                decoded_path = "index.html";
+            // Если путь пустой - используем index.html
+            if (path.empty()) {
+                path = "index.html";
             }
 
-            // Build full path
-            fs::path file_path = static_path_ / decoded_path;
+            // Строим полный путь к файлу
+            fs::path file_path = static_path_ / path;
 
-            // Check for directory traversal
+            // Проверяем существование файла
+            if (!fs::exists(file_path)) {
+                return MakeStringResponse(http::status::not_found,
+                    "File not found", req, "text/plain");
+            }
+
+            // Проверяем, что это обычный файл
+            if (!fs::is_regular_file(file_path)) {
+                return MakeStringResponse(http::status::bad_request,
+                    "Path is not a file", req, "text/plain");
+            }
+
+            // Проверяем, что путь находится внутри static_path_
             try {
-                file_path = fs::weakly_canonical(file_path);
-                if (!IsSubPath(file_path, static_path_)) {
+                auto canonical_path = fs::canonical(file_path);
+                auto canonical_static = fs::canonical(static_path_);
+
+                if (canonical_path.string().find(canonical_static.string()) != 0) {
                     return MakeStringResponse(http::status::bad_request,
-                        "Invalid path: directory traversal attempt", req, "text/plain");
+                        "Directory traversal attempt", req, "text/plain");
                 }
             }
             catch (const fs::filesystem_error&) {
@@ -171,36 +186,25 @@ namespace http_handler {
                     "File not found", req, "text/plain");
             }
 
-            // Check if path is directory and add index.html
-            if (fs::is_directory(file_path)) {
-                file_path /= "index.html";
-            }
-
-            // Check if file exists
-            if (!fs::exists(file_path) || !fs::is_regular_file(file_path)) {
-                return MakeStringResponse(http::status::not_found,
-                    "File not found", req, "text/plain");
-            }
-
-            // Open file
+            // Открываем файл
             std::ifstream file(file_path, std::ios::binary);
             if (!file) {
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
             }
 
-            // Read file content
+            // Читаем содержимое
             std::string content((std::istreambuf_iterator<char>(file)),
                 std::istreambuf_iterator<char>());
 
-            // Get MIME type
+            // Определяем MIME-тип
             std::string mime_type = GetMimeType(file_path.string());
 
             return MakeStringResponse(http::status::ok, content, req, mime_type);
         }
         catch (const std::exception& e) {
             return MakeStringResponse(http::status::internal_server_error,
-                "Internal server error: " + std::string(e.what()), req, "text/plain");
+                "Internal server error", req, "text/plain");
         }
     }
 
