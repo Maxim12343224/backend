@@ -134,45 +134,73 @@ namespace http_handler {
 
     StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
         try {
-            auto decoded_path = DecodeUrl(req.target());
+            std::string target = req.target().to_string();
 
-            if (decoded_path.empty() || decoded_path[0] != '/') {
+            // Check for empty path or path not starting with /
+            if (target.empty() || target[0] != '/') {
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path", req, "text/plain");
             }
 
-            fs::path file_path = static_path_ / decoded_path.substr(1);
+            // Decode URL path
+            std::string decoded_path = DecodeUrl(target);
 
-            if (decoded_path.back() == '/') {
+            // Remove leading slash
+            if (decoded_path.size() > 1 && decoded_path[0] == '/') {
+                decoded_path = decoded_path.substr(1);
+            }
+
+            // Handle root path
+            if (decoded_path.empty()) {
+                decoded_path = "index.html";
+            }
+
+            // Build full path
+            fs::path file_path = static_path_ / decoded_path;
+
+            // Check for directory traversal
+            try {
+                file_path = fs::weakly_canonical(file_path);
+                if (!IsSubPath(file_path, static_path_)) {
+                    return MakeStringResponse(http::status::bad_request,
+                        "Invalid path: directory traversal attempt", req, "text/plain");
+                }
+            }
+            catch (const fs::filesystem_error&) {
+                return MakeStringResponse(http::status::not_found,
+                    "File not found", req, "text/plain");
+            }
+
+            // Check if path is directory and add index.html
+            if (fs::is_directory(file_path)) {
                 file_path /= "index.html";
             }
 
-            if (!IsSubPath(file_path, static_path_)) {
-                return MakeStringResponse(http::status::bad_request,
-                    "Invalid path: directory traversal attempt", req, "text/plain");
-            }
-
+            // Check if file exists
             if (!fs::exists(file_path) || !fs::is_regular_file(file_path)) {
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
 
+            // Open file
             std::ifstream file(file_path, std::ios::binary);
             if (!file) {
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
             }
 
+            // Read file content
             std::string content((std::istreambuf_iterator<char>(file)),
                 std::istreambuf_iterator<char>());
 
+            // Get MIME type
             std::string mime_type = GetMimeType(file_path.string());
 
             return MakeStringResponse(http::status::ok, content, req, mime_type);
         }
         catch (const std::exception& e) {
             return MakeStringResponse(http::status::internal_server_error,
-                "Internal server error", req, "text/plain");
+                "Internal server error: " + std::string(e.what()), req, "text/plain");
         }
     }
 
@@ -243,19 +271,14 @@ namespace http_handler {
         return it->second;
     }
 
-    bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
-        try {
-            auto canonical_path = fs::weakly_canonical(path);
-            auto canonical_base = fs::weakly_canonical(base);
+    bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) const {
+        auto canonical_path = fs::weakly_canonical(path);
+        auto canonical_base = fs::weakly_canonical(base);
 
-            auto [base_end, path_end] = std::mismatch(
-                canonical_base.begin(), canonical_base.end(),
-                canonical_path.begin(), canonical_path.end());
+        auto [base_end, path_end] = std::mismatch(
+            canonical_base.begin(), canonical_base.end(),
+            canonical_path.begin(), canonical_path.end());
 
-            return base_end == canonical_base.end();
-        }
-        catch (const std::exception&) {
-            return false;
-        }
+        return base_end == canonical_base.end();
     }
 }  // namespace http_handler

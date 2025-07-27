@@ -18,8 +18,7 @@ namespace http_handler {
     class RequestHandler {
     public:
         explicit RequestHandler(model::Game& game, const fs::path& static_path)
-            : game_{ game }
-            , static_path_{ static_path } {
+            : game_{ game }, static_path_{ fs::absolute(static_path) } {
         }
 
         RequestHandler(const RequestHandler&) = delete;
@@ -31,8 +30,7 @@ namespace http_handler {
 
             if (string_req.method() != http::verb::get && string_req.method() != http::verb::head) {
                 auto response = MakeErrorResponse(http::status::method_not_allowed,
-                    "invalidMethod",
-                    "Only GET and HEAD methods are expected", string_req);
+                    "invalidMethod", "Only GET and HEAD methods are expected", string_req);
                 return send(std::move(response));
             }
 
@@ -53,7 +51,7 @@ namespace http_handler {
         StringResponse HandleStaticRequest(StringRequest&& req);
         std::string DecodeUrl(beast::string_view url);
         std::string GetMimeType(beast::string_view path);
-        bool IsSubPath(const fs::path& path, const fs::path& base);
+        bool IsSubPath(const fs::path& path, const fs::path& base) const;
 
         StringResponse MakeStringResponse(http::status status, std::string_view body,
             const StringRequest& req, beast::string_view content_type = "application/json");
