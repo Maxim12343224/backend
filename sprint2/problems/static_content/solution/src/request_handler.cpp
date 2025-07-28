@@ -136,83 +136,71 @@ namespace http_handler {
         try {
             beast::string_view target = req.target();
 
-            // Проверяем базовые условия
-            if (target.empty() || target[0] != '/') {
-                return MakeStringResponse(http::status::bad_request,
-                    "Invalid path", req, "text/plain");
+            // Handle root request
+            if (target == "/") {
+                target = "/index.html";
             }
 
-            // Декодируем URL и удаляем ведущий слэш
+            // Decode URL to path
             std::string path = DecodeUrl(target);
+
+            // Remove leading slash
             if (path.size() > 0 && path[0] == '/') {
                 path = path.substr(1);
             }
 
-            // Если путь пустой - используем index.html
+            // Handle directory requests
             if (path.empty()) {
                 path = "index.html";
             }
+            else if (path.back() == '/') {
+                path += "index.html";
+            }
 
-            // Логирование для отладки
-            std::cerr << "Request path: " << path << std::endl;
-            std::cerr << "Static path: " << static_path_ << std::endl;
-
-            // Строим полный путь к файлу
+            // Build full path
             fs::path file_path = static_path_ / path;
 
-            // Логирование полного пути
-            std::cerr << "Full file path: " << file_path << std::endl;
+            // Check if path is within static directory
+            fs::path canonical_path;
+            fs::path canonical_static = fs::canonical(static_path_);
 
-            // Проверяем существование файла
-            if (!fs::exists(file_path)) {
-                std::cerr << "File not found: " << file_path << std::endl;
-                return MakeStringResponse(http::status::not_found,
-                    "File not found", req, "text/plain");
-            }
-
-            // Проверяем, что это обычный файл
-            if (!fs::is_regular_file(file_path)) {
-                std::cerr << "Path is not a file: " << file_path << std::endl;
-                return MakeStringResponse(http::status::bad_request,
-                    "Path is not a file", req, "text/plain");
-            }
-
-            // Проверяем, что путь находится внутри static_path_
             try {
-                auto canonical_path = fs::canonical(file_path);
-                auto canonical_static = fs::canonical(static_path_);
-
-                if (canonical_path.string().find(canonical_static.string()) != 0) {
-                    std::cerr << "Directory traversal attempt: " << canonical_path << std::endl;
-                    return MakeStringResponse(http::status::bad_request,
-                        "Directory traversal attempt", req, "text/plain");
-                }
+                canonical_path = fs::canonical(file_path);
             }
             catch (const fs::filesystem_error& e) {
-                std::cerr << "Filesystem error: " << e.what() << std::endl;
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
 
-            // Открываем файл
-            std::ifstream file(file_path, std::ios::binary);
+            // Prevent directory traversal
+            if (canonical_path.string().find(canonical_static.string()) != 0) {
+                return MakeStringResponse(http::status::bad_request,
+                    "Invalid path", req, "text/plain");
+            }
+
+            // Check if file exists and is regular file
+            if (!fs::exists(canonical_path) || !fs::is_regular_file(canonical_path)) {
+                return MakeStringResponse(http::status::not_found,
+                    "File not found", req, "text/plain");
+            }
+
+            // Open file
+            std::ifstream file(canonical_path, std::ios::binary);
             if (!file) {
-                std::cerr << "Failed to open file: " << file_path << std::endl;
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
             }
 
-            // Читаем содержимое
+            // Read file content
             std::string content((std::istreambuf_iterator<char>(file)),
                 std::istreambuf_iterator<char>());
 
-            // Определяем MIME-тип
-            std::string mime_type = GetMimeType(file_path.string());
+            // Get MIME type
+            std::string mime_type = GetMimeType(canonical_path.string());
 
             return MakeStringResponse(http::status::ok, content, req, mime_type);
         }
         catch (const std::exception& e) {
-            std::cerr << "Exception in static handler: " << e.what() << std::endl;
             return MakeStringResponse(http::status::internal_server_error,
                 "Internal server error", req, "text/plain");
         }
@@ -263,8 +251,7 @@ namespace http_handler {
             {".tif", "image/tiff"},
             {".svg", "image/svg+xml"},
             {".svgz", "image/svg+xml"},
-            {".mp3", "audio/mpeg"},
-            {".wasm", "application/wasm"}
+            {".mp3", "audio/mpeg"}
         };
 
         std::string path_str(path);
@@ -283,16 +270,5 @@ namespace http_handler {
             return "application/octet-stream";
         }
         return it->second;
-    }
-
-    bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) const {
-        auto canonical_path = fs::weakly_canonical(path);
-        auto canonical_base = fs::weakly_canonical(base);
-
-        auto [base_end, path_end] = std::mismatch(
-            canonical_base.begin(), canonical_base.end(),
-            canonical_path.begin(), canonical_path.end());
-
-        return base_end == canonical_base.end();
     }
 }  // namespace http_handler
