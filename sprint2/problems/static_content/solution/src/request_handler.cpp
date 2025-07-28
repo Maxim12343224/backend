@@ -145,45 +145,36 @@ namespace http_handler {
             // Decode URL to path
             std::string path = DecodeUrl(target);
 
-            // Remove leading slash
-            while (!path.empty() && path[0] == '/') {
-                path = path.substr(1);
-            }
-
-            // Handle directory requests
-            if (path.empty()) {
-                path = "index.html";
-            }
-            else if (path.back() == '/') {
-                path += "index.html";
-            }
-
             // Build full path
-            fs::path file_path = static_path_ / path;
+            fs::path file_path = static_path_;
+            file_path /= path.substr(1);  // Remove leading slash
 
-            // Normalize path separators
-            file_path = file_path.lexically_normal();
+            // Get canonical paths for security check
+            fs::path abs_path = fs::weakly_canonical(file_path);
+            fs::path abs_static = fs::weakly_canonical(static_path_);
 
-            // Simplify security check - only prevent obvious directory traversal
-            std::string file_str = file_path.string();
-            if (file_str.find("..") != std::string::npos) {
+            // Check if path is within static directory
+            if (!IsSubPath(abs_path, abs_static)) {
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path", req, "text/plain");
             }
 
-            // Try to open file directly without complex checks
-            std::ifstream file(file_path, std::ios::binary);
-            if (!file) {
-                // Try adding index.html for directories
-                if (path.back() != '/') {
-                    file_path = static_path_ / path / "index.html";
-                    file.open(file_path, std::ios::binary);
-                }
+            // Handle directory requests
+            if (fs::is_directory(abs_path)) {
+                abs_path /= "index.html";
+            }
 
-                if (!file) {
-                    return MakeStringResponse(http::status::not_found,
-                        "File not found", req, "text/plain");
-                }
+            // Check if file exists
+            if (!fs::exists(abs_path) || !fs::is_regular_file(abs_path)) {
+                return MakeStringResponse(http::status::not_found,
+                    "File not found", req, "text/plain");
+            }
+
+            // Open file
+            std::ifstream file(abs_path, std::ios::binary);
+            if (!file) {
+                return MakeStringResponse(http::status::internal_server_error,
+                    "Failed to open file", req, "text/plain");
             }
 
             // Read file content
@@ -191,7 +182,7 @@ namespace http_handler {
                 std::istreambuf_iterator<char>());
 
             // Get MIME type
-            std::string mime_type = GetMimeType(file_path.string());
+            std::string mime_type = GetMimeType(abs_path.string());
 
             return MakeStringResponse(http::status::ok, content, req, mime_type);
         }

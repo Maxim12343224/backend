@@ -2,9 +2,9 @@
 #include <fstream>
 #include <sstream>
 #include <boost/json.hpp>
-#include <string>  // Добавлен заголовок для std::string
+#include <string>  
 
-using namespace std::literals;  // Для использования суффикса "s"
+using namespace std::literals;  
 
 namespace json_loader {
     namespace json = boost::json;
@@ -75,7 +75,7 @@ namespace json_loader {
             return map;
         }
 
-    } // namespace
+    } 
 
     model::Game LoadGame(const std::filesystem::path& json_path) {
         std::ifstream file(json_path);
@@ -102,4 +102,4 @@ namespace json_loader {
 
         return game;
     }
-}  // namespace json_loader
+}  

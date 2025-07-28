@@ -57,5 +57,17 @@ namespace http_handler {
 
         StringResponse MakeErrorResponse(http::status status, beast::string_view code,
             beast::string_view message, const StringRequest& req);
+
+    private:
+        bool IsSubPath(const fs::path& path, const fs::path& base) const {
+            auto norm_path = fs::weakly_canonical(path);
+            auto norm_base = fs::weakly_canonical(base);
+
+            auto [base_end, path_end] = std::mismatch(
+                norm_base.begin(), norm_base.end(),
+                norm_path.begin(), norm_path.end()
+            );
+            return base_end == norm_base.end();
+        }
     };
 }  // namespace http_handler
