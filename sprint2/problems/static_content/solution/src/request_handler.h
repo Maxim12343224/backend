@@ -17,7 +17,10 @@ namespace http_handler {
 
     class RequestHandler {
     public:
-        explicit RequestHandler(model::Game& game, const fs::path& static_path);
+        explicit RequestHandler(model::Game& game, const fs::path& static_path)
+            : game_{ game }, static_path_{ static_path } {
+        }
+
         RequestHandler(const RequestHandler&) = delete;
         RequestHandler& operator=(const RequestHandler&) = delete;
 
