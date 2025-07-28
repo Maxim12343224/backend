@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <iterator>
 #include <iostream>
+#include <system_error>
 
 namespace http_handler {
     namespace beast = boost::beast;
@@ -50,6 +51,20 @@ namespace http_handler {
             };
         }
     } // namespace
+
+    RequestHandler::RequestHandler(model::Game& game, const fs::path& static_path)
+        : game_{ game }, static_path_{ fs::absolute(static_path) } {
+
+        // Проверяем существование статической директории
+        if (!fs::exists(static_path_)) {
+            throw std::runtime_error("Static directory does not exist: " + static_path_.string());
+        }
+
+        // Проверяем, что это действительно директория
+        if (!fs::is_directory(static_path_)) {
+            throw std::runtime_error("Static path is not a directory: " + static_path_.string());
+        }
+    }
 
     StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
         const StringRequest& req, beast::string_view content_type) {
@@ -136,20 +151,20 @@ namespace http_handler {
         try {
             beast::string_view target = req.target();
 
-            // Handle root request
+            // Обработка корневого запроса
             if (target == "/") {
                 target = "/index.html";
             }
 
-            // Decode URL to path
+            // Декодируем URL
             std::string path = DecodeUrl(target);
 
-            // Remove leading slash
+            // Убираем ведущий слэш
             if (path.size() > 0 && path[0] == '/') {
                 path = path.substr(1);
             }
 
-            // Handle directory requests
+            // Обработка запросов к директориям
             if (path.empty()) {
                 path = "index.html";
             }
@@ -157,50 +172,56 @@ namespace http_handler {
                 path += "index.html";
             }
 
-            // Build full path
+            // Формируем полный путь
             fs::path file_path = static_path_ / path;
 
-            // Check if path is within static directory
-            fs::path canonical_path;
-            fs::path canonical_static = fs::canonical(static_path_);
-
-            try {
-                canonical_path = fs::canonical(file_path);
-            }
-            catch (const fs::filesystem_error& e) {
+            // Проверяем безопасность пути
+            std::error_code ec;
+            fs::path canonical_path = fs::canonical(file_path, ec);
+            if (ec) {
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
 
-            // Prevent directory traversal
-            if (canonical_path.string().find(canonical_static.string()) != 0) {
+            // Проверяем, что файл находится внутри статической директории
+            auto root_str = static_path_.string();
+            auto canon_str = canonical_path.string();
+
+            // Нормализуем пути для сравнения
+            if (root_str.back() != '/') {
+                root_str += '/';
+            }
+
+            if (canon_str.find(root_str) != 0) {
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path", req, "text/plain");
             }
 
-            // Check if file exists and is regular file
-            if (!fs::exists(canonical_path) || !fs::is_regular_file(canonical_path)) {
+            // Проверяем, что это обычный файл
+            if (!fs::is_regular_file(canonical_path)) {
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
 
-            // Open file
+            // Открываем файл
             std::ifstream file(canonical_path, std::ios::binary);
             if (!file) {
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
             }
 
-            // Read file content
+            // Читаем содержимое файла
             std::string content((std::istreambuf_iterator<char>(file)),
                 std::istreambuf_iterator<char>());
 
-            // Get MIME type
+            // Определяем MIME-тип
             std::string mime_type = GetMimeType(canonical_path.string());
 
             return MakeStringResponse(http::status::ok, content, req, mime_type);
         }
         catch (const std::exception& e) {
+            // Логируем ошибку для отладки
+            std::cerr << "Exception in static handler: " << e.what() << std::endl;
             return MakeStringResponse(http::status::internal_server_error,
                 "Internal server error", req, "text/plain");
         }
