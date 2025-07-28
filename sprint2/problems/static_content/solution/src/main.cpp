@@ -34,6 +34,10 @@ int main(int argc, const char* argv[]) {
     try {
         // 1. Загружаем карту из файла
         model::Game game = json_loader::LoadGame(argv[1]);
+        //fs::path static_path = argv[2];
+
+        //std::cout << "Static files path: " << static_path << std::endl;
+        //std::cout << "Absolute static path: " << fs::absolute(static_path) << std::endl;
 
         // 2. Инициализируем io_context
         const unsigned num_threads = std::thread::hardware_concurrency();

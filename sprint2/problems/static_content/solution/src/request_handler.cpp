@@ -136,7 +136,6 @@ namespace http_handler {
     StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
         try {
             beast::string_view target = req.target();
-            std::cerr << "Static request: " << req.method() << " " << target << std::endl;
 
             // Handle root request
             if (target == "/" || target == "/index.html") {
@@ -147,7 +146,7 @@ namespace http_handler {
             std::string path = DecodeUrl(target);
 
             // Remove leading slash
-            if (path.size() > 0 && path[0] == '/') {
+            while (!path.empty() && path[0] == '/') {
                 path = path.substr(1);
             }
 
@@ -161,37 +160,30 @@ namespace http_handler {
 
             // Build full path
             fs::path file_path = static_path_ / path;
-            std::cerr << "Looking for file: " << file_path << std::endl;
 
-            // Check if path is safe
-            auto rel_path = fs::relative(file_path, static_path_);
-            if (rel_path.empty() || *rel_path.begin() == "..") {
-                std::cerr << "Invalid path detected: " << file_path << std::endl;
+            // Normalize path separators
+            file_path = file_path.lexically_normal();
+
+            // Simplify security check - only prevent obvious directory traversal
+            std::string file_str = file_path.string();
+            if (file_str.find("..") != std::string::npos) {
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path", req, "text/plain");
             }
 
-            // Check if file exists
-            std::error_code ec;
-            if (!fs::exists(file_path, ec) || ec) {
-                std::cerr << "File not found: " << file_path << " (error: " << ec.message() << ")" << std::endl;
-                return MakeStringResponse(http::status::not_found,
-                    "File not found", req, "text/plain");
-            }
-
-            // Check if it's a regular file
-            if (!fs::is_regular_file(file_path, ec) || ec) {
-                std::cerr << "Not a regular file: " << file_path << " (error: " << ec.message() << ")" << std::endl;
-                return MakeStringResponse(http::status::not_found,
-                    "Not a file", req, "text/plain");
-            }
-
-            // Open file
+            // Try to open file directly without complex checks
             std::ifstream file(file_path, std::ios::binary);
             if (!file) {
-                std::cerr << "Failed to open: " << file_path << std::endl;
-                return MakeStringResponse(http::status::internal_server_error,
-                    "Failed to open file", req, "text/plain");
+                // Try adding index.html for directories
+                if (path.back() != '/') {
+                    file_path = static_path_ / path / "index.html";
+                    file.open(file_path, std::ios::binary);
+                }
+
+                if (!file) {
+                    return MakeStringResponse(http::status::not_found,
+                        "File not found", req, "text/plain");
+                }
             }
 
             // Read file content
@@ -200,12 +192,10 @@ namespace http_handler {
 
             // Get MIME type
             std::string mime_type = GetMimeType(file_path.string());
-            std::cerr << "Serving file: " << file_path << " (" << content.size() << " bytes)" << std::endl;
 
             return MakeStringResponse(http::status::ok, content, req, mime_type);
         }
         catch (const std::exception& e) {
-            std::cerr << "Exception in static handler: " << e.what() << std::endl;
             return MakeStringResponse(http::status::internal_server_error,
                 "Internal server error", req, "text/plain");
         }
