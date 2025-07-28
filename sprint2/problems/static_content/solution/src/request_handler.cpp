@@ -134,7 +134,6 @@ namespace http_handler {
 
     StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
         try {
-            // Используем beast::string_view вместо std::string_view
             beast::string_view target = req.target();
 
             // Проверяем базовые условия
@@ -143,11 +142,9 @@ namespace http_handler {
                     "Invalid path", req, "text/plain");
             }
 
-            // Преобразуем в std::string для дальнейшей обработки
+            // Декодируем URL и удаляем ведущий слэш
             std::string path = DecodeUrl(target);
-
-            // Удаляем ведущий слэш
-            if (path.size() > 1 && path[0] == '/') {
+            if (path.size() > 0 && path[0] == '/') {
                 path = path.substr(1);
             }
 
@@ -156,17 +153,26 @@ namespace http_handler {
                 path = "index.html";
             }
 
+            // Логирование для отладки
+            std::cerr << "Request path: " << path << std::endl;
+            std::cerr << "Static path: " << static_path_ << std::endl;
+
             // Строим полный путь к файлу
             fs::path file_path = static_path_ / path;
 
+            // Логирование полного пути
+            std::cerr << "Full file path: " << file_path << std::endl;
+
             // Проверяем существование файла
             if (!fs::exists(file_path)) {
+                std::cerr << "File not found: " << file_path << std::endl;
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
 
             // Проверяем, что это обычный файл
             if (!fs::is_regular_file(file_path)) {
+                std::cerr << "Path is not a file: " << file_path << std::endl;
                 return MakeStringResponse(http::status::bad_request,
                     "Path is not a file", req, "text/plain");
             }
@@ -177,11 +183,13 @@ namespace http_handler {
                 auto canonical_static = fs::canonical(static_path_);
 
                 if (canonical_path.string().find(canonical_static.string()) != 0) {
+                    std::cerr << "Directory traversal attempt: " << canonical_path << std::endl;
                     return MakeStringResponse(http::status::bad_request,
                         "Directory traversal attempt", req, "text/plain");
                 }
             }
-            catch (const fs::filesystem_error&) {
+            catch (const fs::filesystem_error& e) {
+                std::cerr << "Filesystem error: " << e.what() << std::endl;
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
@@ -189,6 +197,7 @@ namespace http_handler {
             // Открываем файл
             std::ifstream file(file_path, std::ios::binary);
             if (!file) {
+                std::cerr << "Failed to open file: " << file_path << std::endl;
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
             }
@@ -203,6 +212,7 @@ namespace http_handler {
             return MakeStringResponse(http::status::ok, content, req, mime_type);
         }
         catch (const std::exception& e) {
+            std::cerr << "Exception in static handler: " << e.what() << std::endl;
             return MakeStringResponse(http::status::internal_server_error,
                 "Internal server error", req, "text/plain");
         }
