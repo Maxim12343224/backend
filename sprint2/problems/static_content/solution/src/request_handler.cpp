@@ -50,7 +50,7 @@ namespace http_handler {
                 {"offsetY", office.GetOffset().dy}
             };
         }
-    } // namespace
+    } 
 
     StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
         const StringRequest& req, beast::string_view content_type) {
@@ -137,51 +137,51 @@ namespace http_handler {
         try {
             beast::string_view target = req.target();
 
-            // Handle root request
+            
             if (target == "/" || target == "/index.html") {
                 target = "/index.html";
             }
 
-            // Decode URL to path
+            
             std::string path = DecodeUrl(target);
 
-            // Build full path
+           
             fs::path file_path = static_path_;
-            file_path /= path.substr(1);  // Remove leading slash
+            file_path /= path.substr(1);  
 
-            // Get canonical paths for security check
+            
             fs::path abs_path = fs::weakly_canonical(file_path);
             fs::path abs_static = fs::weakly_canonical(static_path_);
 
-            // Check if path is within static directory
+            
             if (!IsSubPath(abs_path, abs_static)) {
                 return MakeStringResponse(http::status::bad_request,
                     "Invalid path", req, "text/plain");
             }
 
-            // Handle directory requests
+            
             if (fs::is_directory(abs_path)) {
                 abs_path /= "index.html";
             }
 
-            // Check if file exists
+            
             if (!fs::exists(abs_path) || !fs::is_regular_file(abs_path)) {
                 return MakeStringResponse(http::status::not_found,
                     "File not found", req, "text/plain");
             }
 
-            // Open file
+            
             std::ifstream file(abs_path, std::ios::binary);
             if (!file) {
                 return MakeStringResponse(http::status::internal_server_error,
                     "Failed to open file", req, "text/plain");
             }
 
-            // Read file content
+            
             std::string content((std::istreambuf_iterator<char>(file)),
                 std::istreambuf_iterator<char>());
 
-            // Get MIME type
+            
             std::string mime_type = GetMimeType(abs_path.string());
 
             return MakeStringResponse(http::status::ok, content, req, mime_type);
