@@ -20,7 +20,7 @@ namespace util {
  *  };
  *
  *  Name name{"Harry Potter"s};
- *  Address address{"4 Privet Drive, Little Whinging, Surrey, England"s};
+ *  Address address{"4 Privet Drive, Little Whinging, Surrey, England"s}tyfg;
  *
  * Person p1{name, address}; // OK
  * Person p2{address, name}; // Ошибка, Address и Name - разные типы
