@@ -1,0 +1,9 @@
+{
+    "version": 4,
+    "vendor": {
+        "conan": {}
+    },
+    "include": [
+        "/mnt/c/backend/sprint2/problems/server_logging/solution/build/CMakePresets.json"
+    ]
+}
