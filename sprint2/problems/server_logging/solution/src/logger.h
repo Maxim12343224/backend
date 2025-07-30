@@ -1,6 +1,6 @@
 #pragma once
 
-// Явно отключаем поддержку широких символов
+
 #define BOOST_LOG_NO_WCHAR_T
 #define BOOST_LOG_WITHOUT_WCHAR_T
 
@@ -32,19 +32,19 @@ namespace logger {
             void operator()(logging::record_view const& rec, logging::formatting_ostream& strm) const {
                 json::object obj;
 
-                // Timestamp
+                
                 auto ts = logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
                 if (ts) {
                     obj["timestamp"] = boost::posix_time::to_iso_extended_string(ts.get());
                 }
 
-                // Message
+                
                 auto msg = logging::extract<std::string>("Message", rec);
                 if (msg) {
                     obj["message"] = msg.get();
                 }
 
-                // Additional data
+                
                 if (auto data = rec[additional_data]; data) {
                     obj["data"] = data.get();
                 }
@@ -54,12 +54,12 @@ namespace logger {
     };
 
     inline void InitLogging() {
-        logging::add_common_attributes();  // Важно для TimeStamp
+        logging::add_common_attributes(); 
 
         auto core = logging::core::get();
         core->remove_all_sinks();
 
-        // Create console sink with JSON formatter
+        
         auto sink = boost::make_shared<sinks::synchronous_sink<sinks::text_ostream_backend>>();
 
         boost::shared_ptr<std::ostream> stream(&std::clog, boost::null_deleter());
