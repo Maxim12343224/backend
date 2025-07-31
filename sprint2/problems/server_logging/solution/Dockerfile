@@ -1,5 +1,6 @@
 FROM gcc:11.3 as build
 
+# Установка зависимостей
 RUN apt update && \
     apt install -y \
       python3-pip \
@@ -7,30 +8,43 @@ RUN apt update && \
     && \
     pip3 install conan==1.*
 
-# Запуск conan как раньше
-COPY conanfile.txt /app/
-RUN mkdir /app/build && cd /app/build && \
-    conan install . --install-folder=build --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
+# Создаем рабочую директорию
+WORKDIR /app
 
-# Папка data больше не нужна
-COPY ./src /app/src
-COPY CMakeLists.txt /app/
+# Копируем conanfile.txt в рабочую директорию
+COPY conanfile.txt .
 
-RUN cd /app/build && \
+# Устанавливаем зависимости через Conan
+RUN mkdir build && cd build && \
+    conan install .. --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
+
+# Копируем исходный код и CMakeLists.txt
+COPY ./src ./src
+COPY CMakeLists.txt .
+
+# Собираем проект
+RUN cd build && \
     cmake -DCMAKE_BUILD_TYPE=Release .. && \
-    cmake --build .
+    cmake --build . --target game_server
 
-# Второй контейнер в том же докерфайле
+# Второй контейнер для запуска
 FROM ubuntu:22.04 as run
 
-# Создадим пользователя www
+# Установка runtime зависимостей (если нужны)
+RUN apt update && apt install -y \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создаем пользователя www
 RUN groupadd -r www && useradd -r -g www www
 USER www
 
-# Скопируем приложение со сборочного контейнера в директорию /app.
-# Не забываем также папку data, она пригодится.
-COPY --from=build /app/build/bin/game_server /app/
-COPY ./data /app/data
+# Создаем рабочую директорию
+WORKDIR /app
 
-# Запускаем игровой сервер
+# Копируем бинарник и данные из build-контейнера
+COPY --from=build /app/build/bin/game_server .
+COPY --from=build /app/data ./data
+
+# Запускаем сервер
 ENTRYPOINT ["/app/game_server", "/app/data/config.json"]
