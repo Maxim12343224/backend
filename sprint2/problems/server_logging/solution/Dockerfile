@@ -8,14 +8,14 @@ RUN apt update && \
     && \
     pip3 install conan==1.*
 
-# Запуск conan как раньше
-COPY conanfile.txt /app/
-RUN mkdir /app/build && cd /app/build && \
-    conan install .. --build=missing
-
-# Папка data больше не нужна
 COPY ./src /app/src
-COPY CMakeLists.txt /app/
+COPY ./data /app/data
+COPY CMakeLists.txt conanfile.txt /app/
+
+
+RUN mkdir /app/build && cd /app/build && \
+    conan install .. --build=missing && \
+
 
 RUN cd /app/build && \
     cmake -DCMAKE_BUILD_TYPE=Release .. && \
@@ -28,8 +28,6 @@ FROM ubuntu:22.04 as run
 RUN groupadd -r www && useradd -r -g www www
 USER www
 
-# Скопируем приложение со сборочного контейнера в директорию /app.
-# Не забываем также папку data, она пригодится.
 COPY --from=build /app/build/bin/game_server /app/
 COPY ./data /app/data
 
