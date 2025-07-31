@@ -8,19 +8,17 @@ RUN apt update && \
     && \
     pip3 install conan==1.*
 
-# Создаем рабочую директорию
 WORKDIR /app
 
-# Копируем conanfile.txt в рабочую директорию
+# Копируем все необходимые файлы для сборки
 COPY conanfile.txt .
+COPY src ./src
+COPY CMakeLists.txt .
+COPY data ./data  # Добавляем копирование данных
 
 # Устанавливаем зависимости через Conan
 RUN mkdir build && cd build && \
     conan install .. --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
-
-# Копируем исходный код и CMakeLists.txt
-COPY ./src ./src
-COPY CMakeLists.txt .
 
 # Собираем проект
 RUN cd build && \
@@ -30,7 +28,7 @@ RUN cd build && \
 # Второй контейнер для запуска
 FROM ubuntu:22.04 as run
 
-# Установка runtime зависимостей (если нужны)
+# Установка runtime зависимостей
 RUN apt update && apt install -y \
     libstdc++6 \
     && rm -rf /var/lib/apt/lists/*
@@ -39,7 +37,6 @@ RUN apt update && apt install -y \
 RUN groupadd -r www && useradd -r -g www www
 USER www
 
-# Создаем рабочую директорию
 WORKDIR /app
 
 # Копируем бинарник и данные из build-контейнера
