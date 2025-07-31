@@ -8,10 +8,10 @@ RUN apt update && \
     && \
     pip3 install conan==1.*
 
-# Запуск conan с указанием libstdc++11
+# Запуск conan как раньше
 COPY conanfile.txt /app/
 RUN mkdir /app/build && cd /app/build && \
-    conan install .. --build=missing -s compiler.libcxx=libstdc++11
+    conan install .. --build=missing
 
 # Папка data больше не нужна
 COPY ./src /app/src
@@ -21,7 +21,7 @@ RUN cd /app/build && \
     cmake -DCMAKE_BUILD_TYPE=Release .. && \
     cmake --build .
 
-# Второй контейров в том же докерфайле
+# Второй контейнер в том же докерфайле
 FROM ubuntu:22.04 as run
 
 # Создадим пользователя www
