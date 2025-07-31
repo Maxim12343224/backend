@@ -9,7 +9,7 @@ RUN apt update && \
 
 # Запуск conan как раньше
 COPY conanfile.txt /app/
-RUN mkdir /app/build && cd /app/build && \
+RUN mkdir /app/build && cd /app && \
     conan install . --install-folder=build --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
 
 # Папка data больше не нужна
