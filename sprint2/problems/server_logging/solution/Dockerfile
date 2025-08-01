@@ -12,6 +12,7 @@ RUN mkdir /app/build && cd /app/build && \
     conan install .. --install-folder=build --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
 
 COPY ./src /app/src
+COPY ./data /app/data
 COPY CMakeLists.txt /app/
 
 RUN cd /app/build && \
