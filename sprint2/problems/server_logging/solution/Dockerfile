@@ -8,8 +8,8 @@ RUN apt update && \
     pip3 install conan==1.*
 
 COPY conanfile.txt /app/
-RUN mkdir /app/build && cd /app/build && \
-    conan install . --install-folder=build --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
+RUN mkdir /app/solution && cd /app/solution && \
+    conan install . --install-folder=solution --solution=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
 
 COPY ./src /app/src
 COPY CMakeLists.txt /app/
