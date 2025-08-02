@@ -6,6 +6,7 @@ namespace http_server {
     namespace http = beast::http;
     namespace json = boost::json;
 
+
     void Session::Run() {
         net::dispatch(stream_.get_executor(),
             beast::bind_front_handler(&Session::Read, shared_from_this()));
@@ -62,4 +63,4 @@ namespace http_server {
             << "error";
     }
 
-}  // namespace http_server
+} 
