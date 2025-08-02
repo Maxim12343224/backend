@@ -179,7 +179,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     auto token = GetTokenFromRequest(req);
     if (!token) {
         return MakeErrorResponse(http::status::unauthorized,
-                               "invalidToken",
+                               "invalidToken",  // Исправлено!
                                "Authorization header is required", req);
     }
 
@@ -213,7 +213,12 @@ std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringReque
     if (auto it = req.find(http::field::authorization); it != req.end()) {
         auto auth_header = it->value();
         if (auth_header.starts_with("Bearer ")) {
-            return std::string(auth_header.substr(7));
+            std::string token = std::string(auth_header.substr(7));
+            // Проверка длины токена (должен быть 32 символа)
+            if (token.length() != 32) {
+                return std::nullopt;
+            }
+            return token;
         }
     }
     return std::nullopt;

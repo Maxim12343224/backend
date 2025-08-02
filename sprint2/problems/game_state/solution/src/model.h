@@ -229,7 +229,9 @@ namespace model {
                 session = CreateSession(map_id);
                 if (!session) return nullptr;
             }
-            return session->AddPlayer(std::move(dog_name));
+            auto player = session->AddPlayer(std::move(dog_name));
+            token_to_player_[player->GetToken()] = player;  // Добавлено!
+            return player;
         }
 
         std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
