@@ -11,6 +11,8 @@ namespace http_server {
             beast::bind_front_handler(&Session::Read, shared_from_this()));
     }
 
+    
+    
     void Session::Read() {
         request_ = {};
         stream_.expires_after(std::chrono::seconds(30));
