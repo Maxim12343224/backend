@@ -156,7 +156,8 @@ StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
     }
 
     auto session = player->GetSession();
-    json::value players_json;
+    // Явно создаем JSON объект вместо null
+    json::value players_json = json::object();
     for (const auto& p : session->GetPlayers()) {
         players_json.as_object()[std::to_string(*p->GetId())] = {
             {"name", p->GetDog().GetName()}

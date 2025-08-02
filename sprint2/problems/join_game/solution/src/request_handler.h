@@ -38,15 +38,26 @@ namespace http_handler {
             StringRequest string_req(std::move(req));
 
             if (string_req.target().starts_with("/api/")) {
-                if (string_req.method() == http::verb::post &&
-                    string_req.target() == "/api/v1/game/join") {
-                    auto response = HandleJoinGame(std::move(string_req));
-                    return send(std::move(response));
+                // Обработка /api/v1/game/join с проверкой метода
+                if (string_req.target() == "/api/v1/game/join") {
+                    if (string_req.method() == http::verb::post) {
+                        auto response = HandleJoinGame(std::move(string_req));
+                        return send(std::move(response));
+                    }
+                    else {
+                        // Возвращаем 405 для всех не-POST методов
+                        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                            "invalidMethod", "Only POST method is expected", string_req);
+                        response.set(http::field::allow, "POST");
+                        return send(std::move(response));
+                    }
                 }
+                // Обработка /api/v1/game/players
                 else if (string_req.target() == "/api/v1/game/players") {
                     auto response = HandleGetPlayers(std::move(string_req));
                     return send(std::move(response));
                 }
+                // Остальные API-запросы
                 else {
                     auto response = HandleApiRequest(std::move(string_req));
                     return send(std::move(response));
