@@ -231,7 +231,7 @@ namespace model {
             return player;
         }
 
-        const std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) const {
+        std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 return it->second;
             }

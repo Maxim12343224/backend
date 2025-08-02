@@ -43,9 +43,7 @@ namespace http_handler {
                     auto response = HandleJoinGame(std::move(string_req));
                     return send(std::move(response));
                 }
-                else if ((string_req.method() == http::verb::get ||
-                    string_req.method() == http::verb::head) &&
-                    string_req.target() == "/api/v1/game/players") {
+                else if (string_req.target() == "/api/v1/game/players") {
                     auto response = HandleGetPlayers(std::move(string_req));
                     return send(std::move(response));
                 }
@@ -128,5 +126,4 @@ namespace http_handler {
     private:
         RequestHandler base_handler_;
     };
-
 }  // namespace http_handler

@@ -97,4 +97,4 @@ namespace http_server {
             ioc, endpoint, std::forward<RequestHandler>(handler))->Run();
     }
 
-}  
+}  // namespace http_server
