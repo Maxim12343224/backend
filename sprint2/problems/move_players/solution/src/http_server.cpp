@@ -12,7 +12,6 @@ namespace http_server {
     }
 
     
-    
     void Session::Read() {
         request_ = {};
         stream_.expires_after(std::chrono::seconds(30));
