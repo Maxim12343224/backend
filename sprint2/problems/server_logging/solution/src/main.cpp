@@ -55,7 +55,7 @@ int main(int argc, const char* argv[]) {
                 std::forward<decltype(send)>(send));
             });
 
-        
+        // Логирование запуска
         json::value start_data{
             {"port", port},
             {"address", address.to_string()}
@@ -65,7 +65,7 @@ int main(int argc, const char* argv[]) {
 
         RunWorkers(std::max(1u, num_threads), [&ioc] { ioc.run(); });
 
-        
+        // Успешное завершение
         json::value exit_data{ {"code", 0} };
         BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, exit_data)
             << "server exited";
