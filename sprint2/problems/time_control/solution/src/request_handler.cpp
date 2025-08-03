@@ -296,6 +296,7 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                                    "timeDelta must be non-negative", req);
         }
 
+        // Конвертируем миллисекунды в секунды
         game_.Tick(static_cast<double>(time_delta) / 1000.0);
 
         return MakeStringResponse(http::status::ok, "{}", req);

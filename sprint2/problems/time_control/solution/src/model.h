@@ -8,6 +8,7 @@
 #include <cmath>
 #include <mutex>
 #include <optional>
+#include <algorithm>
 
 #include "tagged.h"
 

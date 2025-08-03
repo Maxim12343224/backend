@@ -2,6 +2,7 @@
 #include <stdexcept>
 #include <random>
 #include <algorithm>
+#include <cmath>
 
 namespace model {
 using namespace std::literals;
@@ -114,51 +115,49 @@ void GameSession::Tick(double delta_time) {
             continue;
         }
 
+        // Вычисляем новую позицию без ограничений
         new_pos.x += speed.x * delta_time;
         new_pos.y += speed.y * delta_time;
 
-        if (road->IsHorizontal()) {
-            double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
-            double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
-            double min_y = road->GetStart().y - 0.4;
-            double max_y = road->GetStart().y + 0.4;
-
-            if (new_pos.x < min_x) {
-                new_pos.x = min_x;
-                speed.x = 0;
-            } else if (new_pos.x > max_x) {
-                new_pos.x = max_x;
-                speed.x = 0;
+        // Проверяем, находится ли новая позиция в пределах дороги
+        auto is_valid_position = [road](const Point& pos) {
+            if (road->IsHorizontal()) {
+                const double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
+                const double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
+                const double road_y = road->GetStart().y;
+                return (pos.x >= min_x && pos.x <= max_x && 
+                        std::abs(pos.y - road_y) <= 0.4);
+            } else {
+                const double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
+                const double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
+                const double road_x = road->GetStart().x;
+                return (pos.y >= min_y && pos.y <= max_y && 
+                        std::abs(pos.x - road_x) <= 0.4);
             }
+        };
 
-            if (new_pos.y < min_y) {
-                new_pos.y = min_y;
-                speed.y = 0;
-            } else if (new_pos.y > max_y) {
-                new_pos.y = max_y;
-                speed.y = 0;
+        // Если позиция невалидна, корректируем её
+        if (!is_valid_position(new_pos)) {
+            if (road->IsHorizontal()) {
+                // Корректируем X координату
+                double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
+                double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
+                new_pos.x = std::clamp(new_pos.x, min_x, max_x);
+                
+                // Корректируем Y координату
+                new_pos.y = road->GetStart().y;
+            } else {
+                // Корректируем Y координату
+                double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
+                double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
+                new_pos.y = std::clamp(new_pos.y, min_y, max_y);
+                
+                // Корректируем X координату
+                new_pos.x = road->GetStart().x;
             }
-        } else if (road->IsVertical()) {
-            double min_x = road->GetStart().x - 0.4;
-            double max_x = road->GetStart().x + 0.4;
-            double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
-            double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
-
-            if (new_pos.x < min_x) {
-                new_pos.x = min_x;
-                speed.x = 0;
-            } else if (new_pos.x > max_x) {
-                new_pos.x = max_x;
-                speed.x = 0;
-            }
-
-            if (new_pos.y < min_y) {
-                new_pos.y = min_y;
-                speed.y = 0;
-            } else if (new_pos.y > max_y) {
-                new_pos.y = max_y;
-                speed.y = 0;
-            }
+            
+            // Обнуляем скорость при столкновении с границей
+            speed = {0.0, 0.0};
         }
 
         dog.SetPosition(new_pos);
@@ -181,5 +180,4 @@ std::string DirectionToString(Direction dir) {
     }
     return "U";
 }
-
 }  // namespace model
