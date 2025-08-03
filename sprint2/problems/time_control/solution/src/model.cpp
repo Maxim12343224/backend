@@ -21,6 +21,7 @@ void Map::AddOffice(Office office) {
     }
 }
 
+// model.cpp
 bool Map::IsPointOnRoads(Point p) const {
     for (const auto& road : roads_) {
         if (road.IsHorizontal()) {
@@ -148,75 +149,86 @@ void GameSession::UpdateState(double delta_time_sec) {
         Point current = dog.GetPosition();
         Point dp = { speed.x * delta_time_sec, speed.y * delta_time_sec };
         
-        // Если перемещение очень мало, пропускаем
-        if (std::abs(dp.x) < 1e-10 && std::abs(dp.y) < 1e-10) {
-            continue;
-        }
-
+        // Рассчитываем новую позицию без ограничений
         Point new_position = { current.x + dp.x, current.y + dp.y };
-
-        // Если новая позиция на дороге, перемещаемся
-        if (map_.IsPointOnRoads(new_position)) {
-            dog.SetPosition(new_position);
-        } else {
-            // Аналитически находим точку пересечения с границей дороги
-            Point final_point = current;
-            bool moved = false;
-            
-            for (const auto& road : map_.GetRoads()) {
-                if (road.IsHorizontal()) {
-                    double road_y = road.GetStart().y;
-                    double min_x = std::min(road.GetStart().x, road.GetEnd().x);
-                    double max_x = std::max(road.GetStart().x, road.GetEnd().x);
+        
+        // Ищем ближайшую дорогу для определения границ
+        bool moved = false;
+        Point final_position = current;
+        double min_distance = std::numeric_limits<double>::max();
+        
+        for (const auto& road : map_.GetRoads()) {
+            if (road.IsHorizontal()) {
+                double road_y = road.GetStart().y;
+                double x0 = std::min(road.GetStart().x, road.GetEnd().x);
+                double x1 = std::max(road.GetStart().x, road.GetEnd().x);
+                
+                // Проверяем движение вдоль горизонтальной дороги
+                if (std::abs(current.y - road_y) <= 0.4 + 1e-5) {
+                    // Рассчитываем конечную позицию с учетом дорожных ограничений
+                    Point candidate = new_position;
+                    candidate.y = road_y;  // Фиксируем Y на оси дороги
                     
-                    // Проверяем движение вдоль горизонтальной дороги
-                    if (std::abs(current.y - road_y) <= 0.4 + 1e-5) {
-                        double target_y = road_y;
-                        double target_x = new_position.x;
-                        
-                        // Ограничиваем движение по X
-                        if (target_x < min_x) target_x = min_x;
-                        if (target_x > max_x) target_x = max_x;
-                        
-                        // Если перемещение по X допустимо
-                        if (std::abs(target_x - current.x) > 1e-5) {
-                            final_point = {target_x, target_y};
-                            moved = true;
-                            break;
-                        }
-                    }
-                } else if (road.IsVertical()) {
-                    double road_x = road.GetStart().x;
-                    double min_y = std::min(road.GetStart().y, road.GetEnd().y);
-                    double max_y = std::max(road.GetStart().y, road.GetEnd().y);
+                    // Ограничиваем движение по X
+                    if (candidate.x < x0) candidate.x = x0;
+                    if (candidate.x > x1) candidate.x = x1;
                     
-                    // Проверяем движение вдоль вертикальной дороги
-                    if (std::abs(current.x - road_x) <= 0.4 + 1e-5) {
-                        double target_x = road_x;
-                        double target_y = new_position.y;
-                        
-                        // Ограничиваем движение по Y
-                        if (target_y < min_y) target_y = min_y;
-                        if (target_y > max_y) target_y = max_y;
-                        
-                        // Если перемещение по Y допустимо
-                        if (std::abs(target_y - current.y) > 1e-5) {
-                            final_point = {target_x, target_y};
+                    // Проверяем, что точка находится на дороге
+                    if (candidate.x >= x0 && candidate.x <= x1) {
+                        // Выбираем ближайшую дорогу
+                        double distance = std::abs(candidate.x - current.x) + 
+                                          std::abs(candidate.y - current.y);
+                        if (distance < min_distance) {
+                            min_distance = distance;
+                            final_position = candidate;
                             moved = true;
-                            break;
                         }
                     }
                 }
             }
+            
+            if (road.IsVertical()) {
+                double road_x = road.GetStart().x;
+                double y0 = std::min(road.GetStart().y, road.GetEnd().y);
+                double y1 = std::max(road.GetStart().y, road.GetEnd().y);
+                
+                // Проверяем движение вдоль вертикальной дороги
+                if (std::abs(current.x - road_x) <= 0.4 + 1e-5) {
+                    // Рассчитываем конечную позицию с учетом дорожных ограничений
+                    Point candidate = new_position;
+                    candidate.x = road_x;  // Фиксируем X на оси дороги
+                    
+                    // Ограничиваем движение по Y
+                    if (candidate.y < y0) candidate.y = y0;
+                    if (candidate.y > y1) candidate.y = y1;
+                    
+                    // Проверяем, что точка находится на дороге
+                    if (candidate.y >= y0 && candidate.y <= y1) {
+                        // Выбираем ближайшую дорогу
+                        double distance = std::abs(candidate.x - current.x) + 
+                                          std::abs(candidate.y - current.y);
+                        if (distance < min_distance) {
+                            min_distance = distance;
+                            final_position = candidate;
+                            moved = true;
+                        }
+                    }
+                }
+            }
+        }
 
-            dog.SetPosition(final_point);
+        // Если перемещение допустимо, обновляем позицию
+        if (moved) {
+            dog.SetPosition(final_position);
             
             // Сбрасываем скорость только если достигли границы
-            if (!moved || 
-                (std::abs(final_point.x - new_position.x) > 1e-5 ||
-                (std::abs(final_point.y - new_position.y) > 1e-5))) {
+            if (std::abs(final_position.x - new_position.x) > 1e-5 ||
+                std::abs(final_position.y - new_position.y) > 1e-5) {
                 dog.SetSpeed({0.0, 0.0});
             }
+        } else {
+            // Если точка не на дороге, сбрасываем скорость
+            dog.SetSpeed({0.0, 0.0});
         }
     }
 }
