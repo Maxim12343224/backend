@@ -1,3 +1,4 @@
+// model.h
 #pragma once
 #include <string>
 #include <unordered_map>
@@ -18,10 +19,13 @@ namespace model {
 
     struct Point {
         Coord x, y;
+        bool operator==(const Point& other) const {
+            return std::abs(x - other.x) < 1e-9 && std::abs(y - other.y) < 1e-9;
+        }
     };
 
     struct Size {
-        Dimension width, height;
+        double width, height;  // Изменено на double
     };
 
     struct Rectangle {
@@ -64,6 +68,25 @@ namespace model {
         bool IsVertical() const noexcept { return start_.x == end_.x; }
         Point GetStart() const noexcept { return start_; }
         Point GetEnd() const noexcept { return end_; }
+
+        Rectangle GetBoundingBox() const {
+            if (IsHorizontal()) {
+                double min_x = std::min(start_.x, end_.x) - 0.4;
+                double max_x = std::max(start_.x, end_.x) + 0.4;
+                return {
+                    {min_x, start_.y - 0.4},
+                    {max_x - min_x, 0.8}
+                };
+            }
+            else {
+                double min_y = std::min(start_.y, end_.y) - 0.4;
+                double max_y = std::max(start_.y, end_.y) + 0.4;
+                return {
+                    {start_.x - 0.4, min_y},
+                    {0.8, max_y - min_y}
+                };
+            }
+        }
 
     private:
         Point start_;
@@ -138,26 +161,22 @@ namespace model {
             : name_(std::move(name)),
             position_(start_pos),
             speed_{ 0.0, 0.0 },
-            direction_(start_dir),
-            current_road_(nullptr) {
+            direction_(start_dir) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
         Point GetPosition() const noexcept { return position_; }
         Point GetSpeed() const noexcept { return speed_; }
         Direction GetDirection() const noexcept { return direction_; }
-        const Road* GetCurrentRoad() const noexcept { return current_road_; }
         void SetSpeed(Point speed) noexcept { speed_ = speed; }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point pos) noexcept { position_ = pos; }
-        void SetCurrentRoad(const Road* road) noexcept { current_road_ = road; }
 
     private:
         std::string name_;
         Point position_;
         Point speed_;
         Direction direction_;
-        const Road* current_road_;
     };
 
     class GameSession;
