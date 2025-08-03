@@ -28,10 +28,11 @@ bool Map::IsPointOnRoads(Point p) const {
             double x0 = std::min(road.GetStart().x, road.GetEnd().x);
             double x1 = std::max(road.GetStart().x, road.GetEnd().x);
             
-            if (p.y >= road_y - 0.4 && 
-                p.y <= road_y + 0.4 &&
-                p.x >= x0 && 
-                p.x <= x1) {
+            // Расширяем допустимую зону до границ дороги
+            if (p.y >= road_y - 0.4 - 1e-5 && 
+                p.y <= road_y + 0.4 + 1e-5 &&
+                p.x >= x0 - 1e-5 && 
+                p.x <= x1 + 1e-5) {
                 return true;
             }
         } else if (road.IsVertical()) {
@@ -39,10 +40,11 @@ bool Map::IsPointOnRoads(Point p) const {
             double y0 = std::min(road.GetStart().y, road.GetEnd().y);
             double y1 = std::max(road.GetStart().y, road.GetEnd().y);
             
-            if (p.x >= road_x - 0.4 && 
-                p.x <= road_x + 0.4 &&
-                p.y >= y0 && 
-                p.y <= y1) {
+            // Расширяем допустимую зону до границ дороги
+            if (p.x >= road_x - 0.4 - 1e-5 && 
+                p.x <= road_x + 0.4 + 1e-5 &&
+                p.y >= y0 - 1e-5 && 
+                p.y <= y1 + 1e-5) {
                 return true;
             }
         }
@@ -69,10 +71,17 @@ Point GameSession::GenerateRandomPosition() const {
     if (roads.empty()) {
         return {0.0, 0.0};
     }
-    // Начальная точка первой дороги
+    
+    // Начальная точка первой дороги с учетом смещения
     const auto& road = roads.front();
-    return {static_cast<double>(road.GetStart().x), 
-            static_cast<double>(road.GetStart().y)};
+    Point start = road.GetStart();
+    
+    // Для горизонтальных дорог добавляем смещение
+    if (road.IsHorizontal()) {
+        return {static_cast<double>(start.x), static_cast<double>(start.y)};
+    }
+    // Для вертикальных дорог добавляем смещение
+    return {static_cast<double>(start.x), static_cast<double>(start.y)};
 }
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
@@ -141,9 +150,50 @@ void GameSession::UpdateState(double delta_time_sec) {
         new_position.x += speed.x * delta_time_sec;
         new_position.y += speed.y * delta_time_sec;
 
-        if (map_.IsPointOnRoads(new_position)) {
-            dog.SetPosition(new_position);
+        // Рассчитываем конечную позицию с учетом дорожных ограничений
+        Point final_position = new_position;
+        bool moved = false;
+        
+        for (const auto& road : map_.GetRoads()) {
+            if (road.IsHorizontal()) {
+                double road_y = road.GetStart().y;
+                double x0 = std::min(road.GetStart().x, road.GetEnd().x);
+                double x1 = std::max(road.GetStart().x, road.GetEnd().x);
+                
+                // Проверяем, движется ли собака вдоль горизонтальной дороги
+                if (std::abs(new_position.y - road_y) <= 0.4 + 1e-5) {
+                    // Ограничиваем движение по X
+                    final_position.x = std::clamp(new_position.x, x0, x1);
+                    final_position.y = road_y;  // Фиксируем позицию по Y
+                    moved = true;
+                    break;
+                }
+            } else if (road.IsVertical()) {
+                double road_x = road.GetStart().x;
+                double y0 = std::min(road.GetStart().y, road.GetEnd().y);
+                double y1 = std::max(road.GetStart().y, road.GetEnd().y);
+                
+                // Проверяем, движется ли собака вдоль вертикальной дороги
+                if (std::abs(new_position.x - road_x) <= 0.4 + 1e-5) {
+                    // Ограничиваем движение по Y
+                    final_position.y = std::clamp(new_position.y, y0, y1);
+                    final_position.x = road_x;  // Фиксируем позицию по X
+                    moved = true;
+                    break;
+                }
+            }
+        }
+
+        // Если перемещение допустимо, обновляем позицию
+        if (moved) {
+            dog.SetPosition(final_position);
+            
+            // Сбрасываем скорость только если достигли границы
+            if (final_position.x != new_position.x || final_position.y != new_position.y) {
+                dog.SetSpeed({0.0, 0.0});
+            }
         } else {
+            // Если точка не на дороге, сбрасываем скорость
             dog.SetSpeed({0.0, 0.0});
         }
     }
