@@ -2,7 +2,6 @@
 #include <stdexcept>
 #include <random>
 #include <algorithm>
-#include <cmath>
 
 namespace model {
 using namespace std::literals;
@@ -22,6 +21,35 @@ void Map::AddOffice(Office office) {
     }
 }
 
+bool Map::IsPointOnRoads(Point p) const {
+    for (const auto& road : roads_) {
+        if (road.IsHorizontal()) {
+            double road_y = road.GetStart().y;
+            double x0 = std::min(road.GetStart().x, road.GetEnd().x);
+            double x1 = std::max(road.GetStart().x, road.GetEnd().x);
+            
+            if (p.y >= road_y - 0.4 && 
+                p.y <= road_y + 0.4 &&
+                p.x >= x0 && 
+                p.x <= x1) {
+                return true;
+            }
+        } else if (road.IsVertical()) {
+            double road_x = road.GetStart().x;
+            double y0 = std::min(road.GetStart().y, road.GetEnd().y);
+            double y1 = std::max(road.GetStart().y, road.GetEnd().y);
+            
+            if (p.x >= road_x - 0.4 && 
+                p.x <= road_x + 0.4 &&
+                p.y >= y0 && 
+                p.y <= y1) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void Game::AddMap(Map map) {
     const size_t index = maps_.size();
     if (auto [it, inserted] = map_id_to_index_.emplace(map.GetId(), index); !inserted) {
@@ -36,19 +64,20 @@ void Game::AddMap(Map map) {
     }
 }
 
-Point GameSession::GenerateStartPosition() const {
+Point GameSession::GenerateRandomPosition() const {
     const auto& roads = map_.GetRoads();
     if (roads.empty()) {
         return {0.0, 0.0};
     }
-    return {static_cast<double>(roads.front().GetStart().x),
-            static_cast<double>(roads.front().GetStart().y)};
+    // Начальная точка первой дороги
+    const auto& road = roads.front();
+    return {static_cast<double>(road.GetStart().x), 
+            static_cast<double>(road.GetStart().y)};
 }
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
-    Point start_pos = GenerateStartPosition();
+    Point start_pos = GenerateRandomPosition();
     Dog dog(std::move(dog_name), start_pos, Direction::North);
-    dog.SetCurrentRoad(&map_.GetRoads().front());
 
     static std::atomic<uint32_t> next_player_id_{0};
     static std::random_device rd;
@@ -99,75 +128,24 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
     }
 }
 
-void GameSession::Tick(double delta_time) {
+void GameSession::UpdateState(double delta_time_sec) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
         auto& dog = player->GetDog();
-        auto* road = dog.GetCurrentRoad();
-        if (!road) {
-            continue;
-        }
-
-        Point new_pos = dog.GetPosition();
         Point speed = dog.GetSpeed();
-
-        if (speed.x == 0 && speed.y == 0) {
+        if (speed.x == 0.0 && speed.y == 0.0) {
             continue;
         }
 
-        // Вычисляем новую позицию без ограничений
-        new_pos.x += speed.x * delta_time;
-        new_pos.y += speed.y * delta_time;
+        Point new_position = dog.GetPosition();
+        new_position.x += speed.x * delta_time_sec;
+        new_position.y += speed.y * delta_time_sec;
 
-        // Проверяем, находится ли новая позиция в пределах дороги
-        auto is_valid_position = [road](const Point& pos) {
-            if (road->IsHorizontal()) {
-                const double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
-                const double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
-                const double road_y = road->GetStart().y;
-                return (pos.x >= min_x && pos.x <= max_x && 
-                        std::abs(pos.y - road_y) <= 0.4);
-            } else {
-                const double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
-                const double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
-                const double road_x = road->GetStart().x;
-                return (pos.y >= min_y && pos.y <= max_y && 
-                        std::abs(pos.x - road_x) <= 0.4);
-            }
-        };
-
-        // Если позиция невалидна, корректируем её
-        if (!is_valid_position(new_pos)) {
-            if (road->IsHorizontal()) {
-                // Корректируем X координату
-                double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
-                double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
-                new_pos.x = std::clamp(new_pos.x, min_x, max_x);
-                
-                // Корректируем Y координату
-                new_pos.y = road->GetStart().y;
-            } else {
-                // Корректируем Y координату
-                double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
-                double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
-                new_pos.y = std::clamp(new_pos.y, min_y, max_y);
-                
-                // Корректируем X координату
-                new_pos.x = road->GetStart().x;
-            }
-            
-            // Обнуляем скорость при столкновении с границей
-            speed = {0.0, 0.0};
+        if (map_.IsPointOnRoads(new_position)) {
+            dog.SetPosition(new_position);
+        } else {
+            dog.SetSpeed({0.0, 0.0});
         }
-
-        dog.SetPosition(new_pos);
-        dog.SetSpeed(speed);
-    }
-}
-
-void Game::Tick(double delta_time) {
-    for (auto& [map_id, session] : map_id_to_session_) {
-        session->Tick(delta_time);
     }
 }
 
@@ -180,4 +158,5 @@ std::string DirectionToString(Direction dir) {
     }
     return "U";
 }
+
 }  // namespace model
