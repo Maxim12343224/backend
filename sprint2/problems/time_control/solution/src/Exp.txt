@@ -474,6 +474,7 @@ int main(int argc, const char* argv[]) {
 #include "model.h"
 #include <stdexcept>
 #include <random>
+#include <algorithm>
 
 namespace model {
 using namespace std::literals;
@@ -491,6 +492,37 @@ void Map::AddOffice(Office office) {
         offices_.pop_back();
         throw;
     }
+}
+
+bool Map::IsPointOnRoads(Point p) const {
+    for (const auto& road : roads_) {
+        if (road.IsHorizontal()) {
+            double road_y = road.GetStart().y;
+            double x0 = std::min(road.GetStart().x, road.GetEnd().x);
+            double x1 = std::max(road.GetStart().x, road.GetEnd().x);
+            
+            // Расширяем допустимую зону до границ дороги
+            if (p.y >= road_y - 0.4 - 1e-5 && 
+                p.y <= road_y + 0.4 + 1e-5 &&
+                p.x >= x0 - 1e-5 && 
+                p.x <= x1 + 1e-5) {
+                return true;
+            }
+        } else if (road.IsVertical()) {
+            double road_x = road.GetStart().x;
+            double y0 = std::min(road.GetStart().y, road.GetEnd().y);
+            double y1 = std::max(road.GetStart().y, road.GetEnd().y);
+            
+            // Расширяем допустимую зону до границ дороги
+            if (p.x >= road_x - 0.4 - 1e-5 && 
+                p.x <= road_x + 0.4 + 1e-5 &&
+                p.y >= y0 - 1e-5 && 
+                p.y <= y1 + 1e-5) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void Game::AddMap(Map map) {
@@ -512,27 +544,17 @@ Point GameSession::GenerateRandomPosition() const {
     if (roads.empty()) {
         return {0.0, 0.0};
     }
-
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_int_distribution<size_t> road_dist(0, roads.size()-1);
-    const auto& road = roads[road_dist(gen)];
-
+    
+    // Начальная точка первой дороги с учетом смещения
+    const auto& road = roads.front();
+    Point start = road.GetStart();
+    
+    // Для горизонтальных дорог добавляем смещение
     if (road.IsHorizontal()) {
-        auto start = road.GetStart();
-        auto end = road.GetEnd();
-        double x0 = std::min(start.x, end.x);
-        double x1 = std::max(start.x, end.x);
-        std::uniform_real_distribution<double> x_dist(x0, x1);
-        return {x_dist(gen), static_cast<double>(start.y)};
-    } else {
-        auto start = road.GetStart();
-        auto end = road.GetEnd();
-        double y0 = std::min(start.y, end.y);
-        double y1 = std::max(start.y, end.y);
-        std::uniform_real_distribution<double> y_dist(y0, y1);
-        return {static_cast<double>(start.x), y_dist(gen)};
+        return {static_cast<double>(start.x), static_cast<double>(start.y)};
     }
+    // Для вертикальных дорог добавляем смещение
+    return {static_cast<double>(start.x), static_cast<double>(start.y)};
 }
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
@@ -585,6 +607,68 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         }
         dog.SetSpeed(new_speed);
         break;
+    }
+}
+
+void GameSession::UpdateState(double delta_time_sec) {
+    std::lock_guard lock(mutex_);
+    for (auto& player : players_) {
+        auto& dog = player->GetDog();
+        Point speed = dog.GetSpeed();
+        if (speed.x == 0.0 && speed.y == 0.0) {
+            continue;
+        }
+
+        Point new_position = dog.GetPosition();
+        new_position.x += speed.x * delta_time_sec;
+        new_position.y += speed.y * delta_time_sec;
+
+        // Рассчитываем конечную позицию с учетом дорожных ограничений
+        Point final_position = new_position;
+        bool moved = false;
+        
+        for (const auto& road : map_.GetRoads()) {
+            if (road.IsHorizontal()) {
+                double road_y = road.GetStart().y;
+                double x0 = std::min(road.GetStart().x, road.GetEnd().x);
+                double x1 = std::max(road.GetStart().x, road.GetEnd().x);
+                
+                // Проверяем, движется ли собака вдоль горизонтальной дороги
+                if (std::abs(new_position.y - road_y) <= 0.4 + 1e-5) {
+                    // Ограничиваем движение по X
+                    final_position.x = std::clamp(new_position.x, x0, x1);
+                    final_position.y = road_y;  // Фиксируем позицию по Y
+                    moved = true;
+                    break;
+                }
+            } else if (road.IsVertical()) {
+                double road_x = road.GetStart().x;
+                double y0 = std::min(road.GetStart().y, road.GetEnd().y);
+                double y1 = std::max(road.GetStart().y, road.GetEnd().y);
+                
+                // Проверяем, движется ли собака вдоль вертикальной дороги
+                if (std::abs(new_position.x - road_x) <= 0.4 + 1e-5) {
+                    // Ограничиваем движение по Y
+                    final_position.y = std::clamp(new_position.y, y0, y1);
+                    final_position.x = road_x;  // Фиксируем позицию по X
+                    moved = true;
+                    break;
+                }
+            }
+        }
+
+        // Если перемещение допустимо, обновляем позицию
+        if (moved) {
+            dog.SetPosition(final_position);
+            
+            // Сбрасываем скорость только если достигли границы
+            if (final_position.x != new_position.x || final_position.y != new_position.y) {
+                dog.SetSpeed({0.0, 0.0});
+            }
+        } else {
+            // Если точка не на дороге, сбрасываем скорость
+            dog.SetSpeed({0.0, 0.0});
+        }
     }
 }
 
@@ -723,6 +807,7 @@ namespace model {
         void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
         void AddOffice(Office office);
         void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
+        bool IsPointOnRoads(Point p) const;
 
     private:
         using OfficeIdToIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
@@ -751,6 +836,7 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
         void SetSpeed(Point speed) noexcept { speed_ = speed; }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
+        void SetPosition(Point position) noexcept { position_ = position; }
 
     private:
         std::string name_;
@@ -799,6 +885,7 @@ namespace model {
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
+        void UpdateState(double delta_time_sec);
 
     private:
         Id id_;
@@ -869,6 +956,12 @@ namespace model {
             auto session = player->GetSession();
             if (session) {
                 session->SetPlayerAction(token, move);
+            }
+        }
+
+        void UpdateState(double delta_time_sec) {
+            for (auto& [map_id, session] : map_id_to_session_) {
+                session->UpdateState(delta_time_sec);
             }
         }
 
@@ -1153,6 +1246,46 @@ StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
         return MakeErrorResponse(http::status::bad_request,
                                "invalidArgument",
                                "Failed to parse action", req);
+    }
+}
+
+StringResponse RequestHandler::HandleTick(StringRequest&& req) {
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Invalid content type", req);
+    }
+
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object() || !json_body.as_object().contains("timeDelta")) {
+            return MakeErrorResponse(http::status::bad_request,
+                                   "invalidArgument",
+                                   "Invalid tick request JSON", req);
+        }
+
+        auto time_delta = json_body.as_object()["timeDelta"].as_int64();
+        if (time_delta <= 0) {
+            return MakeErrorResponse(http::status::bad_request,
+                                   "invalidArgument",
+                                   "timeDelta must be positive", req);
+        }
+
+        game_.UpdateState(time_delta / 1000.0);
+        return MakeStringResponse(http::status::ok, "{}", req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Failed to parse tick request JSON", req);
     }
 }
 
@@ -1443,6 +1576,18 @@ namespace http_handler {
                         return send(std::move(response));
                     }
                 }
+                else if (string_req.target() == "/api/v1/game/tick") {
+                    if (string_req.method() == http::verb::post) {
+                        auto response = HandleTick(std::move(string_req));
+                        return send(std::move(response));
+                    }
+                    else {
+                        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                            "invalidMethod", "Only POST method is expected", string_req);
+                        response.set(http::field::allow, "POST");
+                        return send(std::move(response));
+                    }
+                }
                 else {
                     auto response = HandleApiRequest(std::move(string_req));
                     return send(std::move(response));
@@ -1463,6 +1608,7 @@ namespace http_handler {
         StringResponse HandleGetPlayers(StringRequest&& req);
         StringResponse HandleGameState(StringRequest&& req);
         StringResponse HandlePlayerAction(StringRequest&& req);
+        StringResponse HandleTick(StringRequest&& req);
 
         std::optional<std::string> GetTokenFromRequest(const StringRequest& req);
 

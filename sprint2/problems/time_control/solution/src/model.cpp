@@ -137,6 +137,7 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
     }
 }
 
+// model.cpp
 void GameSession::UpdateState(double delta_time_sec) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
@@ -146,54 +147,41 @@ void GameSession::UpdateState(double delta_time_sec) {
             continue;
         }
 
-        Point new_position = dog.GetPosition();
-        new_position.x += speed.x * delta_time_sec;
-        new_position.y += speed.y * delta_time_sec;
+        Point current = dog.GetPosition();
+        Point dp = { speed.x * delta_time_sec, speed.y * delta_time_sec };
 
-        // Рассчитываем конечную позицию с учетом дорожных ограничений
-        Point final_position = new_position;
-        bool moved = false;
-        
-        for (const auto& road : map_.GetRoads()) {
-            if (road.IsHorizontal()) {
-                double road_y = road.GetStart().y;
-                double x0 = std::min(road.GetStart().x, road.GetEnd().x);
-                double x1 = std::max(road.GetStart().x, road.GetEnd().x);
-                
-                // Проверяем, движется ли собака вдоль горизонтальной дороги
-                if (std::abs(new_position.y - road_y) <= 0.4 + 1e-5) {
-                    // Ограничиваем движение по X
-                    final_position.x = std::clamp(new_position.x, x0, x1);
-                    final_position.y = road_y;  // Фиксируем позицию по Y
-                    moved = true;
-                    break;
-                }
-            } else if (road.IsVertical()) {
-                double road_x = road.GetStart().x;
-                double y0 = std::min(road.GetStart().y, road.GetEnd().y);
-                double y1 = std::max(road.GetStart().y, road.GetEnd().y);
-                
-                // Проверяем, движется ли собака вдоль вертикальной дороги
-                if (std::abs(new_position.x - road_x) <= 0.4 + 1e-5) {
-                    // Ограничиваем движение по Y
-                    final_position.y = std::clamp(new_position.y, y0, y1);
-                    final_position.x = road_x;  // Фиксируем позицию по X
-                    moved = true;
-                    break;
-                }
-            }
+        // Если перемещение очень мало, пропускаем
+        if (std::abs(dp.x) < 1e-10 && std::abs(dp.y) < 1e-10) {
+            continue;
         }
 
-        // Если перемещение допустимо, обновляем позицию
-        if (moved) {
-            dog.SetPosition(final_position);
-            
-            // Сбрасываем скорость только если достигли границы
-            if (final_position.x != new_position.x || final_position.y != new_position.y) {
-                dog.SetSpeed({0.0, 0.0});
-            }
+        Point new_position = { current.x + dp.x, current.y + dp.y };
+
+        // Если новая позиция на дороге, перемещаемся
+        if (map_.IsPointOnRoads(new_position)) {
+            dog.SetPosition(new_position);
         } else {
-            // Если точка не на дороге, сбрасываем скорость
+            // Бинарный поиск максимального t из [0,1] для которого точка current + t*dp принадлежит дороге
+            double low = 0.0;
+            double high = 1.0;
+            for (int i = 0; i < 10; ++i) {
+                double mid = (low + high) / 2.0;
+                Point test_point = {
+                    current.x + mid * dp.x,
+                    current.y + mid * dp.y
+                };
+                if (map_.IsPointOnRoads(test_point)) {
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+            Point final_point = {
+                current.x + low * dp.x,
+                current.y + low * dp.y
+            };
+            dog.SetPosition(final_point);
+            // Сбрасываем скорость, потому что уперлись в препятствие
             dog.SetSpeed({0.0, 0.0});
         }
     }
