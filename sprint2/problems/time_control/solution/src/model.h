@@ -119,7 +119,6 @@ namespace model {
         void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
         void AddOffice(Office office);
         void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
-        bool IsPointOnRoads(Point p) const;
 
     private:
         using OfficeIdToIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
@@ -139,22 +138,26 @@ namespace model {
             : name_(std::move(name)),
             position_(start_pos),
             speed_{ 0.0, 0.0 },
-            direction_(start_dir) {
+            direction_(start_dir),
+            current_road_(nullptr) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
         Point GetPosition() const noexcept { return position_; }
         Point GetSpeed() const noexcept { return speed_; }
         Direction GetDirection() const noexcept { return direction_; }
+        const Road* GetCurrentRoad() const noexcept { return current_road_; }
         void SetSpeed(Point speed) noexcept { speed_ = speed; }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
-        void SetPosition(Point position) noexcept { position_ = position; }
+        void SetPosition(Point pos) noexcept { position_ = pos; }
+        void SetCurrentRoad(const Road* road) noexcept { current_road_ = road; }
 
     private:
         std::string name_;
         Point position_;
         Point speed_;
         Direction direction_;
+        const Road* current_road_;
     };
 
     class GameSession;
@@ -194,10 +197,10 @@ namespace model {
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
 
-        Point GenerateRandomPosition() const;
+        Point GenerateStartPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
-        void UpdateState(double delta_time_sec);
+        void Tick(double delta_time);
 
     private:
         Id id_;
@@ -271,11 +274,7 @@ namespace model {
             }
         }
 
-        void UpdateState(double delta_time_sec) {
-            for (auto& [map_id, session] : map_id_to_session_) {
-                session->UpdateState(delta_time_sec);
-            }
-        }
+        void Tick(double delta_time);
 
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;

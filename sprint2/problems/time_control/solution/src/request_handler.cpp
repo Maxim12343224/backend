@@ -285,18 +285,19 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
         auto json_body = json::parse(req.body());
         if (!json_body.is_object() || !json_body.as_object().contains("timeDelta")) {
             return MakeErrorResponse(http::status::bad_request,
-                                   "invalidArgument",
-                                   "Invalid tick request JSON", req);
+                                  "invalidArgument",
+                                  "Failed to parse tick request JSON", req);
         }
 
         auto time_delta = json_body.as_object()["timeDelta"].as_int64();
-        if (time_delta <= 0) {
+        if (time_delta < 0) {
             return MakeErrorResponse(http::status::bad_request,
                                    "invalidArgument",
-                                   "timeDelta must be positive", req);
+                                   "timeDelta must be non-negative", req);
         }
 
-        game_.UpdateState(time_delta / 1000.0);
+        game_.Tick(static_cast<double>(time_delta) / 1000.0);
+
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {
         return MakeErrorResponse(http::status::bad_request,
