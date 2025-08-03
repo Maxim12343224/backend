@@ -1,6 +1,7 @@
 #include "model.h"
 #include <stdexcept>
 #include <random>
+#include <algorithm>
 
 namespace model {
 using namespace std::literals;
@@ -117,8 +118,11 @@ void GameSession::Tick(double delta_time) {
         new_pos.y += speed.y * delta_time;
 
         if (road->IsHorizontal()) {
-            double min_x = std::min(road->GetStart().x, road->GetEnd().x);
-            double max_x = std::max(road->GetStart().x, road->GetEnd().x);
+            double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
+            double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
+            double min_y = road->GetStart().y - 0.4;
+            double max_y = road->GetStart().y + 0.4;
+
             if (new_pos.x < min_x) {
                 new_pos.x = min_x;
                 speed.x = 0;
@@ -126,10 +130,7 @@ void GameSession::Tick(double delta_time) {
                 new_pos.x = max_x;
                 speed.x = 0;
             }
-            new_pos.y = road->GetStart().y;
-        } else if (road->IsVertical()) {
-            double min_y = std::min(road->GetStart().y, road->GetEnd().y);
-            double max_y = std::max(road->GetStart().y, road->GetEnd().y);
+
             if (new_pos.y < min_y) {
                 new_pos.y = min_y;
                 speed.y = 0;
@@ -137,7 +138,27 @@ void GameSession::Tick(double delta_time) {
                 new_pos.y = max_y;
                 speed.y = 0;
             }
-            new_pos.x = road->GetStart().x;
+        } else if (road->IsVertical()) {
+            double min_x = road->GetStart().x - 0.4;
+            double max_x = road->GetStart().x + 0.4;
+            double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
+            double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
+
+            if (new_pos.x < min_x) {
+                new_pos.x = min_x;
+                speed.x = 0;
+            } else if (new_pos.x > max_x) {
+                new_pos.x = max_x;
+                speed.x = 0;
+            }
+
+            if (new_pos.y < min_y) {
+                new_pos.y = min_y;
+                speed.y = 0;
+            } else if (new_pos.y > max_y) {
+                new_pos.y = max_y;
+                speed.y = 0;
+            }
         }
 
         dog.SetPosition(new_pos);
