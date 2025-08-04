@@ -1,6 +1,7 @@
 #include "model.h"
 #include <stdexcept>
 #include <random>
+#include <cmath>
 #include <algorithm>
 
 namespace model {
@@ -35,55 +36,104 @@ void Game::AddMap(Map map) {
     }
 }
 
-Point GameSession::GenerateStartPosition() const {
-    const auto& roads = map_.GetRoads();
-    if (roads.empty()) {
-        return {0.0, 0.0};
+namespace {
+    bool IsPointOnRoad(const Road& road, Point p) {
+        constexpr double tolerance = 0.4;
+        if (road.IsHorizontal()) {
+            auto min_x = std::min(road.GetStart().x, road.GetEnd().x);
+            auto max_x = std::max(road.GetStart().x, road.GetEnd().x);
+            return p.x >= min_x && p.x <= max_x && 
+                   std::abs(p.y - road.GetStart().y) <= tolerance;
+        } else {
+            auto min_y = std::min(road.GetStart().y, road.GetEnd().y);
+            auto max_y = std::max(road.GetStart().y, road.GetEnd().y);
+            return p.y >= min_y && p.y <= max_y && 
+                   std::abs(p.x - road.GetStart().x) <= tolerance;
+        }
     }
 
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::uniform_int_distribution<size_t> road_dist(0, roads.size()-1);
-    const auto& road = roads[road_dist(gen)];
+    const Road* FindHorizontalRoad(Point p, const Map& map) {
+        for (const auto& road : map.GetRoads()) {
+            if (!road.IsHorizontal()) continue;
+            if (IsPointOnRoad(road, p)) {
+                return &road;
+            }
+        }
+        return nullptr;
+    }
 
-    if (road.IsHorizontal()) {
-        auto start = road.GetStart();
-        auto end = road.GetEnd();
-        double x0 = std::min(start.x, end.x);
-        double x1 = std::max(start.x, end.x);
-        std::uniform_real_distribution<double> x_dist(x0, x1);
-        return {x_dist(gen), static_cast<double>(start.y)};
-    } else {
-        auto start = road.GetStart();
-        auto end = road.GetEnd();
-        double y0 = std::min(start.y, end.y);
-        double y1 = std::max(start.y, end.y);
-        std::uniform_real_distribution<double> y_dist(y0, y1);
-        return {static_cast<double>(start.x), y_dist(gen)};
+    const Road* FindVerticalRoad(Point p, const Map& map) {
+        for (const auto& road : map.GetRoads()) {
+            if (!road.IsVertical()) continue;
+            if (IsPointOnRoad(road, p)) {
+                return &road;
+            }
+        }
+        return nullptr;
     }
 }
 
-std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
-    Point start_pos = GenerateStartPosition();
-    Dog dog(std::move(dog_name), start_pos, Direction::North);
-    if (!map_.GetRoads().empty()) {
-        // Выбираем случайную дорогу для начального положения
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        std::uniform_int_distribution<size_t> dist(0, map_.GetRoads().size()-1);
-        dog.SetCurrentRoad(&map_.GetRoads()[dist(gen)]);
+void Dog::UpdatePosition(double delta_time, const Map& map) {
+    double new_x = position_.x + speed_.x * delta_time;
+    double new_y = position_.y + speed_.y * delta_time;
+
+    // Horizontal movement
+    if (speed_.x != 0) {
+        const auto* h_road = FindHorizontalRoad(position_, map);
+        if (h_road) {
+            double min_x = std::min(h_road->GetStart().x, h_road->GetEnd().x);
+            double max_x = std::max(h_road->GetStart().x, h_road->GetEnd().x);
+            new_x = std::clamp(new_x, min_x, max_x);
+            if (new_x <= min_x || new_x >= max_x) {
+                speed_.x = 0;
+            }
+        } else {
+            new_x = position_.x;
+            speed_.x = 0;
+        }
     }
 
+    // Vertical movement
+    if (speed_.y != 0) {
+        Point temp_pos{new_x, position_.y};
+        const auto* v_road = FindVerticalRoad(temp_pos, map);
+        if (v_road) {
+            double min_y = std::min(v_road->GetStart().y, v_road->GetEnd().y);
+            double max_y = std::max(v_road->GetStart().y, v_road->GetEnd().y);
+            new_y = std::clamp(new_y, min_y, max_y);
+            if (new_y <= min_y || new_y >= max_y) {
+                speed_.y = 0;
+            }
+        } else {
+            new_y = position_.y;
+            speed_.y = 0;
+        }
+    }
+
+    position_ = {new_x, new_y};
+}
+
+std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
+    Point start_pos;
+    if (map_.GetRoads().empty()) {
+        start_pos = {0.0, 0.0};
+    } else {
+        const auto& first_road = map_.GetRoads()[0];
+        start_pos = first_road.GetStart();
+    }
+
+    Dog dog(std::move(dog_name), start_pos, Direction::North);
+
     static std::atomic<uint32_t> next_player_id_{0};
-    static std::random_device rd_token;
-    static std::mt19937 gen_token(rd_token());
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
     static std::uniform_int_distribution<> dis(0, 15);
     
     const char* hex_digits = "0123456789abcdef";
     std::string token;
     token.reserve(32);
     for (int i = 0; i < 32; ++i) {
-        token += hex_digits[dis(gen_token)];
+        token += hex_digits[dis(gen)];
     }
 
     auto player = std::make_shared<Player>(
@@ -123,77 +173,10 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
     }
 }
 
-void GameSession::Tick(double delta_time) {
+void GameSession::UpdateState(double delta_time) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
-        auto& dog = player->GetDog();
-        auto* road = dog.GetCurrentRoad();
-        if (!road) {
-            continue;
-        }
-
-        Point new_pos = dog.GetPosition();
-        Point speed = dog.GetSpeed();
-
-        if (speed.x == 0 && speed.y == 0) {
-            continue;
-        }
-
-        new_pos.x += speed.x * delta_time;
-        new_pos.y += speed.y * delta_time;
-
-        if (road->IsHorizontal()) {
-            double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
-            double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
-            double min_y = road->GetStart().y - 0.4;
-            double max_y = road->GetStart().y + 0.4;
-
-            if (new_pos.x < min_x) {
-                new_pos.x = min_x;
-                speed.x = 0;
-            } else if (new_pos.x > max_x) {
-                new_pos.x = max_x;
-                speed.x = 0;
-            }
-
-            if (new_pos.y < min_y) {
-                new_pos.y = min_y;
-                speed.y = 0;
-            } else if (new_pos.y > max_y) {
-                new_pos.y = max_y;
-                speed.y = 0;
-            }
-        } else if (road->IsVertical()) {
-            double min_x = road->GetStart().x - 0.4;
-            double max_x = road->GetStart().x + 0.4;
-            double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
-            double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
-
-            if (new_pos.x < min_x) {
-                new_pos.x = min_x;
-                speed.x = 0;
-            } else if (new_pos.x > max_x) {
-                new_pos.x = max_x;
-                speed.x = 0;
-            }
-
-            if (new_pos.y < min_y) {
-                new_pos.y = min_y;
-                speed.y = 0;
-            } else if (new_pos.y > max_y) {
-                new_pos.y = max_y;
-                speed.y = 0;
-            }
-        }
-
-        dog.SetPosition(new_pos);
-        dog.SetSpeed(speed);
-    }
-}
-
-void Game::Tick(double delta_time) {
-    for (auto& [map_id, session] : map_id_to_session_) {
-        session->Tick(delta_time);
+        player->GetDog().UpdatePosition(delta_time, map_);
     }
 }
 
@@ -206,4 +189,5 @@ std::string DirectionToString(Direction dir) {
     }
     return "U";
 }
+
 }  // namespace model

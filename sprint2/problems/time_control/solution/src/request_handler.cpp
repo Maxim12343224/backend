@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <optional>
 #include <random>
+#include <boost/json.hpp>
 
 namespace http_handler {
 namespace beast = boost::beast;
@@ -265,7 +266,7 @@ StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
     }
 }
 
-StringResponse RequestHandler::HandleTick(StringRequest&& req) {
+StringResponse RequestHandler::HandleTickRequest(StringRequest&& req) {
     if (req.method() != http::verb::post) {
         auto response = MakeErrorResponse(http::status::method_not_allowed,
                                         "invalidMethod",
@@ -283,20 +284,26 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
 
     try {
         auto json_body = json::parse(req.body());
-        if (!json_body.is_object() || !json_body.as_object().contains("timeDelta")) {
-            return MakeErrorResponse(http::status::bad_request,
-                                  "invalidArgument",
-                                  "Failed to parse tick request JSON", req);
+        if (!json_body.is_object()) {
+            throw std::runtime_error("Request body must be JSON object");
         }
 
-        auto time_delta = json_body.as_object()["timeDelta"].as_int64();
-        if (time_delta < 0) {
-            return MakeErrorResponse(http::status::bad_request,
-                                   "invalidArgument",
-                                   "timeDelta must be non-negative", req);
+        auto& obj = json_body.as_object();
+        if (!obj.contains("timeDelta")) {
+            throw std::runtime_error("Missing timeDelta field");
         }
 
-        game_.Tick(static_cast<double>(time_delta) / 1000.0);
+        auto time_delta_val = obj["timeDelta"];
+        if (!time_delta_val.is_int64()) {
+            throw std::runtime_error("timeDelta must be integer");
+        }
+
+        auto time_delta = time_delta_val.as_int64();
+        if (time_delta <= 0) {
+            throw std::runtime_error("timeDelta must be positive");
+        }
+
+        game_.UpdateState(time_delta / 1000.0);
 
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {
