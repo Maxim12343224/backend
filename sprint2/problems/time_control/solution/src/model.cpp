@@ -35,14 +35,44 @@ void Game::AddMap(Map map) {
     }
 }
 
-Point GameSession::GenerateStartPosition() const {
+/*Point GameSession::GenerateStartPosition() const {
     const auto& roads = map_.GetRoads();
     if (roads.empty()) {
         return {0.0, 0.0};
     }
     return {static_cast<double>(roads.front().GetStart().x),
             static_cast<double>(roads.front().GetStart().y)};
+}*/
+
+
+
+
+
+
+Point GameSession::GenerateStartPosition() const {
+    const auto& roads = map_.GetRoads();
+    if (roads.empty()) {
+        return {0.0, 0.0};
+    }
+    
+    const auto& first_road = roads.front();
+    Point start_pos = first_road.GetStart();
+    
+    // Для вертикальных дорог центрируем по X
+    if (first_road.IsVertical()) {
+        start_pos.x += 0.4;
+    }
+    // Для горизонтальных дорог центрируем по Y
+    else if (first_road.IsHorizontal()) {
+        start_pos.y += 0.4;
+    }
+    
+    return {static_cast<double>(start_pos.x), static_cast<double>(start_pos.y)};
 }
+
+
+
+
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     Point start_pos = GenerateStartPosition();
