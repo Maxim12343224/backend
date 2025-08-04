@@ -1,9 +1,7 @@
-// model.cpp
 #include "model.h"
 #include <stdexcept>
 #include <random>
 #include <algorithm>
-#include <cmath>
 
 namespace model {
 using namespace std::literals;
@@ -49,6 +47,7 @@ Point GameSession::GenerateStartPosition() const {
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     Point start_pos = GenerateStartPosition();
     Dog dog(std::move(dog_name), start_pos, Direction::North);
+    dog.SetCurrentRoad(&map_.GetRoads().front());
 
     static std::atomic<uint32_t> next_player_id_{0};
     static std::random_device rd;
@@ -101,10 +100,13 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
 
 void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
-    const auto& roads = map_.GetRoads();
-    
     for (auto& player : players_) {
         auto& dog = player->GetDog();
+        auto* road = dog.GetCurrentRoad();
+        if (!road) {
+            continue;
+        }
+
         Point new_pos = dog.GetPosition();
         Point speed = dog.GetSpeed();
 
@@ -115,21 +117,48 @@ void GameSession::Tick(double delta_time) {
         new_pos.x += speed.x * delta_time;
         new_pos.y += speed.y * delta_time;
 
-        bool is_valid_position = false;
-        for (const auto& road : roads) {
-            auto bbox = road.GetBoundingBox();
-            if (new_pos.x >= bbox.position.x &&
-                new_pos.x <= bbox.position.x + bbox.size.width &&
-                new_pos.y >= bbox.position.y &&
-                new_pos.y <= bbox.position.y + bbox.size.height) {
-                is_valid_position = true;
-                break;
-            }
-        }
+        if (road->IsHorizontal()) {
+            double min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
+            double max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
+            double min_y = road->GetStart().y - 0.4;
+            double max_y = road->GetStart().y + 0.4;
 
-        if (!is_valid_position) {
-            new_pos = dog.GetPosition();
-            speed = {0.0, 0.0};
+            if (new_pos.x < min_x) {
+                new_pos.x = min_x;
+                speed.x = 0;
+            } else if (new_pos.x > max_x) {
+                new_pos.x = max_x;
+                speed.x = 0;
+            }
+
+            if (new_pos.y < min_y) {
+                new_pos.y = min_y;
+                speed.y = 0;
+            } else if (new_pos.y > max_y) {
+                new_pos.y = max_y;
+                speed.y = 0;
+            }
+        } else if (road->IsVertical()) {
+            double min_x = road->GetStart().x - 0.4;
+            double max_x = road->GetStart().x + 0.4;
+            double min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
+            double max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
+
+            if (new_pos.x < min_x) {
+                new_pos.x = min_x;
+                speed.x = 0;
+            } else if (new_pos.x > max_x) {
+                new_pos.x = max_x;
+                speed.x = 0;
+            }
+
+            if (new_pos.y < min_y) {
+                new_pos.y = min_y;
+                speed.y = 0;
+            } else if (new_pos.y > max_y) {
+                new_pos.y = max_y;
+                speed.y = 0;
+            }
         }
 
         dog.SetPosition(new_pos);

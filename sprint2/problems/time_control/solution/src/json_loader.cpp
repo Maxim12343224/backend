@@ -1,4 +1,3 @@
-// json_loader.cpp
 #include "json_loader.h"
 #include <fstream>
 #include <sstream>
@@ -36,8 +35,8 @@ namespace json_loader {
                     static_cast<model::Coord>(building_obj.at("y").as_int64())
                 },
                 {
-                    static_cast<double>(building_obj.at("w").as_int64()),
-                    static_cast<double>(building_obj.at("h").as_int64())
+                    static_cast<model::Dimension>(building_obj.at("w").as_int64()),
+                    static_cast<model::Dimension>(building_obj.at("h").as_int64())
                 }
             };
             return model::Building(rect);
