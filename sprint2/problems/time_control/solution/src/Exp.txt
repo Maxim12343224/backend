@@ -517,6 +517,17 @@ Point GameSession::GenerateStartPosition() const {
             static_cast<double>(roads.front().GetStart().y)};
 }
 
+
+
+
+
+
+
+
+
+
+
+
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     Point start_pos = GenerateStartPosition();
     Dog dog(std::move(dog_name), start_pos, Direction::North);
@@ -544,6 +555,24 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     return player;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void GameSession::SetPlayerAction(const Player::Token& token, const std::string& move) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
@@ -570,6 +599,20 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         break;
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
@@ -638,6 +681,20 @@ void GameSession::Tick(double delta_time) {
         dog.SetSpeed(speed);
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 void Game::Tick(double delta_time) {
     for (auto& [map_id, session] : map_id_to_session_) {

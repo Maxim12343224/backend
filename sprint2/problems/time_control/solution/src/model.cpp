@@ -35,58 +35,55 @@ void Game::AddMap(Map map) {
     }
 }
 
-/*Point GameSession::GenerateStartPosition() const {
-    const auto& roads = map_.GetRoads();
-    if (roads.empty()) {
-        return {0.0, 0.0};
-    }
-    return {static_cast<double>(roads.front().GetStart().x),
-            static_cast<double>(roads.front().GetStart().y)};
-}*/
-
-
-
-
-
 Point GameSession::GenerateStartPosition() const {
     const auto& roads = map_.GetRoads();
     if (roads.empty()) {
         return {0.0, 0.0};
     }
-    
-    const auto& first_road = roads.front();
-    Point start_pos = first_road.GetStart();
-    
-    // Центрируем собаку на дороге
-    if (first_road.IsHorizontal()) {
-        start_pos.y += 0.4;
-    } else if (first_road.IsVertical()) {
-        start_pos.x += 0.4;
+
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> road_dist(0, roads.size()-1);
+    const auto& road = roads[road_dist(gen)];
+
+    if (road.IsHorizontal()) {
+        auto start = road.GetStart();
+        auto end = road.GetEnd();
+        double x0 = std::min(start.x, end.x);
+        double x1 = std::max(start.x, end.x);
+        std::uniform_real_distribution<double> x_dist(x0, x1);
+        return {x_dist(gen), static_cast<double>(start.y)};
+    } else {
+        auto start = road.GetStart();
+        auto end = road.GetEnd();
+        double y0 = std::min(start.y, end.y);
+        double y1 = std::max(start.y, end.y);
+        std::uniform_real_distribution<double> y_dist(y0, y1);
+        return {static_cast<double>(start.x), y_dist(gen)};
     }
-    
-    return {static_cast<double>(start_pos.x), static_cast<double>(start_pos.y)};
 }
-
-
-
-
-
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     Point start_pos = GenerateStartPosition();
     Dog dog(std::move(dog_name), start_pos, Direction::North);
-    dog.SetCurrentRoad(&map_.GetRoads().front());
+    if (!map_.GetRoads().empty()) {
+        // Выбираем случайную дорогу для начального положения
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        std::uniform_int_distribution<size_t> dist(0, map_.GetRoads().size()-1);
+        dog.SetCurrentRoad(&map_.GetRoads()[dist(gen)]);
+    }
 
     static std::atomic<uint32_t> next_player_id_{0};
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
+    static std::random_device rd_token;
+    static std::mt19937 gen_token(rd_token());
     static std::uniform_int_distribution<> dis(0, 15);
     
     const char* hex_digits = "0123456789abcdef";
     std::string token;
     token.reserve(32);
     for (int i = 0; i < 32; ++i) {
-        token += hex_digits[dis(gen)];
+        token += hex_digits[dis(gen_token)];
     }
 
     auto player = std::make_shared<Player>(
@@ -99,11 +96,6 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     return player;
 }
 
-
-
-
-
-/*
 void GameSession::SetPlayerAction(const Player::Token& token, const std::string& move) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
@@ -129,49 +121,8 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         dog.SetSpeed(new_speed);
         break;
     }
-}*/
-
-
-
-
-
-
-
-void GameSession::SetPlayerAction(const Player::Token& token, const std::string& move) {
-    std::lock_guard lock(mutex_);
-    for (auto& player : players_) {
-        if (player->GetToken() != token) continue;
-        
-        auto& dog = player->GetDog();
-        Point new_speed{0.0, 0.0};
-        if (move == "L") {
-            new_speed = {-dog_speed_, 0.0};
-            dog.SetDirection(Direction::West);
-        } else if (move == "R") {
-            new_speed = {dog_speed_, 0.0};
-            dog.SetDirection(Direction::East);
-        } else if (move == "U") {
-            new_speed = {0.0, -dog_speed_};
-            dog.SetDirection(Direction::North);
-        } else if (move == "D") {
-            new_speed = {0.0, dog_speed_};
-            dog.SetDirection(Direction::South);
-        } else if (move == "") {
-            new_speed = {0.0, 0.0};
-        }
-        dog.SetSpeed(new_speed);
-        // Убрали break - обрабатываем всех игроков
-    }
 }
 
-
-
-
-
-
-
-
-/*
 void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
@@ -239,86 +190,6 @@ void GameSession::Tick(double delta_time) {
         dog.SetSpeed(speed);
     }
 }
-*/
-
-
-
-
-
-
-void GameSession::Tick(double delta_time) {
-    std::lock_guard lock(mutex_);
-    for (auto& player : players_) {
-        auto& dog = player->GetDog();
-        auto* road = dog.GetCurrentRoad();
-        if (!road) {
-            continue;
-        }
-
-        Point new_pos = dog.GetPosition();
-        Point speed = dog.GetSpeed();
-
-        if (speed.x == 0 && speed.y == 0) {
-            continue;
-        }
-
-        // Рассчитываем новую позицию
-        new_pos.x += speed.x * delta_time;
-        new_pos.y += speed.y * delta_time;
-
-        // Определяем границы дороги
-        double min_x, max_x, min_y, max_y;
-
-        if (road->IsHorizontal()) {
-            min_x = std::min(road->GetStart().x, road->GetEnd().x) - 0.4;
-            max_x = std::max(road->GetStart().x, road->GetEnd().x) + 0.4;
-            min_y = road->GetStart().y - 0.4;
-            max_y = road->GetStart().y + 0.4;
-        } else { // Vertical
-            min_x = road->GetStart().x - 0.4;
-            max_x = road->GetStart().x + 0.4;
-            min_y = std::min(road->GetStart().y, road->GetEnd().y) - 0.4;
-            max_y = std::max(road->GetStart().y, road->GetEnd().y) + 0.4;
-        }
-
-        // Проверяем выход за границы дороги
-        bool clamped = false;
-        if (new_pos.x < min_x) {
-            new_pos.x = min_x;
-            clamped = true;
-        } else if (new_pos.x > max_x) {
-            new_pos.x = max_x;
-            clamped = true;
-        }
-
-        if (new_pos.y < min_y) {
-            new_pos.y = min_y;
-            clamped = true;
-        } else if (new_pos.y > max_y) {
-            new_pos.y = max_y;
-            clamped = true;
-        }
-
-        // Если было столкновение - останавливаем собаку
-        if (clamped) {
-            if (speed.x != 0 && (new_pos.x <= min_x || new_pos.x >= max_x)) {
-                speed.x = 0;
-            }
-            if (speed.y != 0 && (new_pos.y <= min_y || new_pos.y >= max_y)) {
-                speed.y = 0;
-            }
-        }
-
-        dog.SetPosition(new_pos);
-        dog.SetSpeed(speed);
-    }
-}
-
-
-
-
-
-
 
 void Game::Tick(double delta_time) {
     for (auto& [map_id, session] : map_id_to_session_) {
@@ -335,5 +206,4 @@ std::string DirectionToString(Direction dir) {
     }
     return "U";
 }
-
 }  // namespace model
