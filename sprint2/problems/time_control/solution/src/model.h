@@ -116,11 +116,13 @@ namespace model {
         const Roads& GetRoads() const noexcept { return roads_; }
         const Offices& GetOffices() const noexcept { return offices_; }
         const std::optional<double>& GetDogSpeed() const noexcept { return dog_speed_; }
+        const std::optional<Size>& GetSize() const noexcept { return size_; }
 
         void AddRoad(const Road& road) { roads_.emplace_back(road); }
         void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
         void AddOffice(Office office);
         void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
+        void SetSize(Size size) noexcept { size_ = size; }
 
     private:
         using OfficeIdToIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
@@ -132,6 +134,7 @@ namespace model {
         OfficeIdToIndex warehouse_id_to_index_;
         Offices offices_;
         std::optional<double> dog_speed_;
+        std::optional<Size> size_;
     };
 
     class Dog {

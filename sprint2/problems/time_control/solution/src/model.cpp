@@ -115,10 +115,12 @@ void Dog::UpdatePosition(double delta_time, const Map& map) {
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     Point start_pos;
-    if (map_.GetRoads().empty()) {
+    const auto& roads = map_.GetRoads();
+    if (roads.empty()) {
         start_pos = {0.0, 0.0};
     } else {
-        const auto& first_road = map_.GetRoads()[0];
+        // Используем начальную точку первой дороги
+        const auto& first_road = roads[0];
         start_pos = first_road.GetStart();
     }
 

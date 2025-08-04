@@ -64,6 +64,16 @@ namespace json_loader {
                 map.SetDogSpeed(map_obj.at("dogSpeed").as_double());
             }
 
+            // Загрузка размера карты
+            if (map_obj.contains("size")) {
+                auto size_obj = map_obj.at("size").as_object();
+                model::Size size{
+                    static_cast<model::Dimension>(size_obj.at("width").as_int64()),
+                    static_cast<model::Dimension>(size_obj.at("height").as_int64())
+                };
+                map.SetSize(size);
+            }
+
             for (const auto& road_val : map_obj.at("roads").as_array()) {
                 map.AddRoad(ParseRoad(road_val.as_object()));
             }

@@ -194,10 +194,14 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     auto session = player->GetSession();
     json::value players_json = json::object();
     
+    // Получаем высоту карты для преобразования координаты Y
+    auto map_size = session->GetMap().GetSize();
+    double map_height = map_size ? static_cast<double>(map_size->height) : 1000.0;
+
     for (const auto& p : session->GetPlayers()) {
         const auto& dog = p->GetDog();
         players_json.as_object()[std::to_string(*p->GetId())] = {
-            {"pos", json::array({dog.GetPosition().x, dog.GetPosition().y})},
+            {"pos", json::array({dog.GetPosition().x, map_height - dog.GetPosition().y})}, // Преобразование Y
             {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
             {"dir", model::DirectionToString(dog.GetDirection())}
         };
