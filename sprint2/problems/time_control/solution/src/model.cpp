@@ -44,13 +44,14 @@ void Game::AddMap(Map map) {
 
 Point GameSession::GenerateRandomPosition() const {
     const auto& roads = map_.GetRoads();
-    if (roads.empty()) {
-        return {0.0, 0.0};
-    }
-
-    // Появление в начальной точке первой дороги
+    if (roads.empty()) return {0.0, 0.0};
+    
+    // Появление строго в начальной точке первой дороги
     const auto& road = roads[0];
-    return { static_cast<double>(road.GetStart().x), static_cast<double>(road.GetStart().y) };
+    return {
+        static_cast<double>(road.GetStart().x),
+        static_cast<double>(road.GetStart().y)
+    };
 }
 
 
@@ -116,41 +117,78 @@ void GameSession::Tick(double delta_time) {
         auto pos = dog.GetPosition();
         auto speed = dog.GetSpeed();
 
-        if (speed.x == 0.0 && speed.y == 0.0) {
-            continue;
-        }
+        if (speed.x == 0.0 && speed.y == 0.0) continue;
 
-        double new_x = pos.x + speed.x * delta_time;
-        double new_y = pos.y + speed.y * delta_time;
+        double move_x = speed.x * delta_time;
+        double move_y = speed.y * delta_time;
+        double new_x = pos.x + move_x;
+        double new_y = pos.y + move_y;
 
-        // Проверка дорог для определения границ
-        bool can_move = true;
-        Point new_pos = {new_x, new_y};
-
+        // Проверяем каждую дорогу на возможность движения
+        bool can_move = false;
         for (const auto& road : map_.GetRoads()) {
             auto bbox = road.GetBoundingBox();
-            double x0 = bbox.position.x;
-            double y0 = bbox.position.y;
-            double x1 = x0 + bbox.size.width;
-            double y1 = y0 + bbox.size.height;
+            double road_x0 = bbox.position.x;
+            double road_y0 = bbox.position.y;
+            double road_x1 = road_x0 + bbox.size.width;
+            double road_y1 = road_y0 + bbox.size.height;
 
-            // Проверка находится ли текущая позиция в пределах дороги
-            bool on_road = (pos.x >= x0 && pos.x <= x1 && pos.y >= y0 && pos.y <= y1);
-            if (!on_road) continue;
-
-            // Проверка новой позиции
-            bool x_in_road = (new_x >= x0 && new_x <= x1);
-            bool y_in_road = (new_y >= y0 && new_y <= y1);
-            if (!x_in_road || !y_in_road) {
-                can_move = false;
-                break;
+            // Текущая позиция на дороге?
+            if (pos.x >= road_x0 && pos.x <= road_x1 &&
+                pos.y >= road_y0 && pos.y <= road_y1) {
+                
+                // Проверка новой позиции
+                if (new_x >= road_x0 && new_x <= road_x1 &&
+                    new_y >= road_y0 && new_y <= road_y1) {
+                    can_move = true;
+                    break;
+                }
             }
         }
 
         if (can_move) {
-            dog.SetPosition(new_pos);
+            dog.SetPosition({new_x, new_y});
         } else {
-            // Остановка собаки, если движение заблокировано
+            // Вычисляем ближайшую границу
+            double target_x = new_x;
+            double target_y = new_y;
+            bool hit_boundary = false;
+            
+            for (const auto& road : map_.GetRoads()) {
+                auto bbox = road.GetBoundingBox();
+                double road_x0 = bbox.position.x;
+                double road_y0 = bbox.position.y;
+                double road_x1 = road_x0 + bbox.size.width;
+                double road_y1 = road_y0 + bbox.size.height;
+
+                if (pos.x >= road_x0 && pos.x <= road_x1 &&
+                    pos.y >= road_y0 && pos.y <= road_y1) {
+                    
+                    // Горизонтальное движение
+                    if (speed.x != 0) {
+                        if (speed.x > 0) {
+                            target_x = std::min(new_x, road_x1);
+                        } else {
+                            target_x = std::max(new_x, road_x0);
+                        }
+                        hit_boundary = true;
+                    }
+                    
+                    // Вертикальное движение
+                    if (speed.y != 0) {
+                        if (speed.y > 0) {
+                            target_y = std::min(new_y, road_y1);
+                        } else {
+                            target_y = std::max(new_y, road_y0);
+                        }
+                        hit_boundary = true;
+                    }
+                    
+                    if (hit_boundary) break;
+                }
+            }
+            
+            dog.SetPosition({target_x, target_y});
             dog.SetSpeed({0.0, 0.0});
         }
     }
