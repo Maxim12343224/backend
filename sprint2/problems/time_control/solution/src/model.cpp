@@ -124,7 +124,7 @@ void GameSession::Tick(double delta_time) {
         double new_x = pos.x + move_x;
         double new_y = pos.y + move_y;
 
-        // Проверка возможности движения без ограничения дорогами
+        // Проверяем каждую дорогу на возможность движения
         bool can_move = false;
         for (const auto& road : map_.GetRoads()) {
             auto bbox = road.GetBoundingBox();
@@ -133,19 +133,26 @@ void GameSession::Tick(double delta_time) {
             double road_x1 = road_x0 + bbox.size.width;
             double road_y1 = road_y0 + bbox.size.height;
 
-            if (new_x >= road_x0 && new_x <= road_x1 &&
-                new_y >= road_y0 && new_y <= road_y1) {
-                can_move = true;
-                break;
+            // Текущая позиция на дороге?
+            if (pos.x >= road_x0 && pos.x <= road_x1 &&
+                pos.y >= road_y0 && pos.y <= road_y1) {
+                
+                // Проверка новой позиции
+                if (new_x >= road_x0 && new_x <= road_x1 &&
+                    new_y >= road_y0 && new_y <= road_y1) {
+                    can_move = true;
+                    break;
+                }
             }
         }
 
         if (can_move) {
             dog.SetPosition({new_x, new_y});
         } else {
-            // Корректировка позиции до ближайшей границы
+            // Вычисляем ближайшую границу
             double target_x = new_x;
             double target_y = new_y;
+            bool hit_boundary = false;
             
             for (const auto& road : map_.GetRoads()) {
                 auto bbox = road.GetBoundingBox();
@@ -154,7 +161,6 @@ void GameSession::Tick(double delta_time) {
                 double road_x1 = road_x0 + bbox.size.width;
                 double road_y1 = road_y0 + bbox.size.height;
 
-                // Для текущей позиции собаки
                 if (pos.x >= road_x0 && pos.x <= road_x1 &&
                     pos.y >= road_y0 && pos.y <= road_y1) {
                     
@@ -165,6 +171,7 @@ void GameSession::Tick(double delta_time) {
                         } else {
                             target_x = std::max(new_x, road_x0);
                         }
+                        hit_boundary = true;
                     }
                     
                     // Вертикальное движение
@@ -174,19 +181,15 @@ void GameSession::Tick(double delta_time) {
                         } else {
                             target_y = std::max(new_y, road_y0);
                         }
+                        hit_boundary = true;
                     }
                     
-                    break;
+                    if (hit_boundary) break;
                 }
             }
             
-            // Корректируем позицию с учетом точности вычислений
-            constexpr double eps = 1e-5;
-            if (std::abs(target_x - new_x) > eps || std::abs(target_y - new_y) > eps) {
-                dog.SetSpeed({0.0, 0.0});
-            }
-            
             dog.SetPosition({target_x, target_y});
+            dog.SetSpeed({0.0, 0.0});
         }
     }
 }
