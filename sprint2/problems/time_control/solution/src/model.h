@@ -71,16 +71,16 @@ namespace model {
                 Coord x0 = std::min(start_.x, end_.x);
                 Coord x1 = std::max(start_.x, end_.x);
                 return {
-                    {x0 - 0.4, start_.y - 0.4},
-                    {x1 - x0 + 0.8, 0.8}
+                    {x0, start_.y - 0.4},
+                    {x1 - x0, 0.8}
                 };
             }
             else {
                 Coord y0 = std::min(start_.y, end_.y);
                 Coord y1 = std::max(start_.y, end_.y);
                 return {
-                    {start_.x - 0.4, y0 - 0.4},
-                    {0.8, y1 - y0 + 0.8}
+                    {start_.x - 0.4, y0},
+                    {0.8, y1 - y0}
                 };
             }
         }

@@ -124,7 +124,7 @@ void GameSession::Tick(double delta_time) {
         double new_x = pos.x + move_x;
         double new_y = pos.y + move_y;
 
-        // Проверяем ВСЕ дороги на карте (не только текущие)
+        // Проверка возможности движения без ограничения дорогами
         bool can_move = false;
         for (const auto& road : map_.GetRoads()) {
             auto bbox = road.GetBoundingBox();
@@ -133,7 +133,6 @@ void GameSession::Tick(double delta_time) {
             double road_x1 = road_x0 + bbox.size.width;
             double road_y1 = road_y0 + bbox.size.height;
 
-            // Проверяем только новую позицию
             if (new_x >= road_x0 && new_x <= road_x1 &&
                 new_y >= road_y0 && new_y <= road_y1) {
                 can_move = true;
@@ -144,10 +143,9 @@ void GameSession::Tick(double delta_time) {
         if (can_move) {
             dog.SetPosition({new_x, new_y});
         } else {
-            // Вычисляем ближайшую границу с учетом направления
+            // Корректировка позиции до ближайшей границы
             double target_x = new_x;
             double target_y = new_y;
-            bool hit_boundary = false;
             
             for (const auto& road : map_.GetRoads()) {
                 auto bbox = road.GetBoundingBox();
@@ -156,33 +154,39 @@ void GameSession::Tick(double delta_time) {
                 double road_x1 = road_x0 + bbox.size.width;
                 double road_y1 = road_y0 + bbox.size.height;
 
-                // Для вертикального движения проверяем только вертикальные дороги
-                if (speed.y != 0 && !road.IsVertical()) continue;
-                // Для горизонтального - только горизонтальные
-                if (speed.x != 0 && !road.IsHorizontal()) continue;
-
+                // Для текущей позиции собаки
                 if (pos.x >= road_x0 && pos.x <= road_x1 &&
                     pos.y >= road_y0 && pos.y <= road_y1) {
                     
-                    if (speed.x > 0) {
-                        target_x = std::min(new_x, road_x1);
-                    } else if (speed.x < 0) {
-                        target_x = std::max(new_x, road_x0);
+                    // Горизонтальное движение
+                    if (speed.x != 0) {
+                        if (speed.x > 0) {
+                            target_x = std::min(new_x, road_x1);
+                        } else {
+                            target_x = std::max(new_x, road_x0);
+                        }
                     }
                     
-                    if (speed.y > 0) {
-                        target_y = std::min(new_y, road_y1);
-                    } else if (speed.y < 0) {
-                        target_y = std::max(new_y, road_y0);
+                    // Вертикальное движение
+                    if (speed.y != 0) {
+                        if (speed.y > 0) {
+                            target_y = std::min(new_y, road_y1);
+                        } else {
+                            target_y = std::max(new_y, road_y0);
+                        }
                     }
                     
-                    hit_boundary = true;
                     break;
                 }
             }
             
+            // Корректируем позицию с учетом точности вычислений
+            constexpr double eps = 1e-5;
+            if (std::abs(target_x - new_x) > eps || std::abs(target_y - new_y) > eps) {
+                dog.SetSpeed({0.0, 0.0});
+            }
+            
             dog.SetPosition({target_x, target_y});
-            dog.SetSpeed({0.0, 0.0});
         }
     }
 }
