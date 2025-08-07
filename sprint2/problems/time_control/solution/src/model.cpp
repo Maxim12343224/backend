@@ -1,8 +1,9 @@
 #include "model.h"
 #include <stdexcept>
 #include <random>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace model {
 using namespace std::literals;
@@ -36,94 +37,27 @@ void Game::AddMap(Map map) {
     }
 }
 
-namespace {
-    bool IsPointOnRoad(const Road& road, Point p) {
-        constexpr double tolerance = 0.4;
-        if (road.IsHorizontal()) {
-            auto min_x = std::min(road.GetStart().x, road.GetEnd().x);
-            auto max_x = std::max(road.GetStart().x, road.GetEnd().x);
-            return p.x >= min_x && p.x <= max_x && 
-                   std::abs(p.y - road.GetStart().y) <= tolerance;
-        } else {
-            auto min_y = std::min(road.GetStart().y, road.GetEnd().y);
-            auto max_y = std::max(road.GetStart().y, road.GetEnd().y);
-            return p.y >= min_y && p.y <= max_y && 
-                   std::abs(p.x - road.GetStart().x) <= tolerance;
-        }
-    }
 
-    const Road* FindHorizontalRoad(Point p, const Map& map) {
-        for (const auto& road : map.GetRoads()) {
-            if (!road.IsHorizontal()) continue;
-            if (IsPointOnRoad(road, p)) {
-                return &road;
-            }
-        }
-        return nullptr;
-    }
 
-    const Road* FindVerticalRoad(Point p, const Map& map) {
-        for (const auto& road : map.GetRoads()) {
-            if (!road.IsVertical()) continue;
-            if (IsPointOnRoad(road, p)) {
-                return &road;
-            }
-        }
-        return nullptr;
-    }
-}
 
-void Dog::UpdatePosition(double delta_time, const Map& map) {
-    double new_x = position_.x + speed_.x * delta_time;
-    double new_y = position_.y + speed_.y * delta_time;
 
-    // Horizontal movement
-    if (speed_.x != 0) {
-        const auto* h_road = FindHorizontalRoad(position_, map);
-        if (h_road) {
-            double min_x = std::min(h_road->GetStart().x, h_road->GetEnd().x);
-            double max_x = std::max(h_road->GetStart().x, h_road->GetEnd().x);
-            new_x = std::clamp(new_x, min_x, max_x);
-            if (new_x <= min_x || new_x >= max_x) {
-                speed_.x = 0;
-            }
-        } else {
-            new_x = position_.x;
-            speed_.x = 0;
-        }
-    }
 
-    // Vertical movement
-    if (speed_.y != 0) {
-        Point temp_pos{new_x, position_.y};
-        const auto* v_road = FindVerticalRoad(temp_pos, map);
-        if (v_road) {
-            double min_y = std::min(v_road->GetStart().y, v_road->GetEnd().y);
-            double max_y = std::max(v_road->GetStart().y, v_road->GetEnd().y);
-            new_y = std::clamp(new_y, min_y, max_y);
-            if (new_y <= min_y || new_y >= max_y) {
-                speed_.y = 0;
-            }
-        } else {
-            new_y = position_.y;
-            speed_.y = 0;
-        }
-    }
-
-    position_ = {new_x, new_y};
-}
-
-std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
-    Point start_pos;
+Point GameSession::GenerateRandomPosition() const {
     const auto& roads = map_.GetRoads();
     if (roads.empty()) {
-        start_pos = {0.0, 0.0};
-    } else {
-        // Используем начальную точку первой дороги
-        const auto& first_road = roads[0];
-        start_pos = first_road.GetStart();
+        return {0.0, 0.0};
     }
 
+    // Появление в начальной точке первой дороги
+    const auto& road = roads[0];
+    return { static_cast<double>(road.GetStart().x), static_cast<double>(road.GetStart().y) };
+}
+
+
+
+
+std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
+    Point start_pos = GenerateRandomPosition();
     Dog dog(std::move(dog_name), start_pos, Direction::North);
 
     static std::atomic<uint32_t> next_player_id_{0};
@@ -175,10 +109,50 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
     }
 }
 
-void GameSession::UpdateState(double delta_time) {
+void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
-        player->GetDog().UpdatePosition(delta_time, map_);
+        auto& dog = player->GetDog();
+        auto pos = dog.GetPosition();
+        auto speed = dog.GetSpeed();
+
+        if (speed.x == 0.0 && speed.y == 0.0) {
+            continue;
+        }
+
+        double new_x = pos.x + speed.x * delta_time;
+        double new_y = pos.y + speed.y * delta_time;
+
+        // Проверка дорог для определения границ
+        bool can_move = true;
+        Point new_pos = {new_x, new_y};
+
+        for (const auto& road : map_.GetRoads()) {
+            auto bbox = road.GetBoundingBox();
+            double x0 = bbox.position.x;
+            double y0 = bbox.position.y;
+            double x1 = x0 + bbox.size.width;
+            double y1 = y0 + bbox.size.height;
+
+            // Проверка находится ли текущая позиция в пределах дороги
+            bool on_road = (pos.x >= x0 && pos.x <= x1 && pos.y >= y0 && pos.y <= y1);
+            if (!on_road) continue;
+
+            // Проверка новой позиции
+            bool x_in_road = (new_x >= x0 && new_x <= x1);
+            bool y_in_road = (new_y >= y0 && new_y <= y1);
+            if (!x_in_road || !y_in_road) {
+                can_move = false;
+                break;
+            }
+        }
+
+        if (can_move) {
+            dog.SetPosition(new_pos);
+        } else {
+            // Остановка собаки, если движение заблокировано
+            dog.SetSpeed({0.0, 0.0});
+        }
     }
 }
 

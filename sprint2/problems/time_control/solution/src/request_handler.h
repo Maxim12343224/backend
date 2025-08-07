@@ -70,9 +70,12 @@ namespace http_handler {
                         return send(std::move(response));
                     }
                 }
+
+
+                //время
                 else if (string_req.target() == "/api/v1/game/tick") {
                     if (string_req.method() == http::verb::post) {
-                        auto response = HandleTickRequest(std::move(string_req));
+                        auto response = HandleTick(std::move(string_req));
                         return send(std::move(response));
                     }
                     else {
@@ -102,7 +105,7 @@ namespace http_handler {
         StringResponse HandleGetPlayers(StringRequest&& req);
         StringResponse HandleGameState(StringRequest&& req);
         StringResponse HandlePlayerAction(StringRequest&& req);
-        StringResponse HandleTickRequest(StringRequest&& req);
+        StringResponse HandleTick(StringRequest&& req);
 
         std::optional<std::string> GetTokenFromRequest(const StringRequest& req);
 

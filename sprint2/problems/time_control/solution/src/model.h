@@ -9,13 +9,12 @@
 #include <mutex>
 #include <optional>
 #include <algorithm>
-#include <boost/json.hpp>
 
 #include "tagged.h"
 
 namespace model {
 
-    using Dimension = int;
+    using Dimension = double;  // Изменено int -> double
     using Coord = double;
 
     struct Point {
@@ -67,6 +66,19 @@ namespace model {
         Point GetStart() const noexcept { return start_; }
         Point GetEnd() const noexcept { return end_; }
 
+        Rectangle GetBoundingBox() const noexcept {
+            if (IsHorizontal()) {
+                Coord x0 = std::min(start_.x, end_.x);
+                Coord x1 = std::max(start_.x, end_.x);
+                return { {x0, start_.y - 0.4}, {x1 - x0, 0.8} };
+            }
+            else {
+                Coord y0 = std::min(start_.y, end_.y);
+                Coord y1 = std::max(start_.y, end_.y);
+                return { {start_.x - 0.4, y0}, {0.8, y1 - y0} };
+            }
+        }
+
     private:
         Point start_;
         Point end_;
@@ -116,13 +128,11 @@ namespace model {
         const Roads& GetRoads() const noexcept { return roads_; }
         const Offices& GetOffices() const noexcept { return offices_; }
         const std::optional<double>& GetDogSpeed() const noexcept { return dog_speed_; }
-        const std::optional<Size>& GetSize() const noexcept { return size_; }
 
         void AddRoad(const Road& road) { roads_.emplace_back(road); }
         void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
         void AddOffice(Office office);
         void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
-        void SetSize(Size size) noexcept { size_ = size; }
 
     private:
         using OfficeIdToIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
@@ -134,7 +144,6 @@ namespace model {
         OfficeIdToIndex warehouse_id_to_index_;
         Offices offices_;
         std::optional<double> dog_speed_;
-        std::optional<Size> size_;
     };
 
     class Dog {
@@ -152,8 +161,7 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
         void SetSpeed(Point speed) noexcept { speed_ = speed; }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
-        void SetPosition(Point pos) noexcept { position_ = pos; }
-        void UpdatePosition(double delta_time, const Map& map);
+        void SetPosition(Point p) noexcept { position_ = p; }
 
     private:
         std::string name_;
@@ -199,9 +207,10 @@ namespace model {
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
 
+        Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
-        void UpdateState(double delta_time);
+        void Tick(double delta_time);
 
     private:
         Id id_;
@@ -275,9 +284,9 @@ namespace model {
             }
         }
 
-        void UpdateState(double delta_time) {
-            for (auto& [map_id, session] : map_id_to_session_) {
-                session->UpdateState(delta_time);
+        void Tick(double delta_time) {
+            for (auto& [_, session] : map_id_to_session_) {
+                session->Tick(delta_time);
             }
         }
 

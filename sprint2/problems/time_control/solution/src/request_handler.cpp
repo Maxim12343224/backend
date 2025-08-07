@@ -9,7 +9,7 @@
 #include <filesystem>
 #include <optional>
 #include <random>
-#include <boost/json.hpp>
+#include <chrono>
 
 namespace http_handler {
 namespace beast = boost::beast;
@@ -194,14 +194,10 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     auto session = player->GetSession();
     json::value players_json = json::object();
     
-    // Получаем высоту карты для преобразования координаты Y
-    auto map_size = session->GetMap().GetSize();
-    double map_height = map_size ? static_cast<double>(map_size->height) : 1000.0;
-
     for (const auto& p : session->GetPlayers()) {
         const auto& dog = p->GetDog();
         players_json.as_object()[std::to_string(*p->GetId())] = {
-            {"pos", json::array({dog.GetPosition().x, map_height - dog.GetPosition().y})}, // Преобразование Y
+            {"pos", json::array({dog.GetPosition().x, dog.GetPosition().y})},
             {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
             {"dir", model::DirectionToString(dog.GetDirection())}
         };
@@ -270,11 +266,10 @@ StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
     }
 }
 
-StringResponse RequestHandler::HandleTickRequest(StringRequest&& req) {
+StringResponse RequestHandler::HandleTick(StringRequest&& req) {
     if (req.method() != http::verb::post) {
         auto response = MakeErrorResponse(http::status::method_not_allowed,
-                                        "invalidMethod",
-                                        "Only POST method is expected", req);
+            "invalidMethod", "Only POST method is expected", req);
         response.set(http::field::allow, "POST");
         return response;
     }
@@ -282,38 +277,34 @@ StringResponse RequestHandler::HandleTickRequest(StringRequest&& req) {
     if (req.find(http::field::content_type) == req.end() || 
         req[http::field::content_type] != "application/json") {
         return MakeErrorResponse(http::status::bad_request,
-                               "invalidArgument",
-                               "Invalid content type", req);
+            "invalidArgument", "Invalid content type", req);
     }
 
     try {
         auto json_body = json::parse(req.body());
-        if (!json_body.is_object()) {
-            throw std::runtime_error("Request body must be JSON object");
+        if (!json_body.is_object() || !json_body.as_object().contains("timeDelta")) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "Failed to parse tick request JSON", req);
         }
 
-        auto& obj = json_body.as_object();
-        if (!obj.contains("timeDelta")) {
-            throw std::runtime_error("Missing timeDelta field");
+        auto time_delta = json_body.as_object()["timeDelta"];
+        if (!time_delta.is_int64()) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "timeDelta must be integer", req);
         }
 
-        auto time_delta_val = obj["timeDelta"];
-        if (!time_delta_val.is_int64()) {
-            throw std::runtime_error("timeDelta must be integer");
+        auto delta = time_delta.as_int64();
+        if (delta < 0) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        auto time_delta = time_delta_val.as_int64();
-        if (time_delta <= 0) {
-            throw std::runtime_error("timeDelta must be positive");
-        }
-
-        game_.UpdateState(time_delta / 1000.0);
+        game_.Tick(static_cast<double>(delta) / 1000.0);
 
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {
         return MakeErrorResponse(http::status::bad_request,
-                               "invalidArgument",
-                               "Failed to parse tick request JSON", req);
+            "invalidArgument", "Failed to parse tick request JSON", req);
     }
 }
 
