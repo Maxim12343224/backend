@@ -129,26 +129,36 @@ namespace http_handler {
 
         template <typename Request, typename Send>
         void operator()(Request&& req, std::string remote_address, Send&& send) {
+            json::value request_data{
+                {"ip", remote_address},
+                {"URI", std::string(req.target())},
+                {"method", std::string(req.method_string())}
+            };
+            BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, request_data)
+                << "request received";
+
             auto start_time = std::chrono::steady_clock::now();
-            std::string method = std::string(req.method_string());
-            std::string uri = std::string(req.target());
 
             base_handler_(std::forward<Request>(req), remote_address,
-                [this, start_time, remote_address, method, uri, send = std::forward<Send>(send)]
+                [this, start_time, remote_address, send = std::forward<Send>(send)]
                 (auto&& response) mutable {
-                    auto end_time = std::chrono::steady_clock::now();
                     auto response_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        end_time - start_time).count();
+                        std::chrono::steady_clock::now() - start_time).count();
 
-                    // Добавляем логирование "request handled"
-                    json::value log_data{
-                        {"request", uri},
-                        {"method", method},
-                        {"response_time", static_cast<double>(response_time) / 1000.0} // в секундах
+                    std::string content_type = "null";
+                    if (auto it = response.find(http::field::content_type);
+                        it != response.end()) {
+                        content_type = std::string(it->value());
+                    }
+
+                    json::value response_data{
+                        {"ip", remote_address},
+                        {"response_time", response_time},
+                        {"code", static_cast<int>(response.result())},
+                        {"content_type", content_type}
                     };
-
-                    BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, log_data)
-                        << "request handled";  // <-- Сообщение, которое ожидает тест
+                    BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, response_data)
+                        << "response sent";
 
                     send(std::forward<decltype(response)>(response));
                 });
