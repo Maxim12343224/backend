@@ -583,7 +583,7 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
     }
 }
 
-void GameSession::Tick(double delta_time) {
+/*void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
         auto& dog = player->GetDog();
@@ -665,7 +665,108 @@ void GameSession::Tick(double delta_time) {
             dog.SetSpeed({0.0, 0.0});
         }
     }
+}*/
+
+
+
+
+void GameSession::Tick(double delta_time) {
+    std::lock_guard lock(mutex_);
+    for (auto& player : players_) {
+        auto& dog = player->GetDog();
+        auto pos = dog.GetPosition();
+        auto speed = dog.GetSpeed();
+
+        // Если собака не движется - пропускаем
+        if (speed.x == 0.0 && speed.y == 0.0) continue;
+
+        // Находим ВСЕ дороги, на которых находится собака в текущий момент
+        std::vector<const Road*> current_roads;
+        for (const auto& road : map_.GetRoads()) {
+            auto bbox = road.GetBoundingBox();
+            if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
+                pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
+                current_roads.push_back(&road);
+            }
+        }
+
+        // Если собака вне дорог - останавливаем
+        if (current_roads.empty()) {
+            dog.SetSpeed({0, 0});
+            continue;
+        }
+
+        // Рассчитываем новую позицию без ограничений
+        double new_x = pos.x + speed.x * delta_time;
+        double new_y = pos.y + speed.y * delta_time;
+        bool can_move = false;
+
+        // Проверяем, разрешено ли движение на новую позицию
+        for (const auto road : current_roads) {
+            auto bbox = road->GetBoundingBox();
+            if (new_x >= bbox.position.x && new_x <= bbox.position.x + bbox.size.width &&
+                new_y >= bbox.position.y && new_y <= bbox.position.y + bbox.size.height) {
+                can_move = true;
+                break;
+            }
+        }
+
+        if (can_move) {
+            // Если движение разрешено - обновляем позицию
+            dog.SetPosition({new_x, new_y});
+        } else {
+            // Вычисляем ближайшую границу с учетом направления движения
+            double target_x = new_x;
+            double target_y = new_y;
+            
+            for (const auto road : current_roads) {
+                auto bbox = road->GetBoundingBox();
+                const double road_left = bbox.position.x;
+                const double road_right = bbox.position.x + bbox.size.width;
+                const double road_top = bbox.position.y;
+                const double road_bottom = bbox.position.y + bbox.size.height;
+
+                // Обработка движения по горизонтали
+                if (speed.x != 0.0) {
+                    if (speed.x > 0) {  // Движение вправо
+                        target_x = std::min(target_x, road_right);
+                    } else {  // Движение влево
+                        target_x = std::max(target_x, road_left);
+                    }
+                }
+
+                // Обработка движения по вертикали
+                if (speed.y != 0.0) {
+                    if (speed.y > 0) {  // Движение вниз
+                        target_y = std::min(target_y, road_bottom);
+                    } else {  // Движение вверх
+                        target_y = std::max(target_y, road_top);
+                    }
+                }
+            }
+
+            // Устанавливаем позицию на границе и останавливаем собаку
+            dog.SetPosition({target_x, target_y});
+            dog.SetSpeed({0.0, 0.0});
+            
+            // Дополнительная проверка для плавного перехода на перекрестках
+            for (const auto road : map_.GetRoads()) {
+                auto bbox = road.GetBoundingBox();
+                if (target_x >= bbox.position.x && target_x <= bbox.position.x + bbox.size.width &&
+                    target_y >= bbox.position.y && target_y <= bbox.position.y + bbox.size.height) {
+                    // Собака осталась на дороге - сохраняем направление
+                    dog.SetDirection(speed.x > 0 ? Direction::East :
+                                     speed.x < 0 ? Direction::West :
+                                     speed.y > 0 ? Direction::South : Direction::North);
+                    break;
+                }
+            }
+        }
+    }
 }
+
+
+
 
 std::string DirectionToString(Direction dir) {
     switch (dir) {
@@ -751,14 +852,20 @@ namespace model {
 
         Rectangle GetBoundingBox() const noexcept {
             if (IsHorizontal()) {
-                Coord x0 = std::min(start_.x, end_.x) - 0.4;
-                Coord x1 = std::max(start_.x, end_.x) + 0.4;
-                return { {x0, start_.y - 0.4}, {x1 - x0, 0.8} };
+                Coord min_x = std::min(start_.x, end_.x);
+                Coord max_x = std::max(start_.x, end_.x);
+                return {
+                    {min_x - 0.4, start_.y - 0.4},
+                    {max_x - min_x + 0.8, 0.8}
+                };
             }
             else {
-                Coord y0 = std::min(start_.y, end_.y) - 0.4;
-                Coord y1 = std::max(start_.y, end_.y) + 0.4;
-                return { {start_.x - 0.4, y0}, {0.8, y1 - y0} };
+                Coord min_y = std::min(start_.y, end_.y);
+                Coord max_y = std::max(start_.y, end_.y);
+                return {
+                    {start_.x - 0.4, min_y - 0.4},
+                    {0.8, max_y - min_y + 0.8}
+                };
             }
         }
 
