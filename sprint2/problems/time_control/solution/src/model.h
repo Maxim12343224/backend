@@ -68,20 +68,14 @@ namespace model {
 
         Rectangle GetBoundingBox() const noexcept {
             if (IsHorizontal()) {
-                Coord min_x = std::min(start_.x, end_.x);
-                Coord max_x = std::max(start_.x, end_.x);
-                return {
-                    {min_x, start_.y - 0.4},
-                    {max_x - min_x, 0.8}
-                };
+                Coord x0 = std::min(start_.x, end_.x) - 0.4;
+                Coord x1 = std::max(start_.x, end_.x) + 0.4;
+                return { {x0, start_.y - 0.4}, {x1 - x0, 0.8} };
             }
             else {
-                Coord min_y = std::min(start_.y, end_.y);
-                Coord max_y = std::max(start_.y, end_.y);
-                return {
-                    {start_.x - 0.4, min_y},
-                    {0.8, max_y - min_y}
-                };
+                Coord y0 = std::min(start_.y, end_.y) - 0.4;
+                Coord y1 = std::max(start_.y, end_.y) + 0.4;
+                return { {start_.x - 0.4, y0}, {0.8, y1 - y0} };
             }
         }
 

@@ -1,13 +1,9 @@
-#include <iostream>
 #include "model.h"
 #include <stdexcept>
 #include <random>
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <iomanip>
-
-
 
 namespace model {
 using namespace std::literals;
@@ -94,12 +90,6 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         
         auto& dog = player->GetDog();
         Point new_speed{0.0, 0.0};
-
-
-        std::cerr << "Setting action: " << move << " for token: " << *token << std::endl;
-
-
-
         if (move == "L") {
             new_speed = {-dog_speed_, 0.0};
             dog.SetDirection(Direction::West);
@@ -116,14 +106,6 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
             new_speed = {0.0, 0.0};
         }
         dog.SetSpeed(new_speed);
-
-
-
-        std::cerr << "New speed set: (" << new_speed.x << ", " << new_speed.y << ")" << std::endl;
-
-
-
-
         break;
     }
 }
@@ -211,128 +193,6 @@ void GameSession::Tick(double delta_time) {
         }
     }
 }
-
-
-
-
-/*void GameSession::Tick(double delta_time) {
-    std::lock_guard lock(mutex_);
-    for (auto& player : players_) {
-        auto& dog = player->GetDog();
-        auto pos = dog.GetPosition();
-        auto speed = dog.GetSpeed();
-
-        if (speed.x == 0.0 && speed.y == 0.0) continue;
-
-        double new_x = pos.x + speed.x * delta_time;
-        double new_y = pos.y + speed.y * delta_time;
-
-        // 1. Проверяем, разрешено ли движение на новой позиции на ЛЮБОЙ дороге карты
-        bool can_move = false;
-        for (const auto& road : map_.GetRoads()) {
-            auto bbox = road.GetBoundingBox();
-            if (new_x >= bbox.position.x && 
-                new_x <= bbox.position.x + bbox.size.width &&
-                new_y >= bbox.position.y && 
-                new_y <= bbox.position.y + bbox.size.height) {
-                can_move = true;
-                break;
-            }
-        }
-
-        if (can_move) {
-            // Движение разрешено - обновляем позицию
-            dog.SetPosition({new_x, new_y});
-        } else {
-            // 2. Корректируем позицию до ближайшей границы
-            double target_x = new_x;
-            double target_y = new_y;
-            bool corrected = false;
-
-            // Для горизонтального движения
-            if (speed.x != 0.0) {
-                if (speed.x > 0) {
-                    // Движение вправо - ищем минимальную правую границу
-                    double min_right = std::numeric_limits<double>::max();
-                    for (const auto& road : map_.GetRoads()) {
-                        auto bbox = road.GetBoundingBox();
-                        // Проверяем только дороги, на которых мы сейчас находимся
-                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
-                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
-                            double road_right = bbox.position.x + bbox.size.width;
-                            if (road_right < min_right) {
-                                min_right = road_right;
-                                corrected = true;
-                            }
-                        }
-                    }
-                    if (corrected) target_x = min_right;
-                } else {
-                    // Движение влево - ищем максимальную левую границу
-                    double max_left = std::numeric_limits<double>::lowest();
-                    for (const auto& road : map_.GetRoads()) {
-                        auto bbox = road.GetBoundingBox();
-                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
-                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
-                            double road_left = bbox.position.x;
-                            if (road_left > max_left) {
-                                max_left = road_left;
-                                corrected = true;
-                            }
-                        }
-                    }
-                    if (corrected) target_x = max_left;
-                }
-            }
-
-            // Для вертикального движения
-            if (speed.y != 0.0) {
-                if (speed.y > 0) {
-                    // Движение вниз - ищем минимальную нижнюю границу
-                    double min_bottom = std::numeric_limits<double>::max();
-                    for (const auto& road : map_.GetRoads()) {
-                        auto bbox = road.GetBoundingBox();
-                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
-                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
-                            double road_bottom = bbox.position.y + bbox.size.height;
-                            if (road_bottom < min_bottom) {
-                                min_bottom = road_bottom;
-                                corrected = true;
-                            }
-                        }
-                    }
-                    if (corrected) target_y = min_bottom;
-                } else {
-                    // Движение вверх - ищем максимальную верхнюю границу
-                    double max_top = std::numeric_limits<double>::lowest();
-                    for (const auto& road : map_.GetRoads()) {
-                        auto bbox = road.GetBoundingBox();
-                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
-                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
-                            double road_top = bbox.position.y;
-                            if (road_top > max_top) {
-                                max_top = road_top;
-                                corrected = true;
-                            }
-                        }
-                    }
-                    if (corrected) target_y = max_top;
-                }
-            }
-
-            // Устанавливаем скорректированную позицию
-            dog.SetPosition({target_x, target_y});
-            
-            // Останавливаем собаку только если была корректировка
-            if (corrected) {
-                dog.SetSpeed({0.0, 0.0});
-            }
-        }
-    }
-}*/
-
-
-
 
 std::string DirectionToString(Direction dir) {
     switch (dir) {
