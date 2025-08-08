@@ -128,7 +128,7 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
     }
 }
 
-/*void GameSession::Tick(double delta_time) {
+void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
         auto& dog = player->GetDog();
@@ -210,12 +210,12 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
             dog.SetSpeed({0.0, 0.0});
         }
     }
-}*/
+}
 
 
 
 
-void GameSession::Tick(double delta_time) {
+/*void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
         auto& dog = player->GetDog();
@@ -329,7 +329,7 @@ void GameSession::Tick(double delta_time) {
             }
         }
     }
-}
+}*/
 
 
 
