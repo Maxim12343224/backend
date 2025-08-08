@@ -1,9 +1,13 @@
+#include <iostream>
 #include "model.h"
 #include <stdexcept>
 #include <random>
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <iomanip>
+
+
 
 namespace model {
 using namespace std::literals;
@@ -90,6 +94,12 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         
         auto& dog = player->GetDog();
         Point new_speed{0.0, 0.0};
+
+
+        std::cerr << "Setting action: " << move << " for token: " << *token << std::endl;
+
+
+
         if (move == "L") {
             new_speed = {-dog_speed_, 0.0};
             dog.SetDirection(Direction::West);
@@ -106,6 +116,14 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
             new_speed = {0.0, 0.0};
         }
         dog.SetSpeed(new_speed);
+
+
+
+        std::cerr << "New speed set: (" << new_speed.x << ", " << new_speed.y << ")" << std::endl;
+
+
+
+
         break;
     }
 }
@@ -204,10 +222,12 @@ void GameSession::Tick(double delta_time) {
         auto pos = dog.GetPosition();
         auto speed = dog.GetSpeed();
 
-        // Если собака не движется - пропускаем
         if (speed.x == 0.0 && speed.y == 0.0) continue;
 
-        // Находим ВСЕ дороги, на которых находится собака в текущий момент
+        double new_x = pos.x + speed.x * delta_time;
+        double new_y = pos.y + speed.y * delta_time;
+
+        // 1. Собираем ВСЕ дороги, на которых находится текущая позиция
         std::vector<const Road*> current_roads;
         for (const auto& road : map_.GetRoads()) {
             auto bbox = road.GetBoundingBox();
@@ -217,18 +237,14 @@ void GameSession::Tick(double delta_time) {
             }
         }
 
-        // Если собака вне дорог - останавливаем
+        // 2. Если собака вне дорог - останавливаем
         if (current_roads.empty()) {
             dog.SetSpeed({0, 0});
             continue;
         }
 
-        // Рассчитываем новую позицию без ограничений
-        double new_x = pos.x + speed.x * delta_time;
-        double new_y = pos.y + speed.y * delta_time;
+        // 3. Проверяем, разрешено ли движение на новую позицию
         bool can_move = false;
-
-        // Проверяем, разрешено ли движение на новую позицию
         for (const auto road : current_roads) {
             auto bbox = road->GetBoundingBox();
             if (new_x >= bbox.position.x && new_x <= bbox.position.x + bbox.size.width &&
@@ -238,11 +254,11 @@ void GameSession::Tick(double delta_time) {
             }
         }
 
+        // 4. Если движение разрешено хотя бы на одной дороге
         if (can_move) {
-            // Если движение разрешено - обновляем позицию
             dog.SetPosition({new_x, new_y});
         } else {
-            // Вычисляем ближайшую границу с учетом направления движения
+            // 5. Корректируем позицию до ближайшей границы
             double target_x = new_x;
             double target_y = new_y;
             
@@ -253,41 +269,21 @@ void GameSession::Tick(double delta_time) {
                 const double road_top = bbox.position.y;
                 const double road_bottom = bbox.position.y + bbox.size.height;
 
-                // Обработка движения по горизонтали
+                // Горизонтальное движение
                 if (speed.x != 0.0) {
-                    if (speed.x > 0) {  // Движение вправо
-                        target_x = std::min(target_x, road_right);
-                    } else {  // Движение влево
-                        target_x = std::max(target_x, road_left);
-                    }
+                    if (speed.x > 0) target_x = std::min(target_x, road_right);
+                    else target_x = std::max(target_x, road_left);
                 }
-
-                // Обработка движения по вертикали
+                
+                // Вертикальное движение
                 if (speed.y != 0.0) {
-                    if (speed.y > 0) {  // Движение вниз
-                        target_y = std::min(target_y, road_bottom);
-                    } else {  // Движение вверх
-                        target_y = std::max(target_y, road_top);
-                    }
+                    if (speed.y > 0) target_y = std::min(target_y, road_bottom);
+                    else target_y = std::max(target_y, road_top);
                 }
             }
-
-            // Устанавливаем позицию на границе и останавливаем собаку
+            
             dog.SetPosition({target_x, target_y});
             dog.SetSpeed({0.0, 0.0});
-            
-            // Дополнительная проверка для плавного перехода на перекрестках
-            for (const auto road : map_.GetRoads()) {
-                auto bbox = road.GetBoundingBox();
-                if (target_x >= bbox.position.x && target_x <= bbox.position.x + bbox.size.width &&
-                    target_y >= bbox.position.y && target_y <= bbox.position.y + bbox.size.height) {
-                    // Собака осталась на дороге - сохраняем направление
-                    dog.SetDirection(speed.x > 0 ? Direction::East :
-                                     speed.x < 0 ? Direction::West :
-                                     speed.y > 0 ? Direction::South : Direction::North);
-                    break;
-                }
-            }
         }
     }
 }
