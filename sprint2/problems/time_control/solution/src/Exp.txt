@@ -471,12 +471,16 @@ int main(int argc, const char* argv[]) {
 
 
 ===== model.cpp =====
+#include <iostream>
 #include "model.h"
 #include <stdexcept>
 #include <random>
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <iomanip>
+
+
 
 namespace model {
 using namespace std::literals;
@@ -563,6 +567,12 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         
         auto& dog = player->GetDog();
         Point new_speed{0.0, 0.0};
+
+
+        std::cerr << "Setting action: " << move << " for token: " << *token << std::endl;
+
+
+
         if (move == "L") {
             new_speed = {-dog_speed_, 0.0};
             dog.SetDirection(Direction::West);
@@ -579,6 +589,14 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
             new_speed = {0.0, 0.0};
         }
         dog.SetSpeed(new_speed);
+
+
+
+        std::cerr << "New speed set: (" << new_speed.x << ", " << new_speed.y << ")" << std::endl;
+
+
+
+
         break;
     }
 }
@@ -677,89 +695,110 @@ void GameSession::Tick(double delta_time) {
         auto pos = dog.GetPosition();
         auto speed = dog.GetSpeed();
 
-        // Если собака не движется - пропускаем
         if (speed.x == 0.0 && speed.y == 0.0) continue;
 
-        // Находим ВСЕ дороги, на которых находится собака в текущий момент
-        std::vector<const Road*> current_roads;
-        for (const auto& road : map_.GetRoads()) {
-            auto bbox = road.GetBoundingBox();
-            if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
-                pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
-                current_roads.push_back(&road);
-            }
-        }
-
-        // Если собака вне дорог - останавливаем
-        if (current_roads.empty()) {
-            dog.SetSpeed({0, 0});
-            continue;
-        }
-
-        // Рассчитываем новую позицию без ограничений
         double new_x = pos.x + speed.x * delta_time;
         double new_y = pos.y + speed.y * delta_time;
-        bool can_move = false;
 
-        // Проверяем, разрешено ли движение на новую позицию
-        for (const auto road : current_roads) {
-            auto bbox = road->GetBoundingBox();
-            if (new_x >= bbox.position.x && new_x <= bbox.position.x + bbox.size.width &&
-                new_y >= bbox.position.y && new_y <= bbox.position.y + bbox.size.height) {
+        // 1. Проверяем, разрешено ли движение на новой позиции на ЛЮБОЙ дороге карты
+        bool can_move = false;
+        for (const auto& road : map_.GetRoads()) {
+            auto bbox = road.GetBoundingBox();
+            if (new_x >= bbox.position.x && 
+                new_x <= bbox.position.x + bbox.size.width &&
+                new_y >= bbox.position.y && 
+                new_y <= bbox.position.y + bbox.size.height) {
                 can_move = true;
                 break;
             }
         }
 
         if (can_move) {
-            // Если движение разрешено - обновляем позицию
+            // Движение разрешено - обновляем позицию
             dog.SetPosition({new_x, new_y});
         } else {
-            // Вычисляем ближайшую границу с учетом направления движения
+            // 2. Корректируем позицию до ближайшей границы
             double target_x = new_x;
             double target_y = new_y;
-            
-            for (const auto road : current_roads) {
-                auto bbox = road->GetBoundingBox();
-                const double road_left = bbox.position.x;
-                const double road_right = bbox.position.x + bbox.size.width;
-                const double road_top = bbox.position.y;
-                const double road_bottom = bbox.position.y + bbox.size.height;
+            bool corrected = false;
 
-                // Обработка движения по горизонтали
-                if (speed.x != 0.0) {
-                    if (speed.x > 0) {  // Движение вправо
-                        target_x = std::min(target_x, road_right);
-                    } else {  // Движение влево
-                        target_x = std::max(target_x, road_left);
+            // Для горизонтального движения
+            if (speed.x != 0.0) {
+                if (speed.x > 0) {
+                    // Движение вправо - ищем минимальную правую границу
+                    double min_right = std::numeric_limits<double>::max();
+                    for (const auto& road : map_.GetRoads()) {
+                        auto bbox = road.GetBoundingBox();
+                        // Проверяем только дороги, на которых мы сейчас находимся
+                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
+                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
+                            double road_right = bbox.position.x + bbox.size.width;
+                            if (road_right < min_right) {
+                                min_right = road_right;
+                                corrected = true;
+                            }
+                        }
                     }
-                }
-
-                // Обработка движения по вертикали
-                if (speed.y != 0.0) {
-                    if (speed.y > 0) {  // Движение вниз
-                        target_y = std::min(target_y, road_bottom);
-                    } else {  // Движение вверх
-                        target_y = std::max(target_y, road_top);
+                    if (corrected) target_x = min_right;
+                } else {
+                    // Движение влево - ищем максимальную левую границу
+                    double max_left = std::numeric_limits<double>::lowest();
+                    for (const auto& road : map_.GetRoads()) {
+                        auto bbox = road.GetBoundingBox();
+                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
+                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
+                            double road_left = bbox.position.x;
+                            if (road_left > max_left) {
+                                max_left = road_left;
+                                corrected = true;
+                            }
+                        }
                     }
+                    if (corrected) target_x = max_left;
                 }
             }
 
-            // Устанавливаем позицию на границе и останавливаем собаку
-            dog.SetPosition({target_x, target_y});
-            dog.SetSpeed({0.0, 0.0});
-            
-            // Дополнительная проверка для плавного перехода на перекрестках
-            for (const auto road : map_.GetRoads()) {
-                auto bbox = road.GetBoundingBox();
-                if (target_x >= bbox.position.x && target_x <= bbox.position.x + bbox.size.width &&
-                    target_y >= bbox.position.y && target_y <= bbox.position.y + bbox.size.height) {
-                    // Собака осталась на дороге - сохраняем направление
-                    dog.SetDirection(speed.x > 0 ? Direction::East :
-                                     speed.x < 0 ? Direction::West :
-                                     speed.y > 0 ? Direction::South : Direction::North);
-                    break;
+            // Для вертикального движения
+            if (speed.y != 0.0) {
+                if (speed.y > 0) {
+                    // Движение вниз - ищем минимальную нижнюю границу
+                    double min_bottom = std::numeric_limits<double>::max();
+                    for (const auto& road : map_.GetRoads()) {
+                        auto bbox = road.GetBoundingBox();
+                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
+                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
+                            double road_bottom = bbox.position.y + bbox.size.height;
+                            if (road_bottom < min_bottom) {
+                                min_bottom = road_bottom;
+                                corrected = true;
+                            }
+                        }
+                    }
+                    if (corrected) target_y = min_bottom;
+                } else {
+                    // Движение вверх - ищем максимальную верхнюю границу
+                    double max_top = std::numeric_limits<double>::lowest();
+                    for (const auto& road : map_.GetRoads()) {
+                        auto bbox = road.GetBoundingBox();
+                        if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
+                            pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
+                            double road_top = bbox.position.y;
+                            if (road_top > max_top) {
+                                max_top = road_top;
+                                corrected = true;
+                            }
+                        }
+                    }
+                    if (corrected) target_y = max_top;
                 }
+            }
+
+            // Устанавливаем скорректированную позицию
+            dog.SetPosition({target_x, target_y});
+            
+            // Останавливаем собаку только если была корректировка
+            if (corrected) {
+                dog.SetSpeed({0.0, 0.0});
             }
         }
     }
@@ -855,16 +894,16 @@ namespace model {
                 Coord min_x = std::min(start_.x, end_.x);
                 Coord max_x = std::max(start_.x, end_.x);
                 return {
-                    {min_x - 0.4, start_.y - 0.4},
-                    {max_x - min_x + 0.8, 0.8}
+                    {min_x, start_.y - 0.4},
+                    {max_x - min_x, 0.8}
                 };
             }
             else {
                 Coord min_y = std::min(start_.y, end_.y);
                 Coord max_y = std::max(start_.y, end_.y);
                 return {
-                    {start_.x - 0.4, min_y - 0.4},
-                    {0.8, max_y - min_y + 0.8}
+                    {start_.x - 0.4, min_y},
+                    {0.8, max_y - min_y}
                 };
             }
         }
