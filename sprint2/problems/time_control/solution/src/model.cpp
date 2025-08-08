@@ -114,82 +114,116 @@ void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
     for (auto& player : players_) {
         auto& dog = player->GetDog();
-        auto pos = dog.GetPosition();
-        auto speed = dog.GetSpeed();
+        const auto pos = dog.GetPosition();
+        const auto speed = dog.GetSpeed();
 
+        // Если собака не движется, пропускаем обработку
         if (speed.x == 0.0 && speed.y == 0.0) continue;
 
-        double move_x = speed.x * delta_time;
-        double move_y = speed.y * delta_time;
-        double new_x = pos.x + move_x;
-        double new_y = pos.y + move_y;
+        // Рассчитываем вектор перемещения
+        const double move_x = speed.x * delta_time;
+        const double move_y = speed.y * delta_time;
+        const double new_x = pos.x + move_x;
+        const double new_y = pos.y + move_y;
 
-        // Проверяем каждую дорогу на возможность движения
-        bool can_move = false;
-        for (const auto& road : map_.GetRoads()) {
-            auto bbox = road.GetBoundingBox();
-            double road_x0 = bbox.position.x;
-            double road_y0 = bbox.position.y;
-            double road_x1 = road_x0 + bbox.size.width;
-            double road_y1 = road_y0 + bbox.size.height;
-
-            // Текущая позиция на дороге?
-            if (pos.x >= road_x0 && pos.x <= road_x1 &&
-                pos.y >= road_y0 && pos.y <= road_y1) {
+        // Проверяем, принадлежит ли новая позиция любой дороге на карте
+        auto is_valid_position = [this](double x, double y) {
+            for (const auto& road : map_.GetRoads()) {
+                const auto bbox = road.GetBoundingBox();
+                const double road_x0 = bbox.position.x;
+                const double road_y0 = bbox.position.y;
+                const double road_x1 = road_x0 + bbox.size.width;
+                const double road_y1 = road_y0 + bbox.size.height;
                 
-                // Проверка новой позиции
-                if (new_x >= road_x0 && new_x <= road_x1 &&
-                    new_y >= road_y0 && new_y <= road_y1) {
-                    can_move = true;
+                if (x >= road_x0 && x <= road_x1 &&
+                    y >= road_y0 && y <= road_y1) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Если новое положение валидно - перемещаем
+        if (is_valid_position(new_x, new_y)) {
+            dog.SetPosition({new_x, new_y});
+        } else {
+            // Определяем текущую дорогу
+            const Road* current_road = nullptr;
+            for (const auto& road : map_.GetRoads()) {
+                const auto bbox = road.GetBoundingBox();
+                const double road_x0 = bbox.position.x;
+                const double road_y0 = bbox.position.y;
+                const double road_x1 = road_x0 + bbox.size.width;
+                const double road_y1 = road_y0 + bbox.size.height;
+                
+                if (pos.x >= road_x0 && pos.x <= road_x1 &&
+                    pos.y >= road_y0 && pos.y <= road_y1) {
+                    current_road = &road;
                     break;
                 }
             }
-        }
 
-        if (can_move) {
-            dog.SetPosition({new_x, new_y});
-        } else {
-            // Вычисляем ближайшую границу
-            double target_x = new_x;
-            double target_y = new_y;
-            bool hit_boundary = false;
-            
-            for (const auto& road : map_.GetRoads()) {
-                auto bbox = road.GetBoundingBox();
-                double road_x0 = bbox.position.x;
-                double road_y0 = bbox.position.y;
-                double road_x1 = road_x0 + bbox.size.width;
-                double road_y1 = road_y0 + bbox.size.height;
+            // Если текущая дорога найдена, обрабатываем границы
+            if (current_road) {
+                const auto bbox = current_road->GetBoundingBox();
+                const double road_x0 = bbox.position.x;
+                const double road_y0 = bbox.position.y;
+                const double road_x1 = road_x0 + bbox.size.width;
+                const double road_y1 = road_y0 + bbox.size.height;
 
-                if (pos.x >= road_x0 && pos.x <= road_x1 &&
-                    pos.y >= road_y0 && pos.y <= road_y1) {
-                    
-                    // Горизонтальное движение
-                    if (speed.x != 0) {
-                        if (speed.x > 0) {
-                            target_x = std::min(new_x, road_x1);
-                        } else {
-                            target_x = std::max(new_x, road_x0);
-                        }
-                        hit_boundary = true;
+                // Вычисляем целевую позицию с учетом границ дороги
+                double target_x = new_x;
+                double target_y = new_y;
+                bool boundary_hit = false;
+
+                // Проверка горизонтальных границ
+                if (speed.x != 0.0) {
+                    if (speed.x > 0 && new_x > road_x1) {
+                        target_x = road_x1;
+                        boundary_hit = true;
+                    } else if (speed.x < 0 && new_x < road_x0) {
+                        target_x = road_x0;
+                        boundary_hit = true;
                     }
-                    
-                    // Вертикальное движение
-                    if (speed.y != 0) {
-                        if (speed.y > 0) {
-                            target_y = std::min(new_y, road_y1);
-                        } else {
-                            target_y = std::max(new_y, road_y0);
-                        }
-                        hit_boundary = true;
-                    }
-                    
-                    if (hit_boundary) break;
                 }
+
+                // Проверка вертикальных границ
+                if (speed.y != 0.0) {
+                    if (speed.y > 0 && new_y > road_y1) {
+                        target_y = road_y1;
+                        boundary_hit = true;
+                    } else if (speed.y < 0 && new_y < road_y0) {
+                        target_y = road_y0;
+                        boundary_hit = true;
+                    }
+                }
+
+                // Если уперлись в границу - устанавливаем позицию и останавливаем движение
+                if (boundary_hit) {
+                    // Проверяем, не ведет ли граница на другую дорогу
+                    if (is_valid_position(target_x, target_y)) {
+                        dog.SetPosition({target_x, target_y});
+                    } else {
+                        // Если за границей нет дороги - останавливаем на границе
+                        dog.SetPosition({target_x, target_y});
+                        dog.SetSpeed({0.0, 0.0});
+                    }
+                } else {
+                    // Если не уперлись в границу, но позиция невалидна - возможно, диагональное движение
+                    // Пробуем переместиться только по одной оси
+                    if (is_valid_position(new_x, pos.y)) {
+                        dog.SetPosition({new_x, pos.y});
+                    } else if (is_valid_position(pos.x, new_y)) {
+                        dog.SetPosition({pos.x, new_y});
+                    } else {
+                        // Если ни один вариант не работает - останавливаем
+                        dog.SetSpeed({0.0, 0.0});
+                    }
+                }
+            } else {
+                // Если собака не на дороге - останавливаем
+                dog.SetSpeed({0.0, 0.0});
             }
-            
-            dog.SetPosition({target_x, target_y});
-            dog.SetSpeed({0.0, 0.0});
         }
     }
 }
