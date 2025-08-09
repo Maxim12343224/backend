@@ -9,7 +9,7 @@
 #include "logger.h"
 #include <boost/program_options.hpp>
 #include <filesystem>
-#include <boost/system/error_code.hpp>  // Добавлен заголовок
+#include <boost/system/error_code.hpp> 
 
 using namespace std::literals;
 namespace net = boost::asio;
@@ -54,13 +54,13 @@ namespace {
             timer_.expires_after(period_);
             timer_.async_wait(net::bind_executor(
                 strand_, 
-                [self = shared_from_this()](boost::system::error_code ec) {  // Исправлено sys::error_code -> boost::system::error_code
+                [self = shared_from_this()](boost::system::error_code ec) {  
                     self->OnTick(ec);
                 }
             ));
         }
 
-        void OnTick(boost::system::error_code ec) {  // Исправлено sys::error_code -> boost::system::error_code
+        void OnTick(boost::system::error_code ec) {  
             using namespace std::chrono;
             assert(strand_.running_in_this_thread());
 

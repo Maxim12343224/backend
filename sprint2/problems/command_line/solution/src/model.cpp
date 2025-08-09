@@ -55,7 +55,7 @@ Point GameSession::GenerateRandomPosition() const {
     const auto& road = roads[road_dist(gen)];
 
     if (road.IsHorizontal()) {
-        // Заменяем на uniform_real_distribution для вещественных чисел
+        
         std::uniform_real_distribution<double> x_dist(
             std::min(road.GetStart().x, road.GetEnd().x),
             std::max(road.GetStart().x, road.GetEnd().x)
