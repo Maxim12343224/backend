@@ -1,93 +1,72 @@
 #pragma once
-#include <chrono>
-#include <string_view>
-#include <fstream>
-#include <iomanip>
-#include <mutex>
-#include <filesystem>
-#include <optional>
-#include <sstream>
+
+#define BOOST_LOG_NO_WCHAR_T
+#define BOOST_LOG_WITHOUT_WCHAR_T
+
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/support/date_time.hpp>
+#include <boost/json.hpp>
+#include <boost/log/attributes/value_extraction.hpp>
+#include <boost/log/utility/manipulators/add_value.hpp>
+#include <boost/log/sources/record_ostream.hpp>
+#include <boost/log/utility/setup/console.hpp>
+#include <boost/log/sinks/sync_frontend.hpp>
+#include <boost/log/sinks/text_ostream_backend.hpp>
+#include <boost/core/null_deleter.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/make_shared.hpp>
 
 namespace logger {
+    namespace logging = boost::log;
+    namespace sinks = boost::log::sinks;
+    namespace json = boost::json;
+    namespace keywords = boost::log::keywords;
 
-    namespace fs = std::filesystem;
+    BOOST_LOG_ATTRIBUTE_KEYWORD(additional_data, "AdditionalData", json::value)
 
-    class Logger {
-    public:
-        static Logger& GetInstance() {
-            static Logger instance;
-            return instance;
-        }
+        class JsonFormatter {
+        public:
+            void operator()(logging::record_view const& rec, logging::formatting_ostream& strm) const {
+                json::object obj;
 
-        Logger(const Logger&) = delete;
-        Logger& operator=(const Logger&) = delete;
-        Logger(Logger&&) = delete;
-        Logger& operator=(Logger&&) = delete;
 
-        template <typename... Args>
-        void Log(Args&&... args) {
-            std::lock_guard lock(mutex_);
-
-            auto now = timestamp_override_.has_value() ?
-                timestamp_override_.value() : std::chrono::system_clock::now();
-
-            UpdateLogFile(now);
-            WriteTimestamp(now);
-            (log_file_ << ... << std::forward<Args>(args)) << std::endl;
-        }
-
-        void SetTimestamp(std::chrono::system_clock::time_point timestamp) {
-            std::lock_guard lock(mutex_);
-            timestamp_override_ = timestamp;
-        }
-
-    private:
-        Logger() = default;
-        ~Logger() {
-            if (log_file_.is_open()) {
-                log_file_.close();
-            }
-        }
-
-        void UpdateLogFile(const std::chrono::system_clock::time_point& now) {
-            auto new_date = GetDate(now);
-            if (current_date_ != new_date) {
-                if (log_file_.is_open()) {
-                    log_file_.close();
+                auto ts = logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
+                if (ts) {
+                    obj["timestamp"] = boost::posix_time::to_iso_extended_string(ts.get());
                 }
 
-                fs::path log_dir = "/var/log";
-                if (!fs::exists(log_dir)) {
-                    fs::create_directory(log_dir);
+
+                auto msg = logging::extract<std::string>("Message", rec);
+                if (msg) {
+                    obj["message"] = msg.get();
                 }
 
-                std::ostringstream filename;
-                auto t = std::chrono::system_clock::to_time_t(now);
-                auto tm = *std::localtime(&t);
-                filename << "sample_log_"
-                    << std::put_time(&tm, "%Y_%m_%d") << ".log";
 
-                log_file_.open(log_dir / filename.str(), std::ios::app);
-                current_date_ = new_date;
+                if (auto data = rec[additional_data]; data) {
+                    obj["data"] = data.get();
+                }
+
+                strm << json::serialize(obj);
             }
-        }
-
-        void WriteTimestamp(const std::chrono::system_clock::time_point& now) {
-            auto t = std::chrono::system_clock::to_time_t(now);
-            log_file_ << std::put_time(std::localtime(&t), "%F %T") << ": ";
-        }
-
-        static std::string GetDate(const std::chrono::system_clock::time_point& tp) {
-            auto t = std::chrono::system_clock::to_time_t(tp);
-            std::ostringstream oss;
-            oss << std::put_time(std::localtime(&t), "%F");
-            return oss.str();
-        }
-
-        std::ofstream log_file_;
-        std::string current_date_;
-        std::optional<std::chrono::system_clock::time_point> timestamp_override_;
-        std::mutex mutex_;
     };
 
+    inline void InitLogging() {
+        logging::add_common_attributes();
+
+        auto core = logging::core::get();
+        core->remove_all_sinks();
+
+
+        auto sink = boost::make_shared<sinks::synchronous_sink<sinks::text_ostream_backend>>();
+
+        boost::shared_ptr<std::ostream> stream(&std::clog, boost::null_deleter());
+        sink->locked_backend()->add_stream(stream);
+
+        sink->set_formatter(JsonFormatter());
+        sink->locked_backend()->auto_flush(true);
+
+        core->add_sink(sink);
+    }
 } // namespace logger

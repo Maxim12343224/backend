@@ -1,5 +1,6 @@
 #pragma once
 #include "sdk.h"
+#include "logger.h"
 #include <iostream>
 #include <memory>
 #include <boost/asio/ip/tcp.hpp>
@@ -16,16 +17,16 @@ namespace http_server {
 
     using RequestHandler = std::function<void(
         http::request<http::string_body>&& req,
+        std::string remote_address,
         std::function<void(http::response<http::string_body>&&)>&& send)>;
-
-    void ReportError(beast::error_code ec, std::string_view what);
 
     class Session : public std::enable_shared_from_this<Session> {
     public:
         template <typename Handler>
         Session(tcp::socket&& socket, Handler&& handler)
             : stream_(std::move(socket))
-            , request_handler_(std::forward<Handler>(handler)) {
+            , request_handler_(std::forward<Handler>(handler))
+            , remote_address_(stream_.socket().remote_endpoint().address().to_string()) {
         }
 
         void Run();
@@ -35,11 +36,13 @@ namespace http_server {
         void OnRead(beast::error_code ec, std::size_t bytes_read);
         void OnWrite(bool close, beast::error_code ec, std::size_t bytes_written);
         void Close();
+        void ReportError(beast::error_code ec, std::string_view where);
 
         beast::tcp_stream stream_;
         beast::flat_buffer buffer_;
         http::request<http::string_body> request_;
         RequestHandler request_handler_;
+        std::string remote_address_;
     };
 
     template <typename RequestHandler>
@@ -69,7 +72,14 @@ namespace http_server {
 
         void OnAccept(beast::error_code ec, tcp::socket socket) {
             if (ec) {
-                return ReportError(ec, "accept");
+                boost::json::value data{
+                    {"code", ec.value()},
+                    {"text", ec.message()},
+                    {"where", "accept"}
+                };
+                BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, data)
+                    << "error";
+                return;
             }
 
             std::make_shared<Session>(std::move(socket), request_handler_)->Run();

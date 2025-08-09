@@ -1,412 +1,527 @@
 #include "request_handler.h"
-#include <boost/beast/http.hpp>
-#include <boost/json.hpp>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cctype>
+#include <iomanip>
 #include <stdexcept>
+#include <iterator>
 #include <filesystem>
-#include <fstream>
+#include <optional>
+#include <random>
+#include <chrono>
 
 namespace http_handler {
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace json = boost::json;
+namespace fs = std::filesystem;
 
-    using namespace std::literals;
-    namespace fs = std::filesystem;
-
-    RequestHandler::RequestHandler(model::Game& game, const fs::path& static_path,
-        net::strand<net::io_context::executor_type> strand)
-        : game_(game)
-        , static_path_(static_path)
-        , strand_(strand) {
+namespace {
+    json::value SerializeRoad(const model::Road& road) {
+        if (road.IsHorizontal()) {
+            return {
+                {"x0", road.GetStart().x},
+                {"y0", road.GetStart().y},
+                {"x1", road.GetEnd().x}
+            };
+        }
+        return {
+            {"x0", road.GetStart().x},
+            {"y0", road.GetStart().y},
+            {"y1", road.GetEnd().y}
+        };
     }
 
-    StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
-        if (req.target() == "/api/v1/game/join" && req.method() == http::verb::post) {
-            return HandleJoinGame(std::move(req));
-        }
-        if (req.target() == "/api/v1/game/players" &&
-            (req.method() == http::verb::get || req.method() == http::verb::head)) {
-            return HandleGetPlayers(std::move(req));
-        }
-        if (req.target() == "/api/v1/game/state" &&
-            (req.method() == http::verb::get || req.method() == http::verb::head)) {
-            return HandleGetGameState(std::move(req));
-        }
-        if (req.target() == "/api/v1/game/player/action" && req.method() == http::verb::post) {
-            return HandlePlayerAction(std::move(req));
-        }
-        if (req.target() == "/api/v1/game/tick" && req.method() == http::verb::post) {
-            return HandleTick(std::move(req));
-        }
+    json::value SerializeBuilding(const model::Building& building) {
+        const auto& bounds = building.GetBounds();
+        return {
+            {"x", bounds.position.x},
+            {"y", bounds.position.y},
+            {"w", bounds.size.width},
+            {"h", bounds.size.height}
+        };
+    }
+
+    json::value SerializeOffice(const model::Office& office) {
+        return {
+            {"id", *office.GetId()},
+            {"x", office.GetPosition().x},
+            {"y", office.GetPosition().y},
+            {"offsetX", office.GetOffset().dx},
+            {"offsetY", office.GetOffset().dy}
+        };
+    }
+} // namespace
+
+StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
+                                                const StringRequest& req, 
+                                                beast::string_view content_type) {
+    StringResponse response(status, req.version());
+    response.set(http::field::content_type, std::string(content_type));
+    response.set(http::field::cache_control, "no-cache");
+    response.content_length(body.size());
+    response.body() = body;
+    response.prepare_payload();
+    response.keep_alive(req.keep_alive());
+    return response;
+}
+
+StringResponse RequestHandler::MakeErrorResponse(http::status status, beast::string_view code,
+                                               beast::string_view message, const StringRequest& req) {
+    json::value json_res{
+        {"code", std::string(code)},
+        {"message", std::string(message)}
+    };
+    auto response = MakeStringResponse(status, json::serialize(json_res), req);
+    response.set(http::field::cache_control, "no-cache");
+    return response;
+}
+
+StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
         return MakeErrorResponse(http::status::bad_request,
-            "badRequest",
-            "Bad request", req);
+                               "invalidArgument",
+                               "Invalid content type", req);
     }
 
-    StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
-        if (req.find(http::field::content_type) == req.end() ||
-            req[http::field::content_type] != "application/json") {
-            return MakeErrorResponse(http::status::bad_request,
-                "invalidArgument",
-                "Invalid content type", req);
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object()) {
+            throw std::runtime_error("Request body must be JSON object");
         }
 
-        try {
-            auto json_body = json::parse(req.body());
-            auto user_name = json_body.at("userName").as_string();
-            auto map_id = json_body.at("mapId").as_string();
+        auto& obj = json_body.as_object();
+        if (!obj.contains("userName") || !obj.contains("mapId")) {
+            throw std::runtime_error("Missing required fields");
+        }
 
-            if (user_name.empty()) {
-                return MakeErrorResponse(http::status::bad_request,
-                    "invalidArgument",
-                    "Invalid name", req);
-            }
+        auto user_name = obj["userName"].as_string();
+        auto map_id = obj["mapId"].as_string();
 
-            if (auto player = game_.JoinGame(std::string(user_name), model::Map::Id{ std::string(map_id) })) {
-                json::object response;
-                response["authToken"] = player->GetToken().GetUnderlying();
-                response["playerId"] = player->GetId();
+        if (user_name.empty()) {
+            return MakeErrorResponse(http::status::bad_request,
+                                   "invalidArgument",
+                                   "Invalid name", req);
+        }
 
-                auto resp = MakeStringResponse(http::status::ok,
-                    json::serialize(json::value(response)), req, "application/json");
-                resp.set(http::field::cache_control, "no-cache");
-                return resp;
-            }
-
+        auto player = game_.JoinGame(model::Map::Id{std::string(map_id)}, std::string(user_name));
+        if (!player) {
             return MakeErrorResponse(http::status::not_found,
-                "mapNotFound",
-                "Map not found", req);
+                                   "mapNotFound",
+                                   "Map not found", req);
+        }
 
-        }
-        catch (const std::exception& e) {
-            return MakeErrorResponse(http::status::bad_request,
-                "invalidArgument",
-                "Join game request parse error", req);
-        }
+        json::value response_json{
+            {"authToken", *player->GetToken()},
+            {"playerId", *player->GetId()}
+        };
+
+        return MakeStringResponse(http::status::ok, json::serialize(response_json), req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Join game request parse error", req);
+    }
+}
+
+StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
+    if (req.method() != http::verb::get && req.method() != http::verb::head) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Invalid method", req);
+        response.set(http::field::allow, "GET, HEAD");
+        return response;
     }
 
-    StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
-        if (auto token = ExtractToken(req)) {
-            if (auto player = game_.FindPlayerByToken(*token)) {
-                json::object players;
-                for (const auto& p : game_.GetPlayers()) {
-                    if (p->GetDog().GetMap()->GetId() == player->GetDog().GetMap()->GetId()) {
-                        json::object player_info;
-                        player_info["name"] = p->GetName();
-                        players[std::to_string(p->GetId())] = player_info;
-                    }
-                }
-                auto resp = MakeStringResponse(http::status::ok,
-                    json::serialize(players), req, "application/json");
-                resp.set(http::field::cache_control, "no-cache");
-                return resp;
-            }
-            return MakeErrorResponse(http::status::unauthorized,
-                "unknownToken",
-                "Player token has not been found", req);
-        }
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
         return MakeErrorResponse(http::status::unauthorized,
-            "invalidToken",
-            "Authorization header is missing", req);
+                               "invalidToken",
+                               "Authorization header is missing", req);
     }
 
-    StringResponse RequestHandler::HandleGetGameState(StringRequest&& req) {
-        if (auto token = ExtractToken(req)) {
-            if (auto player = game_.FindPlayerByToken(*token)) {
-                json::object players;
-                for (const auto& p : game_.GetPlayers()) {
-                    if (p->GetDog().GetMap()->GetId() == player->GetDog().GetMap()->GetId()) {
-                        auto pos = p->GetDog().GetPosition();
-                        auto speed = p->GetDog().GetSpeed();
-
-                        json::array pos_arr = { pos[0], pos[1] };
-                        json::array speed_arr = { speed[0], speed[1] };
-
-                        json::object player_info;
-                        player_info["pos"] = pos_arr;
-                        player_info["speed"] = speed_arr;
-                        player_info["dir"] = std::string(1, static_cast<char>(p->GetDog().GetDirection()));
-
-                        players[std::to_string(p->GetId())] = player_info;
-                    }
-                }
-
-                json::object result;
-                result["players"] = players;
-
-                auto resp = MakeStringResponse(http::status::ok,
-                    json::serialize(result), req);
-                resp.set(http::field::cache_control, "no-cache");
-                return resp;
-            }
-            return MakeErrorResponse(http::status::unauthorized,
-                "unknownToken", "Player token has not been found", req);
-        }
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
         return MakeErrorResponse(http::status::unauthorized,
-            "invalidToken", "Authorization header is missing", req);
+                               "unknownToken",
+                               "Player token has not been found", req);
     }
 
-    StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
-        if (req.method() != http::verb::post) {
-            auto response = MakeErrorResponse(http::status::method_not_allowed,
-                "invalidMethod", "Only POST method is allowed", req);
-            response.set(http::field::allow, "POST");
-            return response;
-        }
+    auto session = player->GetSession();
+    json::value players_json = json::object();
+    for (const auto& p : session->GetPlayers()) {
+        players_json.as_object()[std::to_string(*p->GetId())] = {
+            {"name", p->GetDog().GetName()}
+        };
+    }
 
-        if (req.find(http::field::content_type) == req.end() ||
-            req[http::field::content_type] != "application/json") {
-            return MakeErrorResponse(http::status::bad_request,
-                "invalidArgument",
-                "Invalid content type", req);
-        }
+    return MakeStringResponse(http::status::ok, json::serialize(players_json), req);
+}
 
-        if (auto token = ExtractToken(req)) {
-            if (auto player = game_.FindPlayerByToken(*token)) {
-                try {
-                    auto json_body = json::parse(req.body());
-                    auto move = json_body.at("move").as_string();
+StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
+    if (req.method() != http::verb::get && req.method() != http::verb::head) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Invalid method", req);
+        response.set(http::field::allow, "GET, HEAD");
+        return response;
+    }
 
-                    auto& dog = player->GetDog();
-                    double speed = dog.GetMap()->GetDogSpeed();
-
-                    if (move == "L") {
-                        dog.SetDirection(model::Dog::Direction::WEST);
-                        dog.SetSpeed(-speed, 0);
-                    }
-                    else if (move == "R") {
-                        dog.SetDirection(model::Dog::Direction::EAST);
-                        dog.SetSpeed(speed, 0);
-                    }
-                    else if (move == "U") {
-                        dog.SetDirection(model::Dog::Direction::NORTH);
-                        dog.SetSpeed(0, -speed);
-                    }
-                    else if (move == "D") {
-                        dog.SetDirection(model::Dog::Direction::SOUTH);
-                        dog.SetSpeed(0, speed);
-                    }
-                    else if (move == "") {
-                        dog.SetSpeed(0, 0);
-                    }
-                    else {
-                        return MakeErrorResponse(http::status::bad_request,
-                            "invalidArgument", "Invalid move value", req);
-                    }
-
-                    return MakeStringResponse(http::status::ok, "{}", req, "application/json");
-                }
-                catch (const std::exception& e) {
-                    return MakeErrorResponse(http::status::bad_request,
-                        "invalidArgument", "Failed to parse action", req);
-                }
-            }
-            return MakeErrorResponse(http::status::unauthorized,
-                "unknownToken", "Player token has not been found", req);
-        }
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
         return MakeErrorResponse(http::status::unauthorized,
-            "invalidToken", "Authorization header is missing", req);
+                               "invalidToken",
+                               "Authorization header is required", req);
     }
 
-    StringResponse RequestHandler::HandleTick(StringRequest&& req) {
-        if (tick_period_.has_value()) {
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "unknownToken",
+                               "Player token has not been found", req);
+    }
+
+    auto session = player->GetSession();
+    json::value players_json = json::object();
+    
+    for (const auto& p : session->GetPlayers()) {
+        const auto& dog = p->GetDog();
+        players_json.as_object()[std::to_string(*p->GetId())] = {
+            {"pos", json::array({dog.GetPosition().x, dog.GetPosition().y})},
+            {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
+            {"dir", model::DirectionToString(dog.GetDirection())}
+        };
+    }
+
+    return MakeStringResponse(
+        http::status::ok,
+        json::serialize(json::value{{"players", players_json}}),
+        req
+    );
+}
+
+StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Invalid content type", req);
+    }
+
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Authorization header is required", req);
+    }
+
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "unknownToken",
+                               "Player token has not been found", req);
+    }
+
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object() || !json_body.as_object().contains("move")) {
             return MakeErrorResponse(http::status::bad_request,
-                "badRequest",
-                "Manual tick is disabled in auto-tick mode", req);
+                                  "invalidArgument",
+                                  "Failed to parse action", req);
         }
 
-        if (req.method() != http::verb::post) {
-            auto response = MakeErrorResponse(http::status::method_not_allowed,
-                "invalidMethod", "Only POST method is allowed", req);
-            response.set(http::field::allow, "POST");
-            return response;
-        }
-
-        if (req.find(http::field::content_type) == req.end() ||
-            req[http::field::content_type] != "application/json") {
+        auto move = json_body.as_object()["move"].as_string();
+        std::string move_str = std::string(move);
+        if (move_str != "L" && move_str != "R" && move_str != "U" && move_str != "D" && move_str != "") {
             return MakeErrorResponse(http::status::bad_request,
-                "invalidArgument",
-                "Invalid content type", req);
+                                  "invalidArgument",
+                                  "Invalid move value", req);
         }
 
-        try {
-            auto json_body = json::parse(req.body());
-            auto time_delta = json_body.at("timeDelta").as_int64();
+        game_.SetPlayerAction(model::Player::Token{*token}, move_str);
 
-            if (time_delta <= 0) {
-                return MakeErrorResponse(http::status::bad_request,
-                    "invalidArgument", "timeDelta must be positive", req);
-            }
+        return MakeStringResponse(http::status::ok, "{}", req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Failed to parse action", req);
+    }
+}
 
-            game_.UpdateState(static_cast<int>(time_delta));
+StringResponse RequestHandler::HandleTick(StringRequest&& req) {
+    if (is_tick_automatic_) {
+        return MakeErrorResponse(http::status::bad_request,
+            "badRequest", "Tick command is disabled in automatic mode", req);
+    }
 
-            auto resp = MakeStringResponse(http::status::ok, "{}", req, "application/json");
-            resp.set(http::field::cache_control, "no-cache");
-            return resp;
-        }
-        catch (const std::exception& e) {
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+            "invalidMethod", "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
+        return MakeErrorResponse(http::status::bad_request,
+            "invalidArgument", "Invalid content type", req);
+    }
+
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object() || !json_body.as_object().contains("timeDelta")) {
             return MakeErrorResponse(http::status::bad_request,
                 "invalidArgument", "Failed to parse tick request JSON", req);
         }
-    }
 
-    std::optional<model::Token> RequestHandler::ExtractToken(const StringRequest& req) const {
-        if (auto it = req.find(http::field::authorization); it != req.end()) {
-            auto auth = it->value();
-            if (auth.starts_with("Bearer ")) {
-                return model::Token{ std::string(auth.substr(7)) };
-            }
-        }
-        return std::nullopt;
-    }
-
-    StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
-        const StringRequest& req, std::string_view content_type) {
-        StringResponse response(status, req.version());
-        response.set(http::field::content_type,
-            beast::string_view(content_type.data(), content_type.size()));
-        response.body() = body;
-        response.prepare_payload();
-        response.keep_alive(req.keep_alive());
-        return response;
-    }
-
-    StringResponse RequestHandler::MakeErrorResponse(http::status status, std::string_view code,
-        std::string_view message, const StringRequest& req) {
-        json::object json_res;
-        json_res["code"] = std::string(code);
-        json_res["message"] = std::string(message);
-
-        auto response = MakeStringResponse(status, json::serialize(json_res), req);
-        response.set(http::field::cache_control, "no-cache");
-
-        if (status == http::status::method_not_allowed) {
-            if (req.target() == "/api/v1/game/join") {
-                response.set(http::field::allow, "POST");
-            }
-            else if (req.target() == "/api/v1/game/players" || req.target() == "/api/v1/game/state") {
-                response.set(http::field::allow, "GET, HEAD");
-            }
-            else if (req.target() == "/api/v1/game/player/action" || req.target() == "/api/v1/game/tick") {
-                response.set(http::field::allow, "POST");
-            }
-        }
-        return response;
-    }
-
-    std::string RequestHandler::DecodeUrl(std::string_view url) {
-        std::ostringstream decoded;
-        for (size_t i = 0; i < url.size(); ++i) {
-            if (url[i] == '%') {
-                if (i + 2 >= url.size()) {
-                    throw std::runtime_error("Invalid URL encoding");
-                }
-                int hex;
-                std::istringstream hex_stream(std::string(url.substr(i + 1, 2)));
-                if (!(hex_stream >> std::hex >> hex)) {
-                    throw std::runtime_error("Invalid URL encoding");
-                }
-                decoded << static_cast<char>(hex);
-                i += 2;
-            }
-            else if (url[i] == '+') {
-                decoded << ' ';
-            }
-            else {
-                decoded << url[i];
-            }
-        }
-        return decoded.str();
-    }
-
-    std::string RequestHandler::GetMimeType(std::string_view path) {
-        static const std::unordered_map<std::string_view, std::string_view> mime_types = {
-            {".htm", "text/html"},
-            {".html", "text/html"},
-            {".css", "text/css"},
-            {".txt", "text/plain"},
-            {".js", "text/javascript"},
-            {".json", "application/json"},
-            {".xml", "application/xml"},
-            {".png", "image/png"},
-            {".jpg", "image/jpeg"},
-            {".jpe", "image/jpeg"},
-            {".jpeg", "image/jpeg"},
-            {".gif", "image/gif"},
-            {".bmp", "image/bmp"},
-            {".ico", "image/vnd.microsoft.icon"},
-            {".tiff", "image/tiff"},
-            {".tif", "image/tiff"},
-            {".svg", "image/svg+xml"},
-            {".svgz", "image/svg+xml"},
-            {".mp3", "audio/mpeg"}
-        };
-
-        auto pos = path.rfind('.');
-        if (pos == std::string_view::npos) {
-            return "application/octet-stream";
+        auto time_delta = json_body.as_object()["timeDelta"];
+        if (!time_delta.is_int64()) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "timeDelta must be integer", req);
         }
 
-        std::string ext(path.substr(pos));
-        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
-            return std::tolower(c);
+        auto delta = time_delta.as_int64();
+        if (delta < 0) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "timeDelta must be non-negative", req);
+        }
+
+        game_.Tick(static_cast<double>(delta) / 1000.0);
+
+        return MakeStringResponse(http::status::ok, "{}", req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+            "invalidArgument", "Failed to parse tick request JSON", req);
+    }
+}
+
+std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
+    if (auto it = req.find(http::field::authorization); it != req.end()) {
+        auto auth_header = it->value();
+        if (auth_header.starts_with("Bearer ")) {
+            std::string token = std::string(auth_header.substr(7));
+            if (token.length() != 32) {
+                return std::nullopt;
+            }
+            return token;
+        }
+    }
+    return std::nullopt;
+}
+
+StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
+    if (req.target() == "/api/v1/maps") {
+        json::array maps_json;
+        for (const auto& map : game_.GetMaps()) {
+            maps_json.push_back({
+                {"id", *map.GetId()},
+                {"name", map.GetName()}
             });
-
-        auto it = mime_types.find(ext);
-        if (it == mime_types.end()) {
-            return "application/octet-stream";
         }
-        return std::string(it->second);
+        return MakeStringResponse(http::status::ok,
+                                json::serialize(maps_json), req);
     }
 
-    bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
-        auto relative = fs::relative(path, base);
-        return !relative.empty() && relative.native()[0] != '.';
+    if (req.target().starts_with("/api/v1/maps/")) {
+        std::string target = req.target().to_string();
+        size_t last_slash_pos = target.find_last_of('/');
+        if (last_slash_pos == std::string::npos || last_slash_pos == target.size() - 1) {
+            return MakeErrorResponse(http::status::bad_request,
+                                   "badRequest",
+                                   "Invalid map ID format", req);
+        }
+
+        std::string map_id = target.substr(last_slash_pos + 1);
+        size_t question_pos = map_id.find('?');
+        if (question_pos != std::string::npos) {
+            map_id = map_id.substr(0, question_pos);
+        }
+
+        if (!map_id.empty() && map_id.back() == '/') {
+            map_id.pop_back();
+        }
+
+        if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
+            json::value map_json{
+                {"id", *map->GetId()},
+                {"name", map->GetName()},
+                {"roads", json::array()},
+                {"buildings", json::array()},
+                {"offices", json::array()}
+            };
+
+            for (const auto& road : map->GetRoads()) {
+                map_json.as_object()["roads"].as_array().push_back(SerializeRoad(road));
+            }
+
+            for (const auto& building : map->GetBuildings()) {
+                map_json.as_object()["buildings"].as_array().push_back(SerializeBuilding(building));
+            }
+
+            for (const auto& office : map->GetOffices()) {
+                map_json.as_object()["offices"].as_array().push_back(SerializeOffice(office));
+            }
+
+            return MakeStringResponse(http::status::ok,
+                                    json::serialize(map_json), req);
+        }
+
+        return MakeErrorResponse(http::status::not_found,
+                               "mapNotFound",
+                               "Map not found", req);
     }
 
-    StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
-        try {
-            auto target = req.target();
-            std::string_view target_sv(target.data(), target.size());
-            auto path = DecodeUrl(target_sv);
+    return MakeErrorResponse(http::status::bad_request,
+                           "badRequest",
+                           "Bad request", req);
+}
 
-            if (path.empty() || path[0] != '/') {
-                throw std::runtime_error("Invalid path");
-            }
-            path = path.substr(1);
+StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
+    try {
+        auto path = DecodeUrl(req.target());
 
-            auto full_path = fs::weakly_canonical(static_path_ / path);
-
-            if (!IsSubPath(full_path, static_path_)) {
-                throw std::runtime_error("Invalid path");
-            }
-
-            if (fs::is_directory(full_path)) {
-                full_path /= "index.html";
-            }
-
-            if (!fs::exists(full_path)) {
-                throw std::runtime_error("File not found");
-            }
-
-            std::ifstream file(full_path, std::ios::binary);
-            if (!file) {
-                throw std::runtime_error("Failed to open file");
-            }
-
-            std::string content((std::istreambuf_iterator<char>(file)),
-                std::istreambuf_iterator<char>());
-
-            auto resp = MakeStringResponse(http::status::ok, content, req, GetMimeType(full_path.string()));
-            resp.set(http::field::cache_control, "no-cache");
-            return resp;
-        }
-        catch (const std::exception& e) {
-            if (std::string_view(e.what()) == "File not found") {
-                return MakeStringResponse(http::status::not_found,
-                    "File not found", req, "text/plain");
-            }
+        if (path.empty() || path[0] != '/') {
             return MakeStringResponse(http::status::bad_request,
-                e.what(), req, "text/plain");
+                                    "Invalid path", req, "text/plain");
+        }
+        path = path.substr(1);
+
+        auto full_path = fs::weakly_canonical(static_path_ / path);
+
+        if (!IsSubPath(full_path, static_path_)) {
+            return MakeStringResponse(http::status::bad_request,
+                                    "Invalid path: attempted directory traversal",
+                                    req, "text/plain");
+        }
+
+        if (fs::is_directory(full_path)) {
+            full_path /= "index.html";
+        }
+
+        if (!fs::exists(full_path)) {
+            return MakeStringResponse(http::status::not_found,
+                                    "File not found", req, "text/plain");
+        }
+
+        std::ifstream file(full_path, std::ios::binary);
+        if (!file) {
+            return MakeStringResponse(http::status::internal_server_error,
+                                    "Failed to open file", req, "text/plain");
+        }
+
+        std::string content((std::istreambuf_iterator<char>(file)),
+                          std::istreambuf_iterator<char>());
+
+        return MakeStringResponse(http::status::ok, content, req, GetMimeType(full_path.string()));
+    }
+    catch (const std::exception& e) {
+        return MakeStringResponse(http::status::internal_server_error,
+                                "Internal server error", req, "text/plain");
+    }
+}
+
+std::string RequestHandler::DecodeUrl(beast::string_view url) {
+    std::ostringstream decoded;
+    for (size_t i = 0; i < url.size(); ++i) {
+        if (url[i] == '%') {
+            if (i + 2 >= url.size()) {
+                throw std::runtime_error("Invalid URL encoding");
+            }
+            int hex;
+            std::istringstream hex_stream(std::string(url.substr(i + 1, 2)));
+            if (!(hex_stream >> std::hex >> hex)) {
+                throw std::runtime_error("Invalid URL encoding");
+            }
+            decoded << static_cast<char>(hex);
+            i += 2;
+        }
+        else if (url[i] == '+') {
+            decoded << ' ';
+        }
+        else {
+            decoded << url[i];
         }
     }
-} // namespace http_handler
+    return decoded.str();
+}
+
+std::string RequestHandler::GetMimeType(beast::string_view path) {
+    static const std::unordered_map<std::string, std::string> mime_types = {
+        {".htm", "text/html"},
+        {".html", "text/html"},
+        {".css", "text/css"},
+        {".txt", "text/plain"},
+        {".js", "text/javascript"},
+        {".json", "application/json"},
+        {".xml", "application/xml"},
+        {".png", "image/png"},
+        {".jpg", "image/jpeg"},
+        {".jpe", "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".gif", "image/gif"},
+        {".bmp", "image/bmp"},
+        {".ico", "image/vnd.microsoft.icon"},
+        {".tiff", "image/tiff"},
+        {".tif", "image/tiff"},
+        {".svg", "image/svg+xml"},
+        {".svgz", "image/svg+xml"},
+        {".mp3", "audio/mpeg"},
+        {".wasm", "application/wasm"}
+    };
+
+    std::string path_str(path);
+    auto pos = path_str.rfind('.');
+    if (pos == std::string::npos) {
+        return "application/octet-stream";
+    }
+
+    std::string ext = path_str.substr(pos);
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+
+    auto it = mime_types.find(ext);
+    if (it == mime_types.end()) {
+        return "application/octet-stream";
+    }
+    return it->second;
+}
+
+bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
+    try {
+        const auto norm_path = fs::weakly_canonical(path);
+        const auto norm_base = fs::weakly_canonical(base);
+
+        auto base_it = norm_base.begin();
+        auto path_it = norm_path.begin();
+
+        for (; base_it != norm_base.end(); ++base_it, ++path_it) {
+            if (path_it == norm_path.end() || *path_it != *base_it) {
+                return false;
+            }
+        }
+        return true;
+    }
+    catch (const std::exception& e) {
+        return false;
+    }
+}
+}  // namespace http_handler

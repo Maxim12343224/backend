@@ -12,28 +12,19 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 set(SOURCE_FILES
-    src/main.cpp
-    src/game.cpp
-    src/game.h
-    src/dog.h
-    src/player.cpp
-    src/player.h
-    src/token_generator.cpp
-    src/token_generator.h
-    src/json_loader.cpp
-    src/json_loader.h
-    src/request_handler.cpp
-    src/request_handler.h
-    src/http_server.cpp
-    src/http_server.h
-    src/ticker.h
-    src/tagged.h
-    src/sdk.h
-    src/logger.h
-    src/model.h
-    src/map.h
-    src/model.cpp
-    src/boost_json.cpp
+	src/main.cpp
+	src/http_server.cpp
+	src/http_server.h
+	src/sdk.h
+	src/model.h
+	src/model.cpp
+	src/tagged.h
+	src/boost_json.cpp
+	src/json_loader.h
+	src/json_loader.cpp
+	src/request_handler.cpp
+	src/request_handler.h
+        src/logger.h
 )
 
 add_executable(game_server ${SOURCE_FILES})

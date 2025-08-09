@@ -1,5 +1,4 @@
 #pragma once
-
 #include <compare>
 #include <functional>
 
@@ -14,7 +13,6 @@ namespace util {
         explicit Tagged(Value&& v)
             : value_(std::move(v)) {
         }
-
         explicit Tagged(const Value& v)
             : value_(v) {
         }
@@ -27,9 +25,12 @@ namespace util {
             return value_;
         }
 
-        // Добавленный метод для получения базового значения
-        const Value& GetUnderlying() const noexcept {
-            return value_;
+        bool operator==(const Tagged<Value, Tag>& other) const {
+            return value_ == other.value_;
+        }
+
+        bool operator!=(const Tagged<Value, Tag>& other) const {
+            return !(*this == other);
         }
 
         auto operator<=>(const Tagged<Value, Tag>&) const = default;
@@ -46,12 +47,3 @@ namespace util {
     };
 
 }  // namespace util
-
-namespace std {
-    template <typename Value, typename Tag>
-    struct hash<util::Tagged<Value, Tag>> {
-        size_t operator()(const util::Tagged<Value, Tag>& value) const {
-            return std::hash<Value>{}(*value);
-        }
-    };
-}

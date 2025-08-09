@@ -1,170 +1,186 @@
 #include "sdk.h"
 #include <boost/asio/io_context.hpp>
-#include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/signal_set.hpp>
-#include <boost/program_options.hpp>
 #include <iostream>
 #include <thread>
+#include <boost/log/trivial.hpp>
 #include "json_loader.h"
 #include "request_handler.h"
-#include "ticker.h"
-#include "http_server.h"
+#include "logger.h"
+#include <boost/program_options.hpp>
+#include <filesystem>
+#include <boost/system/error_code.hpp>  // Р”РѕР±Р°РІР»РµРЅ Р·Р°РіРѕР»РѕРІРѕРє
 
 using namespace std::literals;
 namespace net = boost::asio;
+namespace json = boost::json;
 namespace po = boost::program_options;
-namespace sys = boost::system;
-namespace http = boost::beast::http;
+namespace fs = std::filesystem;
 
 namespace {
 
-    // Структура для хранения аргументов командной строки
-    struct Args {
-        std::string config_file;          // Путь к конфигурационному файлу
-        std::string www_root;             // Путь к статическим файлам
-        std::optional<int> tick_period;   // Период обновления игры (мс)
-        bool randomize_spawn_points;      // Случайные точки спавна
-    };
-
-    // Функция парсинга аргументов командной строки
-    [[nodiscard]] std::optional<Args> ParseCommandLine(int argc, const char* const argv[]) {
-        po::options_description desc{ "Game server options" };
-        Args args;
-
-        // Описание параметров
-        desc.add_options()
-            ("help,h", "Show help")
-            ("tick-period,t", po::value<int>()->value_name("ms"),
-                "Set tick period (milliseconds) for automatic updates")
-            ("config-file,c", po::value(&args.config_file)->required()->value_name("file"),
-                "Path to game configuration file")
-            ("www-root,w", po::value(&args.www_root)->required()->value_name("dir"),
-                "Path to static files directory")
-            ("randomize-spawn-points", po::bool_switch(&args.randomize_spawn_points),
-                "Spawn dogs at random positions on roads");
-
-        po::variables_map vm;
-        try {
-            // Парсинг командной строки
-            po::store(po::parse_command_line(argc, argv, desc), vm);
-
-            // Вывод справки
-            if (vm.count("help")) {
-                std::cout << desc << "\n";
-                return std::nullopt;
-            }
-
-            // Проверка обязательных параметров
-            po::notify(vm);
-
-            // Обработка tick-period
-            if (vm.count("tick-period")) {
-                args.tick_period = vm["tick-period"].as<int>();
-                if (*args.tick_period <= 0) {
-                    throw std::runtime_error("Tick period must be positive");
-                }
-            }
-
-            return args;
-        }
-        catch (const po::error& e) {
-            std::cerr << "Command line error: " << e.what() << "\n";
-            std::cerr << desc << "\n";
-            return std::nullopt;
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Error: " << e.what() << "\n";
-            return std::nullopt;
-        }
-    }
-
-    // Запуск рабочих потоков
     template <typename Fn>
-    void RunWorkers(unsigned num_threads, const Fn& fn) {
-        num_threads = std::max(1u, num_threads);
+    void RunWorkers(unsigned n, const Fn& fn) {
+        n = std::max(1u, n);
         std::vector<std::jthread> workers;
-        workers.reserve(num_threads - 1);
-
-        // Запуск рабочих потоков
-        while (--num_threads) {
+        workers.reserve(n - 1);
+        while (--n) {
             workers.emplace_back(fn);
         }
-
-        // Запуск функции в основном потоке
         fn();
     }
+
+    class Ticker : public std::enable_shared_from_this<Ticker> {
+    public:
+        using Strand = net::strand<net::io_context::executor_type>;
+        using Handler = std::function<void(std::chrono::milliseconds delta)>;
+
+        Ticker(Strand strand, std::chrono::milliseconds period, Handler handler)
+            : strand_{strand}
+            , period_{period}
+            , handler_{std::move(handler)} {
+        }
+
+        void Start() {
+            net::dispatch(strand_, [self = shared_from_this()] {
+                self->last_tick_ = Clock::now();
+                self->ScheduleTick();
+            });
+        }
+
+    private:
+        void ScheduleTick() {
+            assert(strand_.running_in_this_thread());
+            timer_.expires_after(period_);
+            timer_.async_wait(net::bind_executor(
+                strand_, 
+                [self = shared_from_this()](boost::system::error_code ec) {  // РСЃРїСЂР°РІР»РµРЅРѕ sys::error_code -> boost::system::error_code
+                    self->OnTick(ec);
+                }
+            ));
+        }
+
+        void OnTick(boost::system::error_code ec) {  // РСЃРїСЂР°РІР»РµРЅРѕ sys::error_code -> boost::system::error_code
+            using namespace std::chrono;
+            assert(strand_.running_in_this_thread());
+
+            if (!ec) {
+                auto this_tick = Clock::now();
+                auto delta = duration_cast<milliseconds>(this_tick - last_tick_);
+                last_tick_ = this_tick;
+                try {
+                    handler_(delta);
+                } catch (...) {
+                }
+                ScheduleTick();
+            }
+        }
+
+        using Clock = std::chrono::steady_clock;
+
+        Strand strand_;
+        std::chrono::milliseconds period_;
+        net::steady_timer timer_{strand_};
+        Handler handler_;
+        std::chrono::steady_clock::time_point last_tick_;
+    };
 
 }  // namespace
 
 int main(int argc, const char* argv[]) {
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help,h", "produce help message")
+        ("tick-period,t", po::value<int>(), "set tick period in milliseconds")
+        ("config-file,c", po::value<std::string>()->required(), "set config file path")
+        ("www-root,w", po::value<std::string>()->required(), "set static files root")
+        ("randomize-spawn-points", "spawn dogs at random positions");
+
+    po::variables_map vm;
     try {
-        // Парсинг аргументов командной строки
-        auto args = ParseCommandLine(argc, argv);
-        if (!args) {
-            return EXIT_SUCCESS;  // Корректный выход при выводе справки
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        
+        if (vm.count("help")) {
+            std::cout << desc << "\n";
+            return 0;
         }
-
-        // Загрузка игровой модели
-        auto game = json_loader::LoadGame(args->config_file);
-        if (args->randomize_spawn_points) {
-            game->SetRandomSpawnPoints(true);
-        }
-
-        // Определение количества потоков
-        const unsigned num_threads = std::thread::hardware_concurrency();
-        net::io_context ioc(num_threads);
-
-        // Обработка сигналов завершения
-        net::signal_set signals(ioc, SIGINT, SIGTERM);
-        signals.async_wait([&ioc](const sys::error_code& ec, int) {
-            if (!ec) {
-                ioc.stop();
-                std::cout << "Server shutdown initiated..." << std::endl;
-            }
-            });
-
-        // Создание обработчика запросов
-        auto api_strand = net::make_strand(ioc);
-        http_handler::RequestHandler handler{ *game, args->www_root, api_strand };
-
-        // Настройка автоматического обновления (если указан период)
-        if (args->tick_period) {
-            auto ticker = std::make_shared<Ticker>(
-                api_strand,
-                std::chrono::milliseconds(*args->tick_period),
-                [&game](std::chrono::milliseconds delta) {
-                    game->UpdateState(delta.count());
-                }
-            );
-            ticker->Start();
-            std::cout << "Auto-tick enabled (" << *args->tick_period << "ms)" << std::endl;
-        }
-        else {
-            std::cout << "Manual tick mode enabled" << std::endl;
-        }
-
-        // Запуск HTTP сервера
-        const auto address = net::ip::make_address("0.0.0.0");
-        constexpr unsigned short port = 8080;
-
-        http_server::ServeHttp(ioc, { address, port }, [&handler](auto&& req, auto&& send) {
-            handler(std::forward<decltype(req)>(req), std::forward<decltype(send)>(send));
-            });
-
-        std::cout << "Server started at http://" << address << ":" << port << std::endl;
-        std::cout << "Config: " << args->config_file << std::endl;
-        std::cout << "Static files: " << args->www_root << std::endl;
-        std::cout << "Hardware concurrency: " << num_threads << " threads" << std::endl;
-
-        // Запуск рабочих потоков
-        RunWorkers(num_threads, [&ioc] {
-            ioc.run();
-            });
-    }
-    catch (const std::exception& ex) {
-        std::cerr << "Fatal error: " << ex.what() << std::endl;
+        
+        po::notify(vm);
+    } catch (const po::error& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        std::cout << desc << "\n";
         return EXIT_FAILURE;
     }
 
-    return EXIT_SUCCESS;
+    try {
+        logger::InitLogging();
+        
+        const fs::path config_path(vm["config-file"].as<std::string>());
+        const fs::path static_path(vm["www-root"].as<std::string>());
+        const bool randomize_spawn = vm.count("randomize-spawn-points") > 0;
+        const int tick_period = vm.count("tick-period") ? vm["tick-period"].as<int>() : 0;
+        const bool is_tick_automatic = tick_period > 0;
+
+        model::Game game;
+        json_loader::LoadGame(config_path, game);
+        game.SetRandomizeSpawnPoints(randomize_spawn);
+
+        const unsigned num_threads = std::thread::hardware_concurrency();
+        net::io_context ioc(num_threads);
+        auto api_strand = net::make_strand(ioc);
+
+        if (is_tick_automatic) {
+            auto ticker = std::make_shared<Ticker>(
+                api_strand, 
+                std::chrono::milliseconds(tick_period),
+                [&game](std::chrono::milliseconds delta) {
+                    game.Tick(static_cast<double>(delta.count()) / 1000.0);
+                }
+            );
+            ticker->Start();
+        }
+
+        net::signal_set signals(ioc, SIGINT, SIGTERM);
+        signals.async_wait([&ioc](const boost::system::error_code& ec, int) {
+            if (!ec) ioc.stop();
+        });
+
+        http_handler::RequestHandler base_handler{ game, static_path, is_tick_automatic };
+        http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
+
+        const auto address = net::ip::make_address("0.0.0.0");
+        constexpr net::ip::port_type port = 8080;
+        http_server::ServeHttp(ioc, { address, port }, [&handler](auto&& req, auto&& addr, auto&& send) {
+            handler(std::forward<decltype(req)>(req),
+                std::forward<decltype(addr)>(addr),
+                std::forward<decltype(send)>(send));
+        });
+
+        json::value start_data{
+            {"port", port},
+            {"address", address.to_string()},
+            {"static_path", static_path.string()},
+            {"config_path", config_path.string()},
+            {"randomize_spawn_points", randomize_spawn},
+            {"tick_period_ms", tick_period}
+        };
+        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, start_data)
+            << "server started";
+
+        RunWorkers(std::max(1u, num_threads), [&ioc] { ioc.run(); });
+
+        json::value exit_data{ {"code", 0} };
+        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, exit_data)
+            << "server exited";
+        return EXIT_SUCCESS;
+    }
+    catch (const std::exception& ex) {
+        json::value exit_data{
+            {"code", EXIT_FAILURE},
+            {"exception", ex.what()}
+        };
+        BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, exit_data)
+            << "server exited";
+        return EXIT_FAILURE;
+    }
 }
