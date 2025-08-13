@@ -1,0 +1,176 @@
+Run cd cpp-backend-tests-practicum/scripts/sprint2
+  cd cpp-backend-tests-practicum/scripts/sprint2
+  ./static_content/run.sh
+  shell: sh -e {0}
+  env:
+    DOCKER_NETWORK: github_network_d5e9e14a2b0a4b3589cb1f036aa283d7
+/__w/backend/backend/cpp-backend-tests-practicum/scripts/sprint2/static_content/build.sh: line 13: /__w/backend/backend/cpp-backend-tests-practicum/scripts/sprint2/static_content/../../../..//.venv/bin/activate: No such file or directory
+Configuration:
+[settings]
+arch=x86_64
+arch_build=x86_64
+build_type=Release
+compiler=gcc
+compiler.libcxx=libstdc++11
+compiler.version=11
+os=Linux
+os_build=Linux
+[options]
+[build_requires]
+[env]
+
+conanfile.txt: Installing package
+Requirements
+    boost/1.78.0 from 'conancenter' - Cache
+    bzip2/1.0.8 from 'conancenter' - Cache
+    libbacktrace/cci.20210118 from 'conancenter' - Cache
+    zlib/1.2.13 from 'conancenter' - Cache
+Packages
+    boost/1.78.0:dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978 - Cache
+    bzip2/1.0.8:c32092bf4d4bb47cf962af898e02823f499b017e - Cache
+    libbacktrace/cci.20210118:dfbe50feef7f3c6223a476cd5aeadb687084a646 - Cache
+    zlib/1.2.13:dfbe50feef7f3c6223a476cd5aeadb687084a646 - Cache
+
+Installing (downloading, building) binaries...
+bzip2/1.0.8: Already installed!
+libbacktrace/cci.20210118: Already installed!
+zlib/1.2.13: Already installed!
+boost/1.78.0: Already installed!
+conanfile.txt: Generator cmake created conanbuildinfo.cmake
+conanfile.txt: Generator txt created conanbuildinfo.txt
+conanfile.txt: Aggregating env generators
+conanfile.txt: Generated conaninfo.txt
+conanfile.txt: Generated graphinfo
+-- The CXX compiler identification is GNU 11.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Conan: Adjusting output directories
+-- Conan: Using cmake targets configuration
+-- Library boost_contract found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_contract.a
+-- Library boost_coroutine found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_coroutine.a
+-- Library boost_fiber_numa found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_fiber_numa.a
+-- Library boost_fiber found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_fiber.a
+-- Library boost_context found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_context.a
+-- Library boost_graph found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_graph.a
+-- Library boost_iostreams found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_iostreams.a
+-- Library boost_json found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_json.a
+-- Library boost_locale found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_locale.a
+-- Library boost_log_setup found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_log_setup.a
+-- Library boost_log found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_log.a
+-- Library boost_math_c99 found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_c99.a
+-- Library boost_math_c99f found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_c99f.a
+-- Library boost_math_c99l found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_c99l.a
+-- Library boost_math_tr1 found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_tr1.a
+-- Library boost_math_tr1f found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_tr1f.a
+-- Library boost_math_tr1l found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_tr1l.a
+-- Library boost_nowide found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_nowide.a
+-- Library boost_program_options found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_program_options.a
+-- Library boost_random found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_random.a
+-- Library boost_regex found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_regex.a
+-- Library boost_stacktrace_addr2line found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_addr2line.a
+-- Library boost_stacktrace_backtrace found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_backtrace.a
+-- Library boost_stacktrace_basic found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_basic.a
+-- Library boost_stacktrace_noop found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_noop.a
+-- Library boost_timer found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_timer.a
+-- Library boost_type_erasure found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_type_erasure.a
+-- Library boost_thread found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_thread.a
+-- Library boost_chrono found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_chrono.a
+-- Library boost_container found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_container.a
+-- Library boost_date_time found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_date_time.a
+-- Library boost_unit_test_framework found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_unit_test_framework.a
+-- Library boost_prg_exec_monitor found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_prg_exec_monitor.a
+-- Library boost_test_exec_monitor found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_test_exec_monitor.a
+-- Library boost_exception found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_exception.a
+-- Library boost_wave found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_wave.a
+-- Library boost_filesystem found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_filesystem.a
+-- Library boost_atomic found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_atomic.a
+-- Library boost_wserialization found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_wserialization.a
+-- Library boost_serialization found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_serialization.a
+-- Library z found /github/home/.conan/data/zlib/1.2.13/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libz.a
+-- Library bz2 found /github/home/.conan/data/bzip2/1.0.8/_/_/package/c32092bf4d4bb47cf962af898e02823f499b017e/lib/libbz2.a
+-- Library backtrace found /github/home/.conan/data/libbacktrace/cci.20210118/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libbacktrace.a
+-- Conan: Adjusting default RPATHs Conan policies
+-- Conan: Adjusting language standard
+-- Current conanbuildinfo.cmake directory: /__w/backend/backend/sprint2/problems/static_content/solution/build
+-- Conan: Compiler GCC>=5, checking major version 11
+-- Conan: Checking correct version: 11
+-- Looking for C++ include pthread.h
+-- Looking for C++ include pthread.h - found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /__w/backend/backend/sprint2/problems/static_content/solution/build
+[ 14%] Building CXX object CMakeFiles/game_server.dir/src/main.cpp.o
+[ 28%] Building CXX object CMakeFiles/game_server.dir/src/http_server.cpp.o
+[ 42%] Building CXX object CMakeFiles/game_server.dir/src/model.cpp.o
+[ 57%] Building CXX object CMakeFiles/game_server.dir/src/boost_json.cpp.o
+[ 71%] Building CXX object CMakeFiles/game_server.dir/src/json_loader.cpp.o
+[ 85%] Building CXX object CMakeFiles/game_server.dir/src/request_handler.cpp.o
+[100%] Linking CXX executable bin/game_server
+[100%] Built target game_server
+./static_content/run.sh: line 15: /__w/backend/backend/cpp-backend-tests-practicum/scripts/sprint2/static_content/../../../..//.venv/bin/activate: No such file or directory
+============================= test session starts ==============================
+platform linux -- Python 3.10.6, pytest-7.1.2, pluggy-1.0.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /__w/backend/backend
+plugins: quickcheck-0.9.0, parallel-0.1.1, xprocess-0.20.0
+collecting ... collected 7 items
+
+../../tests/test_s02_static_content.py::test_list PASSED                 [ 14%]
+../../tests/test_s02_static_content.py::test_info PASSED                 [ 28%]
+../../tests/test_s02_static_content.py::test_map_not_found PASSED        [ 42%]
+../../tests/test_s02_static_content.py::test_bad_request PASSED          [ 57%]
+../../tests/test_s02_static_content.py::test_image FAILED                [ 71%]
+../../tests/test_s02_static_content.py::test_file_not_found FAILED       [ 85%]
+../../tests/test_s02_static_content.py::test_index_html FAILED           [100%]
+
+=================================== FAILURES ===================================
+__________________________________ test_image __________________________________
+
+server = <cpp_server_api.CppServer object at 0x7f7a40c23520>
+
+    def test_image(server):
+        request = 'images/cube.svg'
+        res = server.get(f'/{request}')
+>       assert res.status_code == 200
+E       assert 400 == 200
+E        +  where 400 = <Response [400]>.status_code
+
+../../tests/test_s02_static_content.py:98: AssertionError
+_____________________________ test_file_not_found ______________________________
+
+server = <cpp_server_api.CppServer object at 0x7f7a40c23520>
+
+    def test_file_not_found(server):
+        request = 'images/ccccube.svg'
+        res = server.get(f'/{request}')
+>       assert res.status_code == 404
+E       assert 400 == 404
+E        +  where 400 = <Response [400]>.status_code
+
+../../tests/test_s02_static_content.py:105: AssertionError
+_______________________________ test_index_html ________________________________
+
+server = <cpp_server_api.CppServer object at 0x7f7a40c23520>
+
+    def test_index_html(server):
+        request = 'index.html'
+        res = server.get(f'/{request}')
+>       assert res.status_code == 200
+E       assert 400 == 200
+E        +  where 400 = <Response [400]>.status_code
+
+../../tests/test_s02_static_content.py:112: AssertionError
+--------- generated xml file: /__w/backend/backend/static_content.xml ----------
+=========================== short test summary info ============================
+FAILED ../../tests/test_s02_static_content.py::test_image - assert 400 == 200
+FAILED ../../tests/test_s02_static_content.py::test_file_not_found - assert 4...
+FAILED ../../tests/test_s02_static_content.py::test_index_html - assert 400 =...
+========================= 3 failed, 4 passed in 0.28s ==========================
+pytest-xprocess reminder::Be sure to terminate the started process by running 'pytest --xkill' if you have not explicitly done so in your fixture with 'xprocess.getinfo(<process_name>).terminate()'.
+Error: Process completed with exit code 1.

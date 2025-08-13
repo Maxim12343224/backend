@@ -2,15 +2,14 @@
 #include <fstream>
 #include <sstream>
 #include <boost/json.hpp>
-#include <utility>
+#include <string>  //                        std::string
 
-using namespace std::literals;
+using namespace std::literals;  //                            "s"
 
 namespace json_loader {
-
     namespace json = boost::json;
 
-    namespace detail {
+    namespace {
 
         model::Road ParseRoad(const json::object& road_obj) {
             if (road_obj.contains("x1")) {
@@ -56,16 +55,14 @@ namespace json_loader {
             return model::Office(std::move(id), pos, offset);
         }
 
-        model::Map ParseMap(const json::object& map_obj, double default_dog_speed) {
+        model::Map ParseMap(const json::object& map_obj) {
             model::Map::Id id{ std::string(map_obj.at("id").as_string().c_str()) };
             std::string name = std::string(map_obj.at("name").as_string().c_str());
+            model::Map map(std::move(id), std::move(name));
 
-            double dog_speed = default_dog_speed;
             if (map_obj.contains("dogSpeed")) {
-                dog_speed = map_obj.at("dogSpeed").as_double();
+                map.SetDogSpeed(map_obj.at("dogSpeed").as_double());
             }
-
-            model::Map map(std::move(id), std::move(name), dog_speed);
 
             for (const auto& road_val : map_obj.at("roads").as_array()) {
                 map.AddRoad(ParseRoad(road_val.as_object()));
@@ -82,12 +79,12 @@ namespace json_loader {
             return map;
         }
 
-    } // namespace detail
+    } // namespace
 
-    std::unique_ptr<model::Game> LoadGame(const std::filesystem::path& json_path) {
+    void LoadGame(const std::filesystem::path& json_path, model::Game& game) {
         std::ifstream file(json_path);
         if (!file) {
-            throw std::runtime_error("Failed to open json file"s);
+            throw std::runtime_error("Failed to open json file");
         }
 
         std::stringstream buffer;
@@ -96,22 +93,19 @@ namespace json_loader {
 
         try {
             auto value = json::parse(json_str);
-            auto& maps = value.as_object().at("maps").as_array();
-
-            double default_dog_speed = 1.0;
-            if (value.as_object().contains("defaultDogSpeed")) {
-                default_dog_speed = value.as_object().at("defaultDogSpeed").as_double();
+            auto& root = value.as_object();
+            
+            if (root.contains("defaultDogSpeed")) {
+                game.SetDefaultDogSpeed(root.at("defaultDogSpeed").as_double());
             }
 
-            auto game = std::make_unique<model::Game>(default_dog_speed);
+            auto& maps = root.at("maps").as_array();
             for (const auto& map_val : maps) {
-                game->AddMap(detail::ParseMap(map_val.as_object(), game->GetDefaultDogSpeed()));
+                game.AddMap(ParseMap(map_val.as_object()));
             }
-            return game;
         }
         catch (const std::exception& e) {
             throw std::runtime_error("JSON parsing error: "s + e.what());
         }
     }
-
-} // namespace json_loader
+}  // namespace json_loader

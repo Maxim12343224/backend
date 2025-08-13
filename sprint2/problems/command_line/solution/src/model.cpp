@@ -1,154 +1,227 @@
 #include "model.h"
-#include "map.h"
 #include <stdexcept>
+#include <random>
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace model {
-    // Реализация методов классов Road, Building, Office и Map
-    // Road implementation
-    Road::Road(HorizontalTag, Point start, Coord end_x) noexcept
-        : start_(start), end_{ end_x, start.y } {}
+using namespace std::literals;
 
-    Road::Road(VerticalTag, Point start, Coord end_y) noexcept
-        : start_(start), end_{ start.x, end_y } {}
-
-    bool Road::IsHorizontal() const noexcept {
-        return start_.y == end_.y;
+void Map::AddOffice(Office office) {
+    if (warehouse_id_to_index_.contains(office.GetId())) {
+        throw std::invalid_argument("Duplicate warehouse");
     }
 
-    bool Road::IsVertical() const noexcept {
-        return start_.x == end_.x;
+    const size_t index = offices_.size();
+    Office& o = offices_.emplace_back(std::move(office));
+    try {
+        warehouse_id_to_index_.emplace(o.GetId(), index);
+    } catch (...) {
+        offices_.pop_back();
+        throw;
     }
+}
 
-    Point Road::GetStart() const noexcept {
-        return start_;
-    }
-
-    Point Road::GetEnd() const noexcept {
-        return end_;
-    }
-
-    // Building implementation
-    Building::Building(Rectangle bounds) noexcept
-        : bounds_(bounds) {}
-
-    const Rectangle& Building::GetBounds() const noexcept {
-        return bounds_;
-    }
-
-    // Office implementation
-    Office::Office(Id id, Point position, Offset offset) noexcept
-        : id_(std::move(id)), position_(position), offset_(offset) {}
-
-    const Office::Id& Office::GetId() const noexcept {
-        return id_;
-    }
-
-    Point Office::GetPosition() const noexcept {
-        return position_;
-    }
-
-    Offset Office::GetOffset() const noexcept {
-        return offset_;
-    }
-
-    // Map implementation
-    Map::Map(Id id, std::string name, double dog_speed) noexcept
-        : id_(std::move(id)), name_(std::move(name)), dog_speed_(dog_speed) {}
-
-    const Map::Id& Map::GetId() const noexcept {
-        return id_;
-    }
-
-    const std::string& Map::GetName() const noexcept {
-        return name_;
-    }
-
-    double Map::GetDogSpeed() const noexcept {
-        return dog_speed_;
-    }
-
-    void Map::SetDogSpeed(double speed) noexcept {
-        dog_speed_ = speed;
-    }
-
-    const Map::Buildings& Map::GetBuildings() const noexcept {
-        return buildings_;
-    }
-
-    const Map::Roads& Map::GetRoads() const noexcept {
-        return roads_;
-    }
-
-    const Map::Offices& Map::GetOffices() const noexcept {
-        return offices_;
-    }
-
-    void Map::AddRoad(const Road& road) {
-        roads_.emplace_back(road);
-    }
-
-    void Map::AddBuilding(const Building& building) {
-        buildings_.emplace_back(building);
-    }
-
-    void Map::AddOffice(Office office) {
-        if (warehouse_id_to_index_.contains(office.GetId())) {
-            throw std::invalid_argument("Duplicate warehouse");
-        }
-
-        const size_t index = offices_.size();
-        Office& o = offices_.emplace_back(std::move(office));
+void Game::AddMap(Map map) {
+    const size_t index = maps_.size();
+    if (auto [it, inserted] = map_id_to_index_.emplace(map.GetId(), index); !inserted) {
+        throw std::invalid_argument("Map with id "s + *map.GetId() + " already exists"s);
+    } else {
         try {
-            warehouse_id_to_index_.emplace(o.GetId(), index);
-        }
-        catch (...) {
-            offices_.pop_back();
+            maps_.emplace_back(std::move(map));
+        } catch (...) {
+            map_id_to_index_.erase(it);
             throw;
         }
     }
+}
 
-    Point Map::GetSpawnPoint() const {
-        if (roads_.empty()) {
-            return { 0, 0 };
-        }
-        return { roads_[0].GetStart().x, roads_[0].GetStart().y };
+Point GameSession::GenerateRandomPosition() const {
+    const auto& roads = map_.GetRoads();
+    if (roads.empty()) return {0.0, 0.0};
+    
+    if (!randomize_spawn_points_) {
+        const auto& road = roads[0];
+        return {
+            static_cast<double>(road.GetStart().x),
+            static_cast<double>(road.GetStart().y)
+        };
     }
 
-    std::pair<double, double> Map::ClampPosition(double old_x, double old_y, double new_x, double new_y) const {
-        if (roads_.empty()) {
-            return { new_x, new_y };
-        }
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> road_dist(0, roads.size() - 1);
+    const auto& road = roads[road_dist(gen)];
 
-        for (const auto& building : buildings_) {
-            const auto& bounds = building.GetBounds();
-            if (new_x >= bounds.position.x &&
-                new_x < bounds.position.x + bounds.size.width &&
-                new_y >= bounds.position.y &&
-                new_y < bounds.position.y + bounds.size.height) {
-                return { old_x, old_y };
-            }
-        }
-
-        for (const auto& road : roads_) {
-            if (road.IsHorizontal()) {
-                const int min_x = std::min(road.GetStart().x, road.GetEnd().x);
-                const int max_x = std::max(road.GetStart().x, road.GetEnd().x);
-                if (std::abs(new_y - road.GetStart().y) < 0.5 &&
-                    new_x >= min_x - 0.5 && new_x <= max_x + 0.5) {
-                    return { new_x, static_cast<double>(road.GetStart().y) };
-                }
-            }
-            else {
-                const int min_y = std::min(road.GetStart().y, road.GetEnd().y);
-                const int max_y = std::max(road.GetStart().y, road.GetEnd().y);
-                if (std::abs(new_x - road.GetStart().x) < 0.5 &&
-                    new_y >= min_y - 0.5 && new_y <= max_y + 0.5) {
-                    return { static_cast<double>(road.GetStart().x), new_y };
-                }
-            }
-        }
-
-        return { old_x, old_y };
+    if (road.IsHorizontal()) {
+        
+        std::uniform_real_distribution<double> x_dist(
+            std::min(road.GetStart().x, road.GetEnd().x),
+            std::max(road.GetStart().x, road.GetEnd().x)
+        );
+        return {x_dist(gen), static_cast<double>(road.GetStart().y)};
+    } else {
+        std::uniform_real_distribution<double> y_dist(
+            std::min(road.GetStart().y, road.GetEnd().y),
+            std::max(road.GetStart().y, road.GetEnd().y)
+        );
+        return {static_cast<double>(road.GetStart().x), y_dist(gen)};
     }
-} // namespace model
+}
+
+std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
+    Point start_pos = GenerateRandomPosition();
+    Dog dog(std::move(dog_name), start_pos, Direction::North);
+
+    static std::atomic<uint32_t> next_player_id_{0};
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::uniform_int_distribution<> dis(0, 15);
+    
+    const char* hex_digits = "0123456789abcdef";
+    std::string token;
+    token.reserve(32);
+    for (int i = 0; i < 32; ++i) {
+        token += hex_digits[dis(gen)];
+    }
+
+    auto player = std::make_shared<Player>(
+        shared_from_this(), 
+        std::move(dog),
+        next_player_id_++, 
+        std::move(token)
+    );
+    players_.push_back(player);
+    return player;
+}
+
+void GameSession::SetPlayerAction(const Player::Token& token, const std::string& move) {
+    std::lock_guard lock(mutex_);
+    for (auto& player : players_) {
+        if (player->GetToken() != token) continue;
+        
+        auto& dog = player->GetDog();
+        Point new_speed{0.0, 0.0};
+        if (move == "L") {
+            new_speed = {-dog_speed_, 0.0};
+            dog.SetDirection(Direction::West);
+        } else if (move == "R") {
+            new_speed = {dog_speed_, 0.0};
+            dog.SetDirection(Direction::East);
+        } else if (move == "U") {
+            new_speed = {0.0, -dog_speed_};
+            dog.SetDirection(Direction::North);
+        } else if (move == "D") {
+            new_speed = {0.0, dog_speed_};
+            dog.SetDirection(Direction::South);
+        } else if (move == "") {
+            new_speed = {0.0, 0.0};
+        }
+        dog.SetSpeed(new_speed);
+        break;
+    }
+}
+
+void GameSession::Tick(double delta_time) {
+    std::lock_guard lock(mutex_);
+    for (auto& player : players_) {
+        auto& dog = player->GetDog();
+        auto pos = dog.GetPosition();
+        auto speed = dog.GetSpeed();
+
+        if (speed.x == 0.0 && speed.y == 0.0) continue;
+
+        const double max_step = 0.1;
+        double remaining_time = delta_time;
+        
+        while (remaining_time > 0.0) {
+            double step_time = std::min(remaining_time, max_step);
+            remaining_time -= step_time;
+
+            double move_x = speed.x * step_time;
+            double move_y = speed.y * step_time;
+            double new_x = pos.x + move_x;
+            double new_y = pos.y + move_y;
+
+            bool can_move = false;
+            for (const auto& road : map_.GetRoads()) {
+                auto bbox = road.GetBoundingBox();
+                double road_x0 = bbox.position.x;
+                double road_y0 = bbox.position.y;
+                double road_x1 = road_x0 + bbox.size.width;
+                double road_y1 = road_y0 + bbox.size.height;
+
+                if (pos.x >= road_x0 && pos.x <= road_x1 &&
+                    pos.y >= road_y0 && pos.y <= road_y1) {
+                    
+                    if (new_x >= road_x0 && new_x <= road_x1 &&
+                        new_y >= road_y0 && new_y <= road_y1) {
+                        can_move = true;
+                        break;
+                    }
+                }
+            }
+
+            if (can_move) {
+                pos.x = new_x;
+                pos.y = new_y;
+                dog.SetPosition(pos);
+            } else {
+                double target_x = new_x;
+                double target_y = new_y;
+                bool hit_boundary = false;
+                
+                for (const auto& road : map_.GetRoads()) {
+                    auto bbox = road.GetBoundingBox();
+                    double road_x0 = bbox.position.x;
+                    double road_y0 = bbox.position.y;
+                    double road_x1 = road_x0 + bbox.size.width;
+                    double road_y1 = road_y0 + bbox.size.height;
+
+                    if (pos.x >= road_x0 && pos.x <= road_x1 &&
+                        pos.y >= road_y0 && pos.y <= road_y1) {
+                        
+                        if (speed.x != 0) {
+                            if (speed.x > 0) {
+                                target_x = std::min(new_x, road_x1);
+                            } else {
+                                target_x = std::max(new_x, road_x0);
+                            }
+                            hit_boundary = true;
+                        }
+                        
+                        if (speed.y != 0) {
+                            if (speed.y > 0) {
+                                target_y = std::min(new_y, road_y1);
+                            } else {
+                                target_y = std::max(new_y, road_y0);
+                            }
+                            hit_boundary = true;
+                        }
+                        
+                        if (hit_boundary) break;
+                    }
+                }
+                
+                pos.x = target_x;
+                pos.y = target_y;
+                dog.SetPosition(pos);
+                dog.SetSpeed({0.0, 0.0});
+                break;
+            }
+        }
+    }
+}
+
+std::string DirectionToString(Direction dir) {
+    switch (dir) {
+        case Direction::North: return "U";
+        case Direction::South: return "D";
+        case Direction::West:  return "L";
+        case Direction::East:  return "R";
+    }
+    return "U";
+}
+
+}  // namespace model
