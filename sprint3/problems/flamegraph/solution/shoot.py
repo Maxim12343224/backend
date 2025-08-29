@@ -49,34 +49,30 @@ def make_shots():
     print('Shooting complete')
 
 
-# Получаем команду для запуска сервера
+# === ВАШ КОД НАЧИНАЕТСЯ ЗДЕСЬ ===
+
+# 1. Запускаем сервер
 server_command = start_server()
-
-# Запускаем сервер в фоновом режиме
 server_process = run(server_command)
+time.sleep(2)  # ждем запуска
 
-# Даем серверу время на запуск
-time.sleep(2)
-
-# Запускаем perf record для записи трассировки серверного процесса
+# 2. Запускаем perf record для профилирования
 perf_record = run(f'perf record -o perf.data -p {server_process.pid} -g')
 
-# Выполняем обстрел сервера запросами
+# 3. Выполняем обстрел запросами
 make_shots()
 
-# Останавливаем запись perf
+# 4. Останавливаем запись perf
 stop(perf_record, wait=True)
-
-# Даем perf время на завершение записи
 time.sleep(1)
 
-# Останавливаем сервер
+# 5. Останавливаем сервер
 stop(server_process, wait=True)
 
-# Строим флеймграф с помощью perf script и скриптов FlameGraph
+# 6. Строим флеймграф через пайп
 print("Generating flamegraph...")
 
-# perf script -> stackcollapse -> flamegraph -> graph.svg
+# perf script -> stackcollapse -> flamegraph
 perf_script = subprocess.Popen(
     ['perf', 'script', '-i', 'perf.data'],
     stdout=subprocess.PIPE,
@@ -100,7 +96,7 @@ with open('graph.svg', 'w') as f:
     )
 stackcollapse.stdout.close()
 
-# Ждем завершения всех процессов
+# Ждем завершения
 perf_script.wait()
 stackcollapse.wait()
 flamegraph.wait()
