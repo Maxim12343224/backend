@@ -3,6 +3,8 @@ import subprocess
 import time
 import random
 import shlex
+import os
+import signal
 
 RANDOM_LIMIT = 1000
 SEED = 123456789
@@ -47,8 +49,62 @@ def make_shots():
     print('Shooting complete')
 
 
-server = run(start_server())
-make_shots()
-stop(server)
+def perf_record(pid, output_file="perf.data"):
+    """Запускает perf record для указанного процесса"""
+    return run(f"perf record -o {output_file} -p {pid} -g")
+
+
+def stop_perf(perf_process):
+    """Корректно останавливает perf record"""
+    perf_process.send_signal(signal.SIGINT)
+    if perf_process.poll() is None:
+        perf_process.wait()
+
+
+def generate_flamegraph(perf_data="perf.data", output_svg="graph.svg"):
+    """Генерирует флеймграф из данных perf"""
+    
+    if not os.path.exists(perf_data):
+        raise FileNotFoundError(f"File {perf_data} not found")
+    
+   
+    perf_script = run(f"perf script -i {perf_data}", output=subprocess.PIPE)
+    
+    stackcollapse = run("./FlameGraph/stackcollapse-perf.pl", output=subprocess.PIPE)
+    stackcollapse.stdin = perf_script.stdout
+    
+    with open(output_svg, "w") as svg_file:
+        flamegraph = run("./FlameGraph/flamegraph.pl", output=svg_file)
+        flamegraph.stdin = stackcollapse.stdout
+        flamegraph.wait()
+
+
+
+server_command = start_server()
+server_process = run(server_command)
+
+try:
+    
+    time.sleep(2)
+    
+    
+    perf_process = perf_record(server_process.pid)
+    
+    
+    time.sleep(1)
+    
+   
+    make_shots()
+    
+   
+    stop_perf(perf_process)
+    
+    
+    generate_flamegraph()
+    
+finally:
+    
+    stop(server_process, wait=True)
+
 time.sleep(1)
 print('Job done')
