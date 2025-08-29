@@ -4,53 +4,32 @@
 #include <boost/json.hpp>
 
 namespace json_loader {
+
     namespace json = boost::json;
 
     model::Game LoadGame(const std::filesystem::path& json_path) {
         std::ifstream file(json_path);
         if (!file) {
-            throw std::runtime_error("Failed to open json file: " + json_path.string());
+            throw std::runtime_error("Failed to open json file");
         }
 
         std::stringstream buffer;
         buffer << file.rdbuf();
         std::string json_str = buffer.str();
 
-        json::value value;
-        try {
-            value = json::parse(json_str);
-        }
-        catch (const std::exception& e) {
-            throw std::runtime_error("JSON parse error: " + std::string(e.what()));
-        }
-
-        if (!value.is_object() || !value.as_object().contains("maps")) {
-            throw std::runtime_error("Invalid config format: missing 'maps' field");
-        }
-
+        auto value = json::parse(json_str);
         auto& maps = value.as_object().at("maps").as_array();
+
         model::Game game;
 
         for (const auto& map_val : maps) {
-            if (!map_val.is_object()) continue;
-
             auto& map_obj = map_val.as_object();
-
-            // Проверка обязательных полей
-            if (!map_obj.contains("id") || !map_obj.contains("name") ||
-                !map_obj.contains("roads") || !map_obj.contains("buildings") ||
-                !map_obj.contains("offices")) {
-                continue;
-            }
 
             model::Map::Id id{ std::string(map_obj.at("id").as_string().c_str()) };
             std::string name = std::string(map_obj.at("name").as_string().c_str());
             model::Map map(std::move(id), std::move(name));
 
-            // Загрузка дорог
             for (const auto& road_val : map_obj.at("roads").as_array()) {
-                if (!road_val.is_object()) continue;
-
                 auto& road_obj = road_val.as_object();
                 if (road_obj.contains("x1")) {
                     model::Point start{
@@ -60,7 +39,7 @@ namespace json_loader {
                     map.AddRoad(model::Road(model::Road::HORIZONTAL, start,
                         static_cast<model::Coord>(road_obj.at("x1").as_int64())));
                 }
-                else if (road_obj.contains("y1")) {
+                else {
                     model::Point start{
                         static_cast<model::Coord>(road_obj.at("x0").as_int64()),
                         static_cast<model::Coord>(road_obj.at("y0").as_int64())
@@ -70,10 +49,7 @@ namespace json_loader {
                 }
             }
 
-            // Загрузка зданий
             for (const auto& building_val : map_obj.at("buildings").as_array()) {
-                if (!building_val.is_object()) continue;
-
                 auto& building_obj = building_val.as_object();
                 model::Rectangle rect{
                     {
@@ -88,10 +64,7 @@ namespace json_loader {
                 map.AddBuilding(model::Building(rect));
             }
 
-            // Загрузка офисов
             for (const auto& office_val : map_obj.at("offices").as_array()) {
-                if (!office_val.is_object()) continue;
-
                 auto& office_obj = office_val.as_object();
                 model::Office::Id id{ std::string(office_obj.at("id").as_string().c_str()) };
                 model::Point pos{
@@ -110,4 +83,5 @@ namespace json_loader {
 
         return game;
     }
-}
+
+}  // namespace json_loader
