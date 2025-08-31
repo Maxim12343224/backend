@@ -4,7 +4,7 @@ import time
 import random
 import shlex
 import os
-import signal
+import sys
 
 RANDOM_LIMIT = 1000
 SEED = 123456789
@@ -49,41 +49,45 @@ def make_shots():
     print('Shooting complete')
 
 
-# === ВАШ КОД НАЧИНАЕТСЯ ЗДЕСЬ ===
-
-# 1. Запускаем сервер
+# Получаем команду для запуска сервера
 server_command = start_server()
-server_process = run(server_command)
-time.sleep(2)  # ждем запуска
 
-# 2. Запускаем perf record для профилирования
+# Запускаем сервер в фоновом режиме
+server_process = run(server_command)
+
+# Даем серверу время на запуск
+time.sleep(2)
+
+# Запускаем perf record для записи трассировки серверного процесса
 perf_record = run(f'perf record -o perf.data -p {server_process.pid} -g')
 
-# 3. Выполняем обстрел запросами
+# Выполняем обстрел сервера запросами
 make_shots()
 
-# 4. Останавливаем запись perf
+# Останавливаем запись perf
 stop(perf_record, wait=True)
+
+# Даем perf время на завершение записи
 time.sleep(1)
 
-# 5. Останавливаем сервер
+# Останавливаем сервер
 stop(server_process, wait=True)
 
-# 6. Строим флеймграф через пайп
+# Строим флеймграф с помощью perf script и скриптов FlameGraph
 print("Generating flamegraph...")
 
-# perf script -> stackcollapse -> flamegraph
+# perf script -> stackcollapse -> flamegraph -> graph.svg
 perf_script = subprocess.Popen(
     ['perf', 'script', '-i', 'perf.data'],
     stdout=subprocess.PIPE,
-    stderr=subprocess.DEVNULL
+    stderr=subprocess.PIPE
 )
 
 stackcollapse = subprocess.Popen(
     ['./FlameGraph/stackcollapse-perf.pl'],
     stdin=perf_script.stdout,
     stdout=subprocess.PIPE,
-    stderr=subprocess.DEVNULL
+    stderr=subprocess.PIPE
 )
 perf_script.stdout.close()
 
@@ -92,14 +96,27 @@ with open('graph.svg', 'w') as f:
         ['./FlameGraph/flamegraph.pl'],
         stdin=stackcollapse.stdout,
         stdout=f,
-        stderr=subprocess.DEVNULL
+        stderr=subprocess.PIPE
     )
 stackcollapse.stdout.close()
 
-# Ждем завершения
-perf_script.wait()
-stackcollapse.wait()
-flamegraph.wait()
+# Ждем завершения всех процессов и проверяем ошибки
+_, perf_err = perf_script.communicate()
+_, collapse_err = stackcollapse.communicate()
+_, flame_err = flamegraph.communicate()
 
-print('Job done')
-print('Flamegraph saved as graph.svg')
+# Проверяем ошибки
+if perf_err:
+    print(f"perf script error: {perf_err.decode()}")
+if collapse_err:
+    print(f"stackcollapse error: {collapse_err.decode()}")
+if flame_err:
+    print(f"flamegraph error: {flame_err.decode()}")
+
+# Проверяем что graph.svg создан и не пустой
+if os.path.exists('graph.svg') and os.path.getsize('graph.svg') > 0:
+    print('Job done')
+    print('Flamegraph saved as graph.svg')
+else:
+    print('Error: graph.svg was not created or is empty')
+    sys.exit(1)
