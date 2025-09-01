@@ -52,7 +52,7 @@ def make_shots():
 server_command = start_server()
 
 # Переходим в директорию с конфигом перед запуском
-config_dir = '/mnt/c/cafeteria/backend/sprint1/problems/map_json/solution/'
+config_dir = '/mnt/c/cafeteria/backend/sprint3/problems/flamegraph/solution/'
 original_dir = os.getcwd()
 os.chdir(config_dir)
 
