@@ -26,7 +26,7 @@ def start_server():
 
 
 def run(command, output=None):
-    process = subprocess.Popen(shlex.split(command), stdout=output, stderr=subprocess.DEVNULL)
+    process = subprocess.Popen(shlex.split(command), stdout=output, stderr=subprocess.PIPE)
     return process
 
 
@@ -51,25 +51,62 @@ def make_shots():
 
 server_command = start_server()
 
+# Переходим в директорию с конфигом перед запуском
+config_dir = '/mnt/c/cafeteria/backend/sprint1/problems/map_json/solution/'
+original_dir = os.getcwd()
+os.chdir(config_dir)
+
+print(f"Starting server: {server_command}")
 server_process = run(server_command)
 
 time.sleep(2)
 
-perf_record = run(f'perf record -o perf.data -p {server_process.pid} -g')
+# Проверка что сервер запустился
+if server_process.poll() is not None:
+    _, server_stderr = server_process.communicate()
+    print(f'Error: Server failed to start. Stderr: {server_stderr.decode()}')
+    os.chdir(original_dir)  # Возвращаемся обратно
+    sys.exit(1)
+
+print(f"Server PID: {server_process.pid}")
+
+# Возвращаемся в оригинальную директорию для perf
+os.chdir(original_dir)
+
+print("Starting perf record...")
+perf_record = run(f'sudo perf record -o perf.data -p {server_process.pid} -g')
+
+# Даем perf время начать запись
+time.sleep(1)
 
 make_shots()
 
+# Останавливаем perf и проверяем ошибки
 stop(perf_record, wait=True)
+_, perf_stderr = perf_record.communicate()
+if perf_stderr:
+    print(f"perf record errors: {perf_stderr.decode()}")
 
 stop(server_process, wait=True)
 
 time.sleep(1)
 
+# Проверка наличия данных в perf.data
+if not os.path.exists('perf.data'):
+    print('Error: perf.data does not exist')
+    sys.exit(1)
+    
+if os.path.getsize('perf.data') == 0:
+    print('Error: perf.data is empty')
+    sys.exit(1)
+
+print(f"perf.data size: {os.path.getsize('perf.data')} bytes")
+
 print("Generating flamegraph...")
 
 # perf script -> stackcollapse -> flamegraph -> graph.svg
 perf_script = subprocess.Popen(
-    ['perf', 'script', '-i', 'perf.data'],
+    ['sudo', 'perf', 'script', '-i', 'perf.data'],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE
 )
