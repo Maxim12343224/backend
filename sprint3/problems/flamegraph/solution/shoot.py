@@ -70,8 +70,6 @@ if server_process.poll() is not None:
 
 print(f"Server PID: {server_process.pid}")
 
-# Возвращаемся в оригинальную директорию для perf
-os.chdir(original_dir)
 
 print("Starting perf record...")
 perf_record = run(f'sudo perf record -o perf.data -p {server_process.pid} -g')
