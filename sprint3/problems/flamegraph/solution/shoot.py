@@ -26,7 +26,7 @@ def start_server():
 
 
 def run(command, output=None):
-    process = subprocess.Popen(shlex.split(command), stdout=output, stderr=subprocess.PIPE)
+    process = subprocess.Popen(shlex.split(command), stdout=output, stderr=subprocess.DEVNULL)
     return process
 
 
@@ -51,48 +51,23 @@ def make_shots():
 
 server_command = start_server()
 
-print(f"Starting server: {server_command}")
 server_process = run(server_command)
 
+# Даем серверу время на запуск
 time.sleep(2)
 
-# Проверка что сервер запустился
-if server_process.poll() is not None:
-    _, server_stderr = server_process.communicate()
-    print(f'Error: Server failed to start. Stderr: {server_stderr.decode()}')
-    sys.exit(1)
 
-print(f"Server PID: {server_process.pid}")
-
-print("Starting perf record...")
 perf_record = run(f'perf record -o perf.data -p {server_process.pid} -g')
-
-# Даем perf время начать запись
-time.sleep(1)
 
 make_shots()
 
-# Останавливаем perf и проверяем ошибки
 stop(perf_record, wait=True)
-_, perf_stderr = perf_record.communicate()
-if perf_stderr:
-    print(f"perf record errors: {perf_stderr.decode()}")
-
 stop(server_process, wait=True)
 
+# Даем perf время на завершение записи после остановки сервера
 time.sleep(1)
 
-# Проверка наличия данных в perf.data
-if not os.path.exists('perf.data'):
-    print('Error: perf.data does not exist')
-    sys.exit(1)
-    
-if os.path.getsize('perf.data') == 0:
-    print('Error: perf.data is empty')
-    sys.exit(1)
-
-print(f"perf.data size: {os.path.getsize('perf.data')} bytes")
-
+# Строим флеймграф с помощью perf script и скриптов FlameGraph
 print("Generating flamegraph...")
 
 # perf script -> stackcollapse -> flamegraph -> graph.svg
@@ -131,7 +106,7 @@ if collapse_err:
 if flame_err:
     print(f"flamegraph error: {flame_err.decode()}")
 
-
+# Проверяем что graph.svg создан и не пустой
 if os.path.exists('graph.svg') and os.path.getsize('graph.svg') > 0:
     print('Job done')
     print('Flamegraph saved as graph.svg')
