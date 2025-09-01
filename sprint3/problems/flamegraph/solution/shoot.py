@@ -51,11 +51,6 @@ def make_shots():
 
 server_command = start_server()
 
-# Переходим в директорию с конфигом перед запуском
-config_dir = '/mnt/c/cafeteria/backend/sprint3/problems/flamegraph/solution/'
-original_dir = os.getcwd()
-os.chdir(config_dir)
-
 print(f"Starting server: {server_command}")
 server_process = run(server_command)
 
@@ -65,14 +60,12 @@ time.sleep(2)
 if server_process.poll() is not None:
     _, server_stderr = server_process.communicate()
     print(f'Error: Server failed to start. Stderr: {server_stderr.decode()}')
-    os.chdir(original_dir)  # Возвращаемся обратно
     sys.exit(1)
 
 print(f"Server PID: {server_process.pid}")
 
-
 print("Starting perf record...")
-perf_record = run(f'sudo perf record -o perf.data -p {server_process.pid} -g')
+perf_record = run(f'perf record -o perf.data -p {server_process.pid} -g')
 
 # Даем perf время начать запись
 time.sleep(1)
@@ -104,7 +97,7 @@ print("Generating flamegraph...")
 
 # perf script -> stackcollapse -> flamegraph -> graph.svg
 perf_script = subprocess.Popen(
-    ['sudo', 'perf', 'script', '-i', 'perf.data'],
+    ['perf', 'script', '-i', 'perf.data'],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE
 )
