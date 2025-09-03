@@ -180,6 +180,11 @@ jobs:
           cd cpp-backend-tests-practicum/scripts/sprint3
           ./flamegraph/run.sh
 
+     - name: run tests sprint3 ammo
+        run: |
+          cd cpp-backend-tests-practicum/scripts/sprint3
+          ./ammo/run.sh
+
       - name: run tests sprint3 gen_objects
         run: |
           cd cpp-backend-tests-practicum/scripts/sprint3
@@ -235,11 +240,6 @@ jobs:
         run: |
           cd cpp-backend-tests-practicum/scripts/sprint3
           ./scores/run.sh
-
-      - name: run tests sprint3 ammo
-        run: |
-          cd cpp-backend-tests-practicum/scripts/sprint3
-          ./ammo/run.sh
 
       - name: run tests sprint3 load
         run: |
