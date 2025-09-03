@@ -1,0 +1,19 @@
+[Connection: close]
+[Host: localhost]
+/api/healthcheck
+
+[Connection: close]
+[Host: localhost]
+/api/v1/maps
+
+[Connection: close]
+[Host: localhost]
+/api/v1/maps/map1
+
+[Connection: close]
+[Host: localhost]
+/api/v1/info
+
+[Connection: close]
+[Host: localhost]
+/public/docs
