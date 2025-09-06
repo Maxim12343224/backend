@@ -15,7 +15,6 @@ RUN mkdir /app/build && cd /app/build && \
 
 # Папка data больше не нужна
 COPY ./src /app/src
-COPY ./test /app/test
 COPY CMakeLists.txt /app/
 
 RUN cd /app/build && \
