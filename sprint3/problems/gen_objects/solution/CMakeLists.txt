@@ -17,16 +17,15 @@ add_executable(game_server
     src/loot_generator.cpp
 )
 
-# КРИТИЧЕСКИ ВАЖНО: добавить эти include директории
+# ПРАВИЛЬНЫЕ include директории
 target_include_directories(game_server PRIVATE 
     ${CMAKE_SOURCE_DIR}/src
-    ${CONAN_INCLUDE_DIRS_BOOST}  # ← специально для Boost
-    ${CONAN_INCLUDE_DIRS}        # ← все остальные include
+    ${CONAN_INCLUDE_DIRS}  # Все include директории от Conan
 )
 
+# ПРАВИЛЬНЫЕ библиотеки для линковки
 target_link_libraries(game_server PRIVATE 
-    ${CONAN_LIBS}
-    CONAN_PKG::boost  # ← явно линкуем Boost
+    ${CONAN_LIBS}  # Все библиотеки от Conan
 )
 
 set_target_properties(game_server PROPERTIES
@@ -43,13 +42,11 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/test/loot_generator_tests.cpp)
     target_include_directories(game_server_tests PRIVATE 
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/test
-        ${CONAN_INCLUDE_DIRS_BOOST}
         ${CONAN_INCLUDE_DIRS}
     )
 
     target_link_libraries(game_server_tests PRIVATE 
         ${CONAN_LIBS}
-        CONAN_PKG::boost
         Catch2::Catch2WithMain
     )
 
