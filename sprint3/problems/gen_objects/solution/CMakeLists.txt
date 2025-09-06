@@ -14,23 +14,27 @@ add_executable(game_server
     src/boost_json.cpp
     src/json_loader.cpp
     src/request_handler.cpp
-    src/loot_generator.cpp  # ← ДОБАВИТЬ
+    src/loot_generator.cpp
 )
 
+# КРИТИЧЕСКИ ВАЖНО: добавить эти include директории
 target_include_directories(game_server PRIVATE 
     ${CMAKE_SOURCE_DIR}/src
-    ${CONAN_INCLUDE_DIRS}
+    ${CONAN_INCLUDE_DIRS_BOOST}  # ← специально для Boost
+    ${CONAN_INCLUDE_DIRS}        # ← все остальные include
 )
 
-target_link_libraries(game_server PRIVATE ${CONAN_LIBS})
+target_link_libraries(game_server PRIVATE 
+    ${CONAN_LIBS}
+    CONAN_PKG::boost  # ← явно линкуем Boost
+)
 
-# Устанавливаем выходной путь
 set_target_properties(game_server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-# Тесты - проверяем существование файлов
-if(EXISTS ${CMAKE_SOURCE_DIR}/test/loot_generator_tests.cpp AND EXISTS ${CMAKE_SOURCE_DIR}/test/model_tests.cpp)
+# Тесты (пропускаем если файлов нет)
+if(EXISTS ${CMAKE_SOURCE_DIR}/test/loot_generator_tests.cpp)
     add_executable(game_server_tests
         test/loot_generator_tests.cpp
         test/model_tests.cpp
@@ -39,16 +43,18 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/test/loot_generator_tests.cpp AND EXISTS ${CMAKE_S
     target_include_directories(game_server_tests PRIVATE 
         ${CMAKE_SOURCE_DIR}/src
         ${CMAKE_SOURCE_DIR}/test
+        ${CONAN_INCLUDE_DIRS_BOOST}
         ${CONAN_INCLUDE_DIRS}
     )
 
     target_link_libraries(game_server_tests PRIVATE 
         ${CONAN_LIBS}
+        CONAN_PKG::boost
         Catch2::Catch2WithMain
     )
 
     enable_testing()
     add_test(NAME game_server_tests COMMAND game_server_tests)
 else()
-    message(WARNING "Test files not found, skipping tests build")
+    message(STATUS "Test files not found, skipping tests build")
 endif()
