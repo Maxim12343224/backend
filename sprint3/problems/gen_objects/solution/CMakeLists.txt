@@ -1,57 +1,68 @@
 cmake_minimum_required(VERSION 3.11)
 
-project(urldecode CXX)
+project(game_server CXX)
 set(CMAKE_CXX_STANDARD 20)
 
+# Включение Conan
 include(${CMAKE_BINARY_DIR}/conanbuildinfo_multi.cmake)
 conan_basic_setup(TARGETS)
 
-# Основное приложение
+# Основной сервер
 add_executable(game_server
     src/main.cpp
     src/http_server.cpp
+    src/http_server.h
     src/model.cpp
+    src/model.h
+    src/tagged.h
     src/boost_json.cpp
+    src/sdk.h
     src/json_loader.cpp
+    src/json_loader.h
     src/request_handler.cpp
+    src/request_handler.h
+    src/logger.h
     src/loot_generator.cpp
+    src/loot_generator.h
 )
 
-# ПРАВИЛЬНЫЕ include директории
 target_include_directories(game_server PRIVATE 
     ${CMAKE_SOURCE_DIR}/src
-    ${CONAN_INCLUDE_DIRS}  # Все include директории от Conan
+    ${CONAN_INCLUDE_DIRS}
 )
 
-# ПРАВИЛЬНЫЕ библиотеки для линковки
 target_link_libraries(game_server PRIVATE 
-    ${CONAN_LIBS}  # Все библиотеки от Conan
+    ${CONAN_LIBS}
+    Threads::Threads
 )
 
 set_target_properties(game_server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-# Тесты (пропускаем если файлов нет)
-if(EXISTS ${CMAKE_SOURCE_DIR}/test/loot_generator_tests.cpp)
-    add_executable(game_server_tests
-        test/loot_generator_tests.cpp
-        test/model_tests.cpp
-    )
+# Тесты - ТОЧНО по рекомендациям задания
+add_executable(game_server_tests
+    src/model.h
+    src/model.cpp
+    src/loot_generator.h
+    src/loot_generator.cpp
+    src/tagged.h
+    tests/model-tests.cpp
+    tests/loot_generator_tests.cpp
+)
 
-    target_include_directories(game_server_tests PRIVATE 
-        ${CMAKE_SOURCE_DIR}/src
-        ${CMAKE_SOURCE_DIR}/test
-        ${CONAN_INCLUDE_DIRS}
-    )
+target_include_directories(game_server_tests PRIVATE 
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/tests
+    ${CONAN_INCLUDE_DIRS}
+)
 
-    target_link_libraries(game_server_tests PRIVATE 
-        ${CONAN_LIBS}
-        Catch2::Catch2WithMain
-    )
+target_link_libraries(game_server_tests PRIVATE 
+    CONAN_PKG::catch2
+    CONAN_PKG::boost
+    Threads::Threads
+)
 
-    enable_testing()
-    add_test(NAME game_server_tests COMMAND game_server_tests)
-else()
-    message(STATUS "Test files not found, skipping tests build")
-endif()
+# Добавляем тесты в систему тестирования
+enable_testing()
+add_test(NAME game_server_tests COMMAND game_server_tests)
