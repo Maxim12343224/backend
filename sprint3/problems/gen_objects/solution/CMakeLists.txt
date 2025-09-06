@@ -47,8 +47,8 @@ add_executable(game_server_tests
     src/loot_generator.h
     src/loot_generator.cpp
     src/tagged.h
-    tests/model-tests.cpp
-    tests/loot_generator_tests.cpp
+    test/model-tests.cpp
+    test/loot_generator_tests.cpp
 )
 
 target_include_directories(game_server_tests PRIVATE 
