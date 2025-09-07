@@ -26,43 +26,14 @@ add_executable(game_server
     src/loot_generator.h
 )
 
-target_include_directories(game_server PRIVATE 
-    ${CMAKE_SOURCE_DIR}/src
-    ${CONAN_INCLUDE_DIRS}
-)
-
-target_link_libraries(game_server PRIVATE 
-    ${CONAN_LIBS}
-    Threads::Threads
-)
-
-set_target_properties(game_server PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
-
-# Тесты - ТОЧНО по рекомендациям задания
 add_executable(game_server_tests
     src/model.h
     src/model.cpp
     src/loot_generator.h
     src/loot_generator.cpp
     src/tagged.h
-    test/model-tests.cpp
-    test/loot_generator_tests.cpp
+    tests/model-tests.cpp
+    tests/loot_generator_tests.cpp
 )
-
-target_include_directories(game_server_tests PRIVATE 
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/tests
-    ${CONAN_INCLUDE_DIRS}
-)
-
-target_link_libraries(game_server_tests PRIVATE 
-    CONAN_PKG::catch2
-    CONAN_PKG::boost
-    Threads::Threads
-)
-
-# Добавляем тесты в систему тестирования
-enable_testing()
-add_test(NAME game_server_tests COMMAND game_server_tests)
+target_include_directories(game_server_tests PRIVATE  CONAN_PKG::boost)
+target_link_libraries(game_server_tests PRIVATE CONAN_PKG::catch2 CONAN_PKG::boost Threads::Threads) 
