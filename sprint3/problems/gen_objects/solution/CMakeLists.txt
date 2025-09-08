@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 3.11)
 project(game_server CXX)
 set(CMAKE_CXX_STANDARD 20)
 
-# Включение Conan
+find_package(Threads REQUIRED)
+
 include(${CMAKE_BINARY_DIR}/conanbuildinfo_multi.cmake)
 conan_basic_setup(TARGETS)
 
@@ -24,6 +25,16 @@ add_executable(game_server
     src/logger.h
     src/loot_generator.cpp
     src/loot_generator.h
+)
+target_include_directories(game_server PRIVATE 
+    ${CMAKE_SOURCE_DIR}/src
+)
+target_link_libraries(game_server PRIVATE        
+    CONAN_PKG::boost      
+    Threads::Threads
+)
+set_target_properties(game_server PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
 add_executable(game_server_tests
