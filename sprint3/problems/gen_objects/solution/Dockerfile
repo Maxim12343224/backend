@@ -27,12 +27,12 @@ COPY ./static ./static
 COPY CMakeLists.txt .
 
 # Копируем тесты через отдельный RUN с проверкой существования
-RUN if [ -d "test" ]; then \
+RUN if [ -d "tests" ]; then \
         echo "Copying test files..."; \
-        cp -r test /app/test; \
+        cp -r tests /app/tests; \
     else \
         echo "Test directory not found, skipping"; \
-        mkdir -p /app/test; \
+        mkdir -p /app/tests; \
     fi
 
 # Собираем проект
