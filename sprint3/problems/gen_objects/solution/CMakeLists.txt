@@ -26,9 +26,8 @@ add_executable(game_server
     src/loot_generator.cpp
     src/loot_generator.h
 )
-target_include_directories(game_server PRIVATE 
-    ${CMAKE_SOURCE_DIR}/src
-)
+
+# target_include_directories УБРАНЫ - Conan автоматически добавляет include пути
 target_link_libraries(game_server PRIVATE        
     CONAN_PKG::boost      
     Threads::Threads
@@ -37,6 +36,7 @@ set_target_properties(game_server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
+# Тесты
 add_executable(game_server_tests
     src/model.h
     src/model.cpp
@@ -46,5 +46,10 @@ add_executable(game_server_tests
     tests/model-tests.cpp
     tests/loot_generator_tests.cpp
 )
-target_include_directories(game_server_tests PRIVATE  CONAN_PKG::boost)
-target_link_libraries(game_server_tests PRIVATE CONAN_PKG::catch2 CONAN_PKG::boost Threads::Threads) 
+
+# target_include_directories УБРАНЫ - Conan автоматически добавляет include пути
+target_link_libraries(game_server_tests PRIVATE 
+    CONAN_PKG::catch2 
+    CONAN_PKG::boost 
+    Threads::Threads
+)

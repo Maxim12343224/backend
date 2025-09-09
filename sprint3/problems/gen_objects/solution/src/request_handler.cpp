@@ -389,7 +389,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             // Ищем карту в конфиге
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
-                if (map_val.as_object()["id"].as_string() == map_id) {
+                if (map_val.as_object().at("id").as_string() == map_id) {
                     map_json = map_val;
                     break;
                 }
