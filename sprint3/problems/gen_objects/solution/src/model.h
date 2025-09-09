@@ -220,14 +220,15 @@ namespace model {
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
 
+        // PUBLIC метод для генерации лута
+        void GenerateLoot(std::chrono::milliseconds delta_time);
+
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
         void Tick(double delta_time);
 
     private:
-        void GenerateLoot(std::chrono::milliseconds delta_time);
-
         Id id_;
         Map map_;
         std::vector<std::shared_ptr<Player>> players_;
