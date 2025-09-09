@@ -26,8 +26,14 @@ COPY ./data ./data
 COPY ./static ./static
 COPY CMakeLists.txt .
 
-# Копируем тесты, если папка существует (используем .dockerignore для условного копирования)
-COPY ./test ./test 2>/dev/null || true
+# Копируем тесты через отдельный RUN с проверкой существования
+RUN if [ -d "test" ]; then \
+        echo "Copying test files..."; \
+        cp -r test /app/test; \
+    else \
+        echo "Test directory not found, skipping"; \
+        mkdir -p /app/test; \
+    fi
 
 # Собираем проект
 RUN cd build && \
