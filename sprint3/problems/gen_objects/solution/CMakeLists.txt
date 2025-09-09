@@ -43,7 +43,7 @@ add_executable(game_server_tests
     src/loot_generator.h
     src/loot_generator.cpp
     src/tagged.h
-    tests/model-tests.cpp
+    tests/model_tests.cpp
     tests/loot_generator_tests.cpp
 )
 
