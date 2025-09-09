@@ -20,12 +20,14 @@ RUN mkdir build && \
         -s compiler.libcxx=libstdc++11 \
         -s build_type=Release
 
-# Копируем исходный код, тесты и данные
+# Копируем исходный код и данные (обязательные файлы)
 COPY ./src ./src
-COPY ./test ./test 2>/dev/null || echo "Test directory not found, skipping"
 COPY ./data ./data
 COPY ./static ./static
 COPY CMakeLists.txt .
+
+# Копируем тесты, если папка существует (используем .dockerignore для условного копирования)
+COPY ./test ./test 2>/dev/null || true
 
 # Собираем проект
 RUN cd build && \
