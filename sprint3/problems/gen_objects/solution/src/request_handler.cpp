@@ -97,12 +97,16 @@ StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
     try {
         auto json_body = json::parse(req.body());
         if (!json_body.is_object()) {
-            throw std::runtime_error("Request body must be JSON object");
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Request body must be JSON object", req);
         }
 
         auto& obj = json_body.as_object();
         if (!obj.contains("userName") || !obj.contains("mapId")) {
-            throw std::runtime_error("Missing required fields");
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Missing required fields", req);
         }
 
         auto user_name = obj["userName"].as_string();
@@ -203,7 +207,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
         };
     }
 
-    // Добавляем информацию о потерянных предметах
+    // Р”РѕР±Р°РІР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕС‚РµСЂСЏРЅРЅС‹С… РїСЂРµРґРјРµС‚Р°С…
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (size_t i = 0; i < lost_objects.size(); ++i) {
@@ -374,7 +378,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Загружаем оригинальный JSON для получения lootTypes
+            // Р—Р°РіСЂСѓР¶Р°РµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ JSON РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ lootTypes
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -386,7 +390,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // Ищем карту в конфиге
+            // РС‰РµРј РєР°СЂС‚Сѓ РІ РєРѕРЅС„РёРіРµ
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -401,7 +405,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // Создаем ответ с lootTypes
+            // РЎРѕР·РґР°РµРј РѕС‚РІРµС‚ СЃ lootTypes
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},

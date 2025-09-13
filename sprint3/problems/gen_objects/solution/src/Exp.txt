@@ -181,9 +181,9 @@ namespace http_server {
 #include <fstream>
 #include <sstream>
 #include <boost/json.hpp>
-#include <string>  //                        std::string
+#include <string>
 
-using namespace std::literals;  //                            "s"
+using namespace std::literals;
 
 namespace json_loader {
     namespace json = boost::json;
@@ -234,7 +234,29 @@ namespace json_loader {
             return model::Office(std::move(id), pos, offset);
         }
 
-        model::Map ParseMap(const json::object& map_obj) {
+        void ParseLootGeneratorConfig(const json::object& config_obj, model::Game& game) {
+            if (!config_obj.contains("lootGeneratorConfig")) {
+                return;
+            }
+
+            auto& loot_config = config_obj.at("lootGeneratorConfig").as_object();
+            double period_seconds = loot_config.at("period").as_double();
+            double probability = loot_config.at("probability").as_double();
+
+            auto period_ms = std::chrono::milliseconds(static_cast<int>(period_seconds * 1000));
+            game.SetLootGeneratorConfig(period_ms, probability);
+        }
+
+        void ParseMapLootTypes(const json::object& map_obj, model::Game& game, const model::Map::Id& map_id) {
+            if (!map_obj.contains("lootTypes")) {
+                return;
+            }
+
+            auto& loot_types = map_obj.at("lootTypes").as_array();
+            game.SetMapLootTypesCount(map_id, loot_types.size());
+        }
+
+        model::Map ParseMap(const json::object& map_obj, model::Game& game) {
             model::Map::Id id{ std::string(map_obj.at("id").as_string().c_str()) };
             std::string name = std::string(map_obj.at("name").as_string().c_str());
             model::Map map(std::move(id), std::move(name));
@@ -255,6 +277,8 @@ namespace json_loader {
                 map.AddOffice(ParseOffice(office_val.as_object()));
             }
 
+            ParseMapLootTypes(map_obj, game, map.GetId());
+
             return map;
         }
 
@@ -274,13 +298,15 @@ namespace json_loader {
             auto value = json::parse(json_str);
             auto& root = value.as_object();
             
+            ParseLootGeneratorConfig(root, game);
+            
             if (root.contains("defaultDogSpeed")) {
                 game.SetDefaultDogSpeed(root.at("defaultDogSpeed").as_double());
             }
 
             auto& maps = root.at("maps").as_array();
             for (const auto& map_val : maps) {
-                game.AddMap(ParseMap(map_val.as_object()));
+                game.AddMap(ParseMap(map_val.as_object(), game));
             }
         }
         catch (const std::exception& e) {
@@ -296,12 +322,13 @@ namespace json_loader {
 #include <filesystem>
 #include <string>
 #include <boost/json.hpp>
+#include <chrono>
 
 #include "model.h"
 
 namespace json_loader {
 
-    void LoadGame(const std::filesystem::path& json_path, model::Game& game);
+	void LoadGame(const std::filesystem::path& json_path, model::Game& game);
 
 }
 
@@ -607,7 +634,7 @@ int main(int argc, const char* argv[]) {
             if (!ec) ioc.stop();
         });
 
-        http_handler::RequestHandler base_handler{ game, static_path, is_tick_automatic };
+        http_handler::RequestHandler base_handler{ game, static_path, is_tick_automatic, config_path };
         http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
 
         const auto address = net::ip::make_address("0.0.0.0");
@@ -706,7 +733,6 @@ Point GameSession::GenerateRandomPosition() const {
     const auto& road = roads[road_dist(gen)];
 
     if (road.IsHorizontal()) {
-        
         std::uniform_real_distribution<double> x_dist(
             std::min(road.GetStart().x, road.GetEnd().x),
             std::max(road.GetStart().x, road.GetEnd().x)
@@ -774,8 +800,60 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
     }
 }
 
+void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
+    std::lock_guard lock(mutex_);
+    
+    if (loot_types_count_ == 0) return;
+
+    unsigned looters_count = players_.size();
+    unsigned current_loot_count = lost_objects_.size();
+    
+    unsigned new_loot_count = loot_generator_->Generate(delta_time, current_loot_count, looters_count);
+    
+    if (new_loot_count > 0) {
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        std::uniform_int_distribution<size_t> type_dist(0, loot_types_count_ - 1);
+        
+        const auto& roads = map_.GetRoads();
+        if (roads.empty()) return;
+        
+        std::uniform_int_distribution<size_t> road_dist(0, roads.size() - 1);
+        
+        for (unsigned i = 0; i < new_loot_count; ++i) {
+            const auto& road = roads[road_dist(gen)];
+            
+            double x, y;
+            if (road.IsHorizontal()) {
+                std::uniform_real_distribution<double> x_dist(
+                    std::min(road.GetStart().x, road.GetEnd().x),
+                    std::max(road.GetStart().x, road.GetEnd().x)
+                );
+                x = x_dist(gen);
+                y = road.GetStart().y;
+            } else {
+                x = road.GetStart().x;
+                std::uniform_real_distribution<double> y_dist(
+                    std::min(road.GetStart().y, road.GetEnd().y),
+                    std::max(road.GetStart().y, road.GetEnd().y)
+                );
+                y = y_dist(gen);
+            }
+            
+            lost_objects_.push_back({
+                type_dist(gen),  // случайный тип
+                {x, y}  // позиция на дороге
+            });
+        }
+    }
+}
+
 void GameSession::Tick(double delta_time) {
     std::lock_guard lock(mutex_);
+    
+    // Генерируем лут
+    GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
+    
     for (auto& player : players_) {
         auto& dog = player->GetDog();
         auto pos = dog.GetPosition();
@@ -890,8 +968,10 @@ std::string DirectionToString(Direction dir) {
 #include <mutex>
 #include <optional>
 #include <algorithm>
+#include <chrono>
 
 #include "tagged.h"
+#include "loot_generator.h"
 
 namespace model {
 
@@ -1051,6 +1131,11 @@ namespace model {
         Direction direction_;
     };
 
+    struct LostObject {
+        size_t type;  // ��� �������� (0..K-1)
+        Point position;  // ������� �� �����
+    };
+
     class GameSession;
 
     class Player {
@@ -1079,15 +1164,23 @@ namespace model {
     public:
         using Id = util::Tagged<uint32_t, GameSession>;
 
-        explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points)
+        explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
+            std::shared_ptr<loot_gen::LootGenerator> loot_generator)
             : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
-            randomize_spawn_points_(randomize_spawn_points) {
+            randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)) {
         }
 
         const Id& GetId() const noexcept { return id_; }
         const Map& GetMap() const noexcept { return map_; }
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
+        const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
+
+        size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
+        void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
+
+        // PUBLIC ����� ��� ��������� ����
+        void GenerateLoot(std::chrono::milliseconds delta_time);
 
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
@@ -1098,8 +1191,11 @@ namespace model {
         Id id_;
         Map map_;
         std::vector<std::shared_ptr<Player>> players_;
+        std::vector<LostObject> lost_objects_;
         double dog_speed_;
         bool randomize_spawn_points_;
+        size_t loot_types_count_ = 0;
+        std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
         mutable std::mutex mutex_;
     };
 
@@ -1115,6 +1211,27 @@ namespace model {
         double GetDefaultDogSpeed() const noexcept { return default_dog_speed_; }
         void SetRandomizeSpawnPoints(bool randomize) noexcept {
             randomize_spawn_points_ = randomize;
+        }
+
+        void SetLootGeneratorConfig(std::chrono::milliseconds period, double probability) {
+            loot_generator_ = std::make_shared<loot_gen::LootGenerator>(period, probability);
+        }
+
+        std::shared_ptr<loot_gen::LootGenerator> GetLootGenerator() const noexcept {
+            return loot_generator_;
+        }
+
+        void SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
+            std::lock_guard lock(mutex_);
+            map_loot_types_count_[map_id] = count;
+        }
+
+        size_t GetMapLootTypesCount(const Map::Id& map_id) const {
+            std::lock_guard lock(mutex_);
+            if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
+                return it->second;
+            }
+            return 0;
         }
 
         const Maps& GetMaps() const noexcept { return maps_; }
@@ -1137,7 +1254,11 @@ namespace model {
             if (const auto* map = FindMap(map_id)) {
                 static std::atomic<uint32_t> next_session_id_{ 0 };
                 double dog_speed = map->GetDogSpeed().value_or(default_dog_speed_);
-                auto session = std::make_shared<GameSession>(*map, next_session_id_++, dog_speed, randomize_spawn_points_);
+                auto session = std::make_shared<GameSession>(*map, next_session_id_++, dog_speed,
+                    randomize_spawn_points_, loot_generator_);
+
+                session->SetLootTypesCount(GetMapLootTypesCount(map_id));
+
                 {
                     std::lock_guard lock(mutex_);
                     map_id_to_session_[map_id] = session;
@@ -1205,6 +1326,8 @@ namespace model {
         MapIdToIndex map_id_to_index_;
         std::unordered_map<Map::Id, std::shared_ptr<GameSession>, MapIdHasher> map_id_to_session_;
         std::unordered_map<Player::Token, std::shared_ptr<Player>, util::TaggedHasher<Player::Token>> token_to_player_;
+        std::unordered_map<Map::Id, size_t, MapIdHasher> map_loot_types_count_;
+        std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
         double default_dog_speed_ = 1.0;
         bool randomize_spawn_points_ = false;
         mutable std::mutex mutex_;
@@ -1421,9 +1544,23 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
         };
     }
 
+    // Добавляем информацию о потерянных предметах
+    json::value lost_objects_json = json::object();
+    const auto& lost_objects = session->GetLostObjects();
+    for (size_t i = 0; i < lost_objects.size(); ++i) {
+        const auto& obj = lost_objects[i];
+        lost_objects_json.as_object()[std::to_string(i)] = {
+            {"type", obj.type},
+            {"pos", json::array({obj.position.x, obj.position.y})}
+        };
+    }
+
     return MakeStringResponse(
         http::status::ok,
-        json::serialize(json::value{{"players", players_json}}),
+        json::serialize(json::value{
+            {"players", players_json},
+            {"lostObjects", lost_objects_json}
+        }),
         req
     );
 }
@@ -1578,28 +1715,59 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            json::value map_json{
+            // Загружаем оригинальный JSON для получения lootTypes
+            std::ifstream file(config_path_);
+            if (!file) {
+                return MakeErrorResponse(http::status::internal_server_error,
+                                       "internalError",
+                                       "Failed to load config", req);
+            }
+
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            auto config_json = json::parse(buffer.str());
+
+            // Ищем карту в конфиге
+            json::value map_json;
+            for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
+                if (map_val.as_object().at("id").as_string() == map_id) {
+                    map_json = map_val;
+                    break;
+                }
+            }
+
+            if (map_json.is_null()) {
+                return MakeErrorResponse(http::status::not_found,
+                                       "mapNotFound",
+                                       "Map not found in config", req);
+            }
+
+            // Создаем ответ с lootTypes
+            json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},
                 {"roads", json::array()},
                 {"buildings", json::array()},
-                {"offices", json::array()}
+                {"offices", json::array()},
+                {"lootTypes", map_json.as_object().contains("lootTypes") 
+                    ? map_json.as_object()["lootTypes"] 
+                    : json::array()}
             };
 
             for (const auto& road : map->GetRoads()) {
-                map_json.as_object()["roads"].as_array().push_back(SerializeRoad(road));
+                response_json.as_object()["roads"].as_array().push_back(SerializeRoad(road));
             }
 
             for (const auto& building : map->GetBuildings()) {
-                map_json.as_object()["buildings"].as_array().push_back(SerializeBuilding(building));
+                response_json.as_object()["buildings"].as_array().push_back(SerializeBuilding(building));
             }
 
             for (const auto& office : map->GetOffices()) {
-                map_json.as_object()["offices"].as_array().push_back(SerializeOffice(office));
+                response_json.as_object()["offices"].as_array().push_back(SerializeOffice(office));
             }
 
             return MakeStringResponse(http::status::ok,
-                                    json::serialize(map_json), req);
+                                    json::serialize(response_json), req);
         }
 
         return MakeErrorResponse(http::status::not_found,
@@ -1768,8 +1936,8 @@ namespace http_handler {
 
     class RequestHandler {
     public:
-        explicit RequestHandler(model::Game& game, const fs::path& static_path, bool is_tick_automatic)
-            : game_{ game }, static_path_{ static_path }, is_tick_automatic_{ is_tick_automatic } {
+        explicit RequestHandler(model::Game& game, const fs::path& static_path, bool is_tick_automatic, const fs::path& config_path)
+            : game_{ game }, static_path_{ static_path }, is_tick_automatic_{ is_tick_automatic }, config_path_{ config_path } {
         }
 
         RequestHandler(const RequestHandler&) = delete;
@@ -1777,7 +1945,7 @@ namespace http_handler {
 
         RequestHandler(RequestHandler&& other) noexcept
             : game_{ other.game_ }, static_path_{ std::move(other.static_path_) },
-            is_tick_automatic_{ other.is_tick_automatic_ } {
+            is_tick_automatic_{ other.is_tick_automatic_ }, config_path_{ std::move(other.config_path_) } {
         }
 
         template <typename Body, typename Allocator, typename Send>
@@ -1845,6 +2013,7 @@ namespace http_handler {
         model::Game& game_;
         fs::path static_path_;
         bool is_tick_automatic_;
+        fs::path config_path_;
 
         StringResponse HandleApiRequest(StringRequest&& req);
         StringResponse HandleStaticRequest(StringRequest&& req);

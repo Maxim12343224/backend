@@ -37,10 +37,10 @@ namespace model {
     };
 
     enum class Direction {
-        North,  // U
-        South,  // D
-        West,   // L
-        East    // R
+        North,
+        South,
+        West,
+        East
     };
 
     class Road {
@@ -134,6 +134,7 @@ namespace model {
         void AddRoad(const Road& road) { roads_.emplace_back(road); }
         void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
         void AddOffice(Office office);
+
         void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
 
     private:
@@ -173,8 +174,8 @@ namespace model {
     };
 
     struct LostObject {
-        size_t type;  // тип предмета (0..K-1)
-        Point position;  // позиция на карте
+        size_t type;
+        Point position;
     };
 
     class GameSession;
@@ -220,12 +221,10 @@ namespace model {
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
 
-        // PUBLIC метод для генерации лута
-        void GenerateLoot(std::chrono::milliseconds delta_time);
-
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
+        void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
 
     private:
@@ -263,12 +262,12 @@ namespace model {
         }
 
         void SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             map_loot_types_count_[map_id] = count;
         }
 
         size_t GetMapLootTypesCount(const Map::Id& map_id) const {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
                 return it->second;
             }
@@ -284,53 +283,19 @@ namespace model {
         }
 
         std::shared_ptr<GameSession> FindSession(const Map::Id& map_id) {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
                 return it->second;
             }
             return nullptr;
         }
 
-        std::shared_ptr<GameSession> CreateSession(const Map::Id& map_id) {
-            if (const auto* map = FindMap(map_id)) {
-                static std::atomic<uint32_t> next_session_id_{ 0 };
-                double dog_speed = map->GetDogSpeed().value_or(default_dog_speed_);
-                auto session = std::make_shared<GameSession>(*map, next_session_id_++, dog_speed,
-                    randomize_spawn_points_, loot_generator_);
+        
 
-                session->SetLootTypesCount(GetMapLootTypesCount(map_id));
-
-                {
-                    std::lock_guard lock(mutex_);
-                    map_id_to_session_[map_id] = session;
-                }
-                return session;
-            }
-            return nullptr;
-        }
-
-        std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name) {
-            std::shared_ptr<GameSession> session;
-            {
-                std::lock_guard lock(mutex_);
-                if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
-                    session = it->second;
-                }
-                else {
-                    session = CreateSession(map_id);
-                    if (!session) return nullptr;
-                }
-            }
-            auto player = session->AddPlayer(std::move(dog_name));
-            {
-                std::lock_guard lock(mutex_);
-                token_to_player_[player->GetToken()] = player;
-            }
-            return player;
-        }
+        std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name);
 
         std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 return it->second;
             }
@@ -349,7 +314,7 @@ namespace model {
         void Tick(double delta_time) {
             std::vector<std::shared_ptr<GameSession>> sessions;
             {
-                std::lock_guard lock(mutex_);
+                std::lock_guard<std::mutex> lock(mutex_);
                 for (auto& [_, session] : map_id_to_session_) {
                     sessions.push_back(session);
                 }
@@ -372,6 +337,7 @@ namespace model {
         double default_dog_speed_ = 1.0;
         bool randomize_spawn_points_ = false;
         mutable std::mutex mutex_;
+        std::atomic<uint32_t> next_session_id_{ 0 };
     };
 
     std::string DirectionToString(Direction dir);
