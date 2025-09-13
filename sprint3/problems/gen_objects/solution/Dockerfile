@@ -8,67 +8,31 @@ RUN apt update && \
     && \
     pip3 install conan==1.*
 
-# Создаем рабочую директорию
-WORKDIR /app
+# Запуск conan как раньше
+COPY conanfile.txt /app/
+RUN mkdir /app/build && cd /app/build && \
+    conan install .. --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Debug
 
-# Копируем conanfile.txt и устанавливаем зависимости
-COPY conanfile.txt .
-RUN mkdir build && \
-    cd build && \
-    conan install .. \
-        --build=missing \
-        -s compiler.libcxx=libstdc++11 \
-        -s build_type=Release
+# Папка data больше не нужна
+COPY ./src /app/src
+COPY CMakeLists.txt /app/
 
-# Копируем исходный код и данные (обязательные файлы)
-COPY ./src ./src
-COPY ./data ./data
-COPY ./static ./static
-COPY CMakeLists.txt .
-
-# Копируем тесты через отдельный RUN с проверкой существования
-RUN if [ -d "tests" ]; then \
-        echo "Copying test files..."; \
-        cp -r tests /app/tests; \
-    else \
-        echo "Test directory not found, skipping"; \
-        mkdir -p /app/tests; \
-    fi
-
-# Собираем проект
-RUN cd build && \
-    cmake .. -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build . && \
-    # Запускаем тесты, если они есть
-    if [ -f "game_server_tests" ]; then \
-        echo "Running tests..."; \
-        ./game_server_tests --success; \
-    else \
-        echo "No tests to run"; \
-    fi
+RUN cd /app/build && \
+    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    cmake --build .
 
 # Второй контейнер в том же докерфайле
 FROM ubuntu:22.04 as run
-
-# Обновляем и устанавливаем минимальные зависимости
-RUN apt update && \
-    apt install -y --no-install-recommends \
-        libstdc++6 \
-        libgcc-s1 \
-    && \
-    rm -rf /var/lib/apt/lists/*
 
 # Создадим пользователя www
 RUN groupadd -r www && useradd -r -g www www
 USER www
 
-# Создаем рабочую директорию
-WORKDIR /app
+# Скопируем приложение со сборочного контейнера в директорию /app.
+# Не забываем также папку data, она пригодится.
+COPY --from=build /app/build/bin/game_server /app/
+COPY ./data /app/data
+COPY ./static /app/static
 
-# Скопируем приложение со сборочного контейнера
-COPY --from=build /app/build/bin/game_server .
-COPY --from=build /app/data ./data
-COPY --from=build /app/static ./static
-
-# Запускаем игровой сервер с поддержкой генерации лута
+# Запускаем игровой сервер
 ENTRYPOINT ["/app/game_server", "/app/data/config.json", "/app/static"]
