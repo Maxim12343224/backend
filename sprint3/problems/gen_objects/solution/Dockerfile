@@ -35,4 +35,8 @@ COPY ./data /app/data
 COPY ./static /app/static
 
 # Запускаем игровой сервер
-ENTRYPOINT ["/app/game_server", "/app/data/config.json", "/app/static"]
+ENTRYPOINT ["/app/game_server", \
+    "-c", "/app/data/config.json", \
+    "-w", "/app/static", \
+    "--tick-period", "500", \
+    "--randomize-spawn-points"]
