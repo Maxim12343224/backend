@@ -681,6 +681,7 @@ int main(int argc, const char* argv[]) {
 #include <random>
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <limits>
 
 namespace model {
@@ -715,6 +716,151 @@ void Game::AddMap(Map map) {
     }
 }
 
+
+
+
+
+
+
+
+
+
+/*std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
+    std::cout << "JoinGame called for map: " << *map_id << std::endl;
+    
+    size_t loot_types_count = 0;
+    const Map* map_ptr = nullptr;
+    std::shared_ptr<GameSession> session;
+    
+    {
+        std::cout << "Locking mutex for data access" << std::endl;
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "Mutex locked" << std::endl;
+        
+        map_ptr = FindMap(map_id);
+        if (!map_ptr) {
+            std::cout << "Map not found: " << *map_id << std::endl;
+            return nullptr;
+        }
+        std::cout << "Map found: " << *map_id << std::endl;
+        
+        loot_types_count = GetMapLootTypesCount(map_id);
+        std::cout << "Loot types count: " << loot_types_count << std::endl;
+        
+        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+            session = it->second;
+            std::cout << "Existing session found" << std::endl;
+        } else {
+            std::cout << "No existing session" << std::endl;
+        }
+    }
+    std::cout << "Mutex unlocked" << std::endl;
+    
+    if (!session) {
+        std::cout << "Creating new session" << std::endl;
+        double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
+        session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
+            randomize_spawn_points_, loot_generator_);
+        session->SetLootTypesCount(loot_types_count);
+
+        std::cout << "Locking mutex for session storage" << std::endl;
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "Mutex locked for session storage" << std::endl;
+        
+        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+            session = it->second;
+            std::cout << "Session already created by another thread" << std::endl;
+        } else {
+            map_id_to_session_[map_id] = session;
+            std::cout << "New session stored" << std::endl;
+        }
+        std::cout << "Mutex unlocked after session storage" << std::endl;
+    }
+
+    std::cout << "Adding player" << std::endl;
+    auto player = session->AddPlayer(std::move(dog_name));
+    if (!player) {
+        std::cout << "AddPlayer failed" << std::endl;
+        return nullptr;
+    }
+
+    std::cout << "Locking mutex for token storage" << std::endl;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "Mutex locked for token storage" << std::endl;
+        token_to_player_[player->GetToken()] = player;
+        std::cout << "Mutex unlocked after token storage" << std::endl;
+    }
+    
+    std::cout << "Player created successfully: " << *player->GetId() << std::endl;
+    return player;
+}*/
+
+
+
+
+
+
+
+
+
+std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
+    std::cout << "JoinGame called for map: " << *map_id << std::endl;
+    
+    size_t loot_types_count = 0;
+    const Map* map_ptr = nullptr;
+    std::shared_ptr<GameSession> session;
+    
+    {
+        // std::lock_guard<std::mutex> lock(mutex_);  // Закомментировано
+        
+        map_ptr = FindMap(map_id);
+        if (!map_ptr) {
+            std::cout << "Map not found: " << *map_id << std::endl;
+            return nullptr;
+        }
+        
+        loot_types_count = GetMapLootTypesCount(map_id);
+        
+        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+            session = it->second;
+        }
+    }
+    
+    if (!session) {
+        double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
+        session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
+            randomize_spawn_points_, loot_generator_);
+        session->SetLootTypesCount(loot_types_count);
+
+        // std::lock_guard<std::mutex> lock(mutex_);  // Закомментировано
+        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+            session = it->second;
+        } else {
+            map_id_to_session_[map_id] = session;
+        }
+    }
+
+    auto player = session->AddPlayer(std::move(dog_name));
+    if (!player) {
+        return nullptr;
+    }
+
+    {
+        // std::lock_guard<std::mutex> lock(mutex_);  // Закомментировано
+        token_to_player_[player->GetToken()] = player;
+    }
+    
+    return player;
+}
+
+
+
+
+
+
+
+
 Point GameSession::GenerateRandomPosition() const {
     const auto& roads = map_.GetRoads();
     if (roads.empty()) return {0.0, 0.0};
@@ -748,33 +894,45 @@ Point GameSession::GenerateRandomPosition() const {
 }
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
-    Point start_pos = GenerateRandomPosition();
-    Dog dog(std::move(dog_name), start_pos, Direction::North);
+    try {
+        std::cout << "AddPlayer started" << std::endl;
+        Point start_pos = GenerateRandomPosition();
+        Dog dog(std::move(dog_name), start_pos, Direction::North);
 
-    static std::atomic<uint32_t> next_player_id_{0};
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    static std::uniform_int_distribution<> dis(0, 15);
-    
-    const char* hex_digits = "0123456789abcdef";
-    std::string token;
-    token.reserve(32);
-    for (int i = 0; i < 32; ++i) {
-        token += hex_digits[dis(gen)];
+        static std::atomic<uint32_t> next_player_id_{0};
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static std::uniform_int_distribution<> dis(0, 15);
+        
+        const char* hex_digits = "0123456789abcdef";
+        std::string token;
+        token.reserve(32);
+        for (int i = 0; i < 32; ++i) {
+            token += hex_digits[dis(gen)];
+        }
+
+        std::cout << "Creating player object" << std::endl;
+        auto player = std::make_shared<Player>(
+            shared_from_this(), 
+            std::move(dog),
+            next_player_id_++, 
+            std::move(token)
+        );
+
+        players_.push_back(player);
+        std::cout << "Player added successfully" << std::endl;
+        return player;
+    } catch (const std::exception& e) {
+        std::cout << "Exception in AddPlayer: " << e.what() << std::endl;
+        return nullptr;
+    } catch (...) {
+        std::cout << "Unknown exception in AddPlayer" << std::endl;
+        return nullptr;
     }
-
-    auto player = std::make_shared<Player>(
-        shared_from_this(), 
-        std::move(dog),
-        next_player_id_++, 
-        std::move(token)
-    );
-    players_.push_back(player);
-    return player;
 }
 
 void GameSession::SetPlayerAction(const Player::Token& token, const std::string& move) {
-    std::lock_guard lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     for (auto& player : players_) {
         if (player->GetToken() != token) continue;
         
@@ -801,7 +959,7 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
 }
 
 void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
-    std::lock_guard lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     
     if (loot_types_count_ == 0) return;
 
@@ -841,17 +999,16 @@ void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
             }
             
             lost_objects_.push_back({
-                type_dist(gen),  // случайный тип
-                {x, y}  // позиция на дороге
+                type_dist(gen),
+                {x, y}
             });
         }
     }
 }
 
 void GameSession::Tick(double delta_time) {
-    std::lock_guard lock(mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
     
-    // Генерируем лут
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
     for (auto& player : players_) {
@@ -996,10 +1153,10 @@ namespace model {
     };
 
     enum class Direction {
-        North,  // U
-        South,  // D
-        West,   // L
-        East    // R
+        North,
+        South,
+        West,
+        East
     };
 
     class Road {
@@ -1093,6 +1250,7 @@ namespace model {
         void AddRoad(const Road& road) { roads_.emplace_back(road); }
         void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
         void AddOffice(Office office);
+
         void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
 
     private:
@@ -1132,8 +1290,8 @@ namespace model {
     };
 
     struct LostObject {
-        size_t type;  // ��� �������� (0..K-1)
-        Point position;  // ������� �� �����
+        size_t type;
+        Point position;
     };
 
     class GameSession;
@@ -1179,12 +1337,10 @@ namespace model {
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
 
-        // PUBLIC ����� ��� ��������� ����
-        void GenerateLoot(std::chrono::milliseconds delta_time);
-
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
+        void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
 
     private:
@@ -1222,12 +1378,12 @@ namespace model {
         }
 
         void SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             map_loot_types_count_[map_id] = count;
         }
 
         size_t GetMapLootTypesCount(const Map::Id& map_id) const {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
                 return it->second;
             }
@@ -1243,53 +1399,19 @@ namespace model {
         }
 
         std::shared_ptr<GameSession> FindSession(const Map::Id& map_id) {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
                 return it->second;
             }
             return nullptr;
         }
 
-        std::shared_ptr<GameSession> CreateSession(const Map::Id& map_id) {
-            if (const auto* map = FindMap(map_id)) {
-                static std::atomic<uint32_t> next_session_id_{ 0 };
-                double dog_speed = map->GetDogSpeed().value_or(default_dog_speed_);
-                auto session = std::make_shared<GameSession>(*map, next_session_id_++, dog_speed,
-                    randomize_spawn_points_, loot_generator_);
+        
 
-                session->SetLootTypesCount(GetMapLootTypesCount(map_id));
-
-                {
-                    std::lock_guard lock(mutex_);
-                    map_id_to_session_[map_id] = session;
-                }
-                return session;
-            }
-            return nullptr;
-        }
-
-        std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name) {
-            std::shared_ptr<GameSession> session;
-            {
-                std::lock_guard lock(mutex_);
-                if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
-                    session = it->second;
-                }
-                else {
-                    session = CreateSession(map_id);
-                    if (!session) return nullptr;
-                }
-            }
-            auto player = session->AddPlayer(std::move(dog_name));
-            {
-                std::lock_guard lock(mutex_);
-                token_to_player_[player->GetToken()] = player;
-            }
-            return player;
-        }
+        std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name);
 
         std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
-            std::lock_guard lock(mutex_);
+            std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 return it->second;
             }
@@ -1308,7 +1430,7 @@ namespace model {
         void Tick(double delta_time) {
             std::vector<std::shared_ptr<GameSession>> sessions;
             {
-                std::lock_guard lock(mutex_);
+                std::lock_guard<std::mutex> lock(mutex_);
                 for (auto& [_, session] : map_id_to_session_) {
                     sessions.push_back(session);
                 }
@@ -1331,6 +1453,7 @@ namespace model {
         double default_dog_speed_ = 1.0;
         bool randomize_spawn_points_ = false;
         mutable std::mutex mutex_;
+        std::atomic<uint32_t> next_session_id_{ 0 };
     };
 
     std::string DirectionToString(Direction dir);
@@ -1438,12 +1561,16 @@ StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
     try {
         auto json_body = json::parse(req.body());
         if (!json_body.is_object()) {
-            throw std::runtime_error("Request body must be JSON object");
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Request body must be JSON object", req);
         }
 
         auto& obj = json_body.as_object();
         if (!obj.contains("userName") || !obj.contains("mapId")) {
-            throw std::runtime_error("Missing required fields");
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Missing required fields", req);
         }
 
         auto user_name = obj["userName"].as_string();
@@ -1544,7 +1671,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
         };
     }
 
-    // Добавляем информацию о потерянных предметах
+    // Р”РѕР±Р°РІР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕС‚РµСЂСЏРЅРЅС‹С… РїСЂРµРґРјРµС‚Р°С…
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (size_t i = 0; i < lost_objects.size(); ++i) {
@@ -1715,7 +1842,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Загружаем оригинальный JSON для получения lootTypes
+            // Р—Р°РіСЂСѓР¶Р°РµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ JSON РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ lootTypes
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -1727,7 +1854,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // Ищем карту в конфиге
+            // РС‰РµРј РєР°СЂС‚Сѓ РІ РєРѕРЅС„РёРіРµ
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -1742,7 +1869,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // Создаем ответ с lootTypes
+            // РЎРѕР·РґР°РµРј РѕС‚РІРµС‚ СЃ lootTypes
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},

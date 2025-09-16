@@ -130,6 +130,7 @@ int main(int argc, const char* argv[]) {
         auto api_strand = net::make_strand(ioc);
 
         if (is_tick_automatic) {
+             std::cout << "Starting automatic ticker with period: " << tick_period << " ms" << std::endl;
             auto ticker = std::make_shared<Ticker>(
                 api_strand, 
                 std::chrono::milliseconds(tick_period),

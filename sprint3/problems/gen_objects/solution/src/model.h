@@ -10,6 +10,7 @@
 #include <optional>
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 
 #include "tagged.h"
 #include "loot_generator.h"
@@ -70,13 +71,13 @@ namespace model {
 
         Rectangle GetBoundingBox() const noexcept {
             if (IsHorizontal()) {
-                Coord x0 = std::min(start_.x, end_.x) - 0.4;
-                Coord x1 = std::max(start_.x, end_.x) + 0.4;
+                Coord x0 = std::min(start_.x, end_.x);
+                Coord x1 = std::max(start_.x, end_.x);
                 return { {x0, start_.y - 0.4}, {x1 - x0, 0.8} };
             }
             else {
-                Coord y0 = std::min(start_.y, end_.y) - 0.4;
-                Coord y1 = std::max(start_.y, end_.y) + 0.4;
+                Coord y0 = std::min(start_.y, end_.y);
+                Coord y1 = std::max(start_.y, end_.y);
                 return { {start_.x - 0.4, y0}, {0.8, y1 - y0} };
             }
         }
@@ -267,7 +268,7 @@ namespace model {
         }
 
         size_t GetMapLootTypesCount(const Map::Id& map_id) const {
-            std::lock_guard<std::mutex> lock(mutex_);
+            //std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
                 return it->second;
             }
@@ -290,12 +291,19 @@ namespace model {
             return nullptr;
         }
 
-        
-
         std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name);
 
         std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
             std::lock_guard<std::mutex> lock(mutex_);
+
+            // Добавим отладочный вывод
+            std::cout << "DEBUG: Looking for token: " << *token << std::endl;
+            std::cout << "DEBUG: Available tokens: ";
+            for (const auto& pair : token_to_player_) {
+                std::cout << *pair.first << " ";
+            }
+            std::cout << std::endl;
+
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 return it->second;
             }
@@ -311,18 +319,56 @@ namespace model {
             }
         }
 
-        void Tick(double delta_time) {
+        /*void Tick(double delta_time) {
+            std::cout << "Game::Tick called, delta: " << delta_time << std::endl;
             std::vector<std::shared_ptr<GameSession>> sessions;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                for (auto& [_, session] : map_id_to_session_) {
+                for (auto& [map_id, session] : map_id_to_session_) {
                     sessions.push_back(session);
                 }
             }
             for (auto& session : sessions) {
                 session->Tick(delta_time);
             }
+        }*/
+
+
+
+
+
+
+        void Tick(double delta_time) {
+            std::cout << "=== Game::Tick START ===" << std::endl;
+
+            std::vector<std::shared_ptr<GameSession>> sessions;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                std::cout << "DEBUG: Total sessions: " << map_id_to_session_.size() << std::endl;
+
+                for (const auto& [map_id, session] : map_id_to_session_) {
+                    std::cout << "DEBUG: Session for map: " << *map_id
+                        << ", ID: " << *session->GetId() << std::endl;
+                    sessions.push_back(session);
+                }
+            }
+
+            std::cout << "DEBUG: Sessions to process: " << sessions.size() << std::endl;
+
+            for (auto& session : sessions) {
+                std::cout << "DEBUG: Calling GameSession::Tick for session: " << *session->GetId() << std::endl;
+                session->Tick(delta_time);
+            }
+
+            std::cout << "=== Game::Tick END ===" << std::endl;
         }
+
+
+
+
+
+
+
 
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;

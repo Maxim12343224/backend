@@ -118,6 +118,11 @@ StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
                                    "Invalid name", req);
         }
 
+
+        if (is_tick_automatic_) {
+        game_.Tick(0.5); // 500 ms в секундах
+    }
+
         auto player = game_.JoinGame(model::Map::Id{std::string(map_id)}, std::string(user_name));
         if (!player) {
             return MakeErrorResponse(http::status::not_found,
@@ -207,7 +212,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
         };
     }
 
-    // Р”РѕР±Р°РІР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕС‚РµСЂСЏРЅРЅС‹С… РїСЂРµРґРјРµС‚Р°С…
+    // Добавляем информацию о потерянных предметах
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (size_t i = 0; i < lost_objects.size(); ++i) {
@@ -378,7 +383,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Р—Р°РіСЂСѓР¶Р°РµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ JSON РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ lootTypes
+            // Загружаем оригинальный JSON для получения lootTypes
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -390,7 +395,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // РС‰РµРј РєР°СЂС‚Сѓ РІ РєРѕРЅС„РёРіРµ
+            // Ищем карту в конфиге
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -405,7 +410,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // РЎРѕР·РґР°РµРј РѕС‚РІРµС‚ СЃ lootTypes
+            // Создаем ответ с lootTypes
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},
