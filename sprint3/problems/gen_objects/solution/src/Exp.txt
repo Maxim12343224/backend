@@ -619,6 +619,7 @@ int main(int argc, const char* argv[]) {
         auto api_strand = net::make_strand(ioc);
 
         if (is_tick_automatic) {
+             std::cout << "Starting automatic ticker with period: " << tick_period << " ms" << std::endl;
             auto ticker = std::make_shared<Ticker>(
                 api_strand, 
                 std::chrono::milliseconds(tick_period),
@@ -716,83 +717,49 @@ void Game::AddMap(Map map) {
     }
 }
 
-
-
-
-
-
-
-
-
-
 /*std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
-    std::cout << "JoinGame called for map: " << *map_id << std::endl;
-    
     size_t loot_types_count = 0;
     const Map* map_ptr = nullptr;
     std::shared_ptr<GameSession> session;
     
     {
-        std::cout << "Locking mutex for data access" << std::endl;
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "Mutex locked" << std::endl;
-        
         map_ptr = FindMap(map_id);
         if (!map_ptr) {
-            std::cout << "Map not found: " << *map_id << std::endl;
             return nullptr;
         }
-        std::cout << "Map found: " << *map_id << std::endl;
         
         loot_types_count = GetMapLootTypesCount(map_id);
-        std::cout << "Loot types count: " << loot_types_count << std::endl;
         
         if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
             session = it->second;
-            std::cout << "Existing session found" << std::endl;
-        } else {
-            std::cout << "No existing session" << std::endl;
         }
     }
-    std::cout << "Mutex unlocked" << std::endl;
     
     if (!session) {
-        std::cout << "Creating new session" << std::endl;
         double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
         session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
             randomize_spawn_points_, loot_generator_);
         session->SetLootTypesCount(loot_types_count);
 
-        std::cout << "Locking mutex for session storage" << std::endl;
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "Mutex locked for session storage" << std::endl;
-        
         if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
             session = it->second;
-            std::cout << "Session already created by another thread" << std::endl;
         } else {
             map_id_to_session_[map_id] = session;
-            std::cout << "New session stored" << std::endl;
         }
-        std::cout << "Mutex unlocked after session storage" << std::endl;
     }
 
-    std::cout << "Adding player" << std::endl;
     auto player = session->AddPlayer(std::move(dog_name));
     if (!player) {
-        std::cout << "AddPlayer failed" << std::endl;
         return nullptr;
     }
 
-    std::cout << "Locking mutex for token storage" << std::endl;
     {
-        std::lock_guard<std::mutex> lock(mutex_);
-        std::cout << "Mutex locked for token storage" << std::endl;
+        std::lock_guard<std::mutex> lock(mutex_);  // Добавить защиту
         token_to_player_[player->GetToken()] = player;
-        std::cout << "Mutex unlocked after token storage" << std::endl;
+        std::cout << "DEBUG: Saved token: " << *player->GetToken() << std::endl;
+        std::cout << "DEBUG: Map size: " << token_to_player_.size() << std::endl;
     }
     
-    std::cout << "Player created successfully: " << *player->GetId() << std::endl;
     return player;
 }*/
 
@@ -804,56 +771,106 @@ void Game::AddMap(Map map) {
 
 
 
-std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
-    std::cout << "JoinGame called for map: " << *map_id << std::endl;
-    
-    size_t loot_types_count = 0;
-    const Map* map_ptr = nullptr;
-    std::shared_ptr<GameSession> session;
-    
-    {
-        // std::lock_guard<std::mutex> lock(mutex_);  // Закомментировано
-        
-        map_ptr = FindMap(map_id);
-        if (!map_ptr) {
-            std::cout << "Map not found: " << *map_id << std::endl;
-            return nullptr;
-        }
-        
-        loot_types_count = GetMapLootTypesCount(map_id);
-        
-        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
-            session = it->second;
-        }
-    }
-    
-    if (!session) {
-        double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
-        session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
-            randomize_spawn_points_, loot_generator_);
-        session->SetLootTypesCount(loot_types_count);
 
-        // std::lock_guard<std::mutex> lock(mutex_);  // Закомментировано
-        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
-            session = it->second;
-        } else {
-            map_id_to_session_[map_id] = session;
-        }
-    }
 
+/*std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
+    // Временно уберем сложную логику с сессиями
+    static std::atomic<uint32_t> next_id{0};
+    
+    auto map_ptr = FindMap(map_id);
+    if (!map_ptr) return nullptr;
+    
+    // Просто создаем игрока без сложной логики сессий
+    auto session = std::make_shared<GameSession>(*map_ptr, 0, 1.0, false, loot_generator_);
     auto player = session->AddPlayer(std::move(dog_name));
-    if (!player) {
-        return nullptr;
-    }
-
+    
+    if (!player) return nullptr;
+    
     {
-        // std::lock_guard<std::mutex> lock(mutex_);  // Закомментировано
+        std::lock_guard<std::mutex> lock(mutex_);
         token_to_player_[player->GetToken()] = player;
+        std::cout << "JOIN: Token=" << *player->GetToken() << " ID=" << *player->GetId() << std::endl;
     }
     
     return player;
-}
+}*/
 
+
+
+
+
+
+std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
+    std::cout << "=== JoinGame START ===" << std::endl;
+    std::cout << "Map ID: " << *map_id << std::endl;
+    
+    const Map* map_ptr = nullptr;
+    size_t loot_types_count = 0;
+    
+    {
+        std::cout << "Before mutex lock" << std::endl;
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "After mutex lock" << std::endl;
+        
+        map_ptr = FindMap(map_id);
+        if (!map_ptr) {
+            std::cout << "JoinGame ERROR: Map not found" << std::endl;
+            return nullptr;
+        }
+        std::cout << "Map found: " << *map_ptr->GetId() << std::endl;
+        
+        loot_types_count = GetMapLootTypesCount(map_id);
+        std::cout << "Loot types count: " << loot_types_count << std::endl;
+    }
+    
+    std::shared_ptr<GameSession> session;
+    {
+        std::cout << "Before session mutex lock" << std::endl;
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "After session mutex lock" << std::endl;
+        
+        // Проверяем существующую сессию
+        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+            session = it->second;
+            std::cout << "Using existing session: " << *session->GetId() << std::endl;
+        } else {
+            std::cout << "Creating new session..." << std::endl;
+            double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
+            std::cout << "Dog speed: " << dog_speed << std::endl;
+            
+            session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
+                randomize_spawn_points_, loot_generator_);
+            std::cout << "Session created: " << *session->GetId() << std::endl;
+            
+            session->SetLootTypesCount(loot_types_count);
+            std::cout << "Loot types set" << std::endl;
+            
+            // ДОБАВЛЯЕМ СЕССИЮ В MAP!
+            map_id_to_session_[map_id] = session;
+            std::cout << "Session added to map: " << *map_id << std::endl;
+        }
+    }
+    
+    std::cout << "Adding player to session..." << std::endl;
+    auto player = session->AddPlayer(std::move(dog_name));
+    if (!player) {
+        std::cout << "JoinGame ERROR: Failed to add player" << std::endl;
+        return nullptr;
+    }
+    std::cout << "Player added: " << *player->GetId() << std::endl;
+    
+    {
+        std::cout << "Before token mutex lock" << std::endl;
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "After token mutex lock" << std::endl;
+        
+        token_to_player_[player->GetToken()] = player;
+        std::cout << "Token saved: " << *player->GetToken() << std::endl;
+    }
+    
+    std::cout << "=== JoinGame END ===" << std::endl;
+    return player;
+}
 
 
 
@@ -895,7 +912,6 @@ Point GameSession::GenerateRandomPosition() const {
 
 std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     try {
-        std::cout << "AddPlayer started" << std::endl;
         Point start_pos = GenerateRandomPosition();
         Dog dog(std::move(dog_name), start_pos, Direction::North);
 
@@ -911,7 +927,6 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
             token += hex_digits[dis(gen)];
         }
 
-        std::cout << "Creating player object" << std::endl;
         auto player = std::make_shared<Player>(
             shared_from_this(), 
             std::move(dog),
@@ -920,13 +935,10 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
         );
 
         players_.push_back(player);
-        std::cout << "Player added successfully" << std::endl;
         return player;
     } catch (const std::exception& e) {
-        std::cout << "Exception in AddPlayer: " << e.what() << std::endl;
         return nullptr;
     } catch (...) {
-        std::cout << "Unknown exception in AddPlayer" << std::endl;
         return nullptr;
     }
 }
@@ -937,23 +949,21 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         if (player->GetToken() != token) continue;
         
         auto& dog = player->GetDog();
-        Point new_speed{0.0, 0.0};
         if (move == "L") {
-            new_speed = {-dog_speed_, 0.0};
+            dog.SetSpeed({-dog_speed_, 0.0});
             dog.SetDirection(Direction::West);
         } else if (move == "R") {
-            new_speed = {dog_speed_, 0.0};
+            dog.SetSpeed({dog_speed_, 0.0});
             dog.SetDirection(Direction::East);
         } else if (move == "U") {
-            new_speed = {0.0, -dog_speed_};
+            dog.SetSpeed({0.0, -dog_speed_});
             dog.SetDirection(Direction::North);
         } else if (move == "D") {
-            new_speed = {0.0, dog_speed_};
+            dog.SetSpeed({0.0, dog_speed_});
             dog.SetDirection(Direction::South);
         } else if (move == "") {
-            new_speed = {0.0, 0.0};
+            dog.SetSpeed({0.0, 0.0});
         }
-        dog.SetSpeed(new_speed);
         break;
     }
 }
@@ -1006,7 +1016,7 @@ void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
     }
 }
 
-void GameSession::Tick(double delta_time) {
+/*void GameSession::Tick(double delta_time) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
@@ -1018,87 +1028,126 @@ void GameSession::Tick(double delta_time) {
 
         if (speed.x == 0.0 && speed.y == 0.0) continue;
 
-        const double max_step = 0.1;
-        double remaining_time = delta_time;
+        double new_x = pos.x + speed.x * delta_time;
+        double new_y = pos.y + speed.y * delta_time;
         
-        while (remaining_time > 0.0) {
-            double step_time = std::min(remaining_time, max_step);
-            remaining_time -= step_time;
-
-            double move_x = speed.x * step_time;
-            double move_y = speed.y * step_time;
-            double new_x = pos.x + move_x;
-            double new_y = pos.y + move_y;
-
-            bool can_move = false;
-            for (const auto& road : map_.GetRoads()) {
-                auto bbox = road.GetBoundingBox();
-                double road_x0 = bbox.position.x;
-                double road_y0 = bbox.position.y;
-                double road_x1 = road_x0 + bbox.size.width;
-                double road_y1 = road_y0 + bbox.size.height;
-
-                if (pos.x >= road_x0 && pos.x <= road_x1 &&
-                    pos.y >= road_y0 && pos.y <= road_y1) {
-                    
-                    if (new_x >= road_x0 && new_x <= road_x1 &&
-                        new_y >= road_y0 && new_y <= road_y1) {
-                        can_move = true;
-                        break;
-                    }
-                }
-            }
-
-            if (can_move) {
-                pos.x = new_x;
-                pos.y = new_y;
-                dog.SetPosition(pos);
-            } else {
-                double target_x = new_x;
-                double target_y = new_y;
-                bool hit_boundary = false;
-                
-                for (const auto& road : map_.GetRoads()) {
-                    auto bbox = road.GetBoundingBox();
-                    double road_x0 = bbox.position.x;
-                    double road_y0 = bbox.position.y;
-                    double road_x1 = road_x0 + bbox.size.width;
-                    double road_y1 = road_y0 + bbox.size.height;
-
-                    if (pos.x >= road_x0 && pos.x <= road_x1 &&
-                        pos.y >= road_y0 && pos.y <= road_y1) {
-                        
-                        if (speed.x != 0) {
-                            if (speed.x > 0) {
-                                target_x = std::min(new_x, road_x1);
-                            } else {
-                                target_x = std::max(new_x, road_x0);
-                            }
-                            hit_boundary = true;
-                        }
-                        
-                        if (speed.y != 0) {
-                            if (speed.y > 0) {
-                                target_y = std::min(new_y, road_y1);
-                            } else {
-                                target_y = std::max(new_y, road_y0);
-                            }
-                            hit_boundary = true;
-                        }
-                        
-                        if (hit_boundary) break;
-                    }
-                }
-                
-                pos.x = target_x;
-                pos.y = target_y;
-                dog.SetPosition(pos);
-                dog.SetSpeed({0.0, 0.0});
+        // Проверяем, находится ли новая позиция на какой-либо дороге
+        bool can_move = false;
+        for (const auto& road : map_.GetRoads()) {
+            auto bbox = road.GetBoundingBox();
+            double road_x0 = bbox.position.x;
+            double road_y0 = bbox.position.y;
+            double road_x1 = road_x0 + bbox.size.width;
+            double road_y1 = road_y0 + bbox.size.height;
+            
+            if (new_x >= road_x0 && new_x <= road_x1 &&
+                new_y >= road_y0 && new_y <= road_y1) {
+                can_move = true;
                 break;
             }
         }
+        
+        if (can_move) {
+            dog.SetPosition({new_x, new_y});
+        } else {
+            dog.SetSpeed({0.0, 0.0});
+        }
     }
+}*/
+
+
+
+/*void GameSession::Tick(double delta_time) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
+    
+    for (auto& player : players_) {
+        auto& dog = player->GetDog();
+        auto pos = dog.GetPosition();
+        auto speed = dog.GetSpeed();
+
+        if (speed.x == 0.0 && speed.y == 0.0) continue;
+
+        double new_x = pos.x + speed.x * delta_time;
+        double new_y = pos.y + speed.y * delta_time;
+        
+        // Проверяем, можно ли двигаться в новую позицию
+        bool can_move = false;
+        
+        // Сначала проверяем текущую позицию
+        for (const auto& road : map_.GetRoads()) {
+            auto bbox = road.GetBoundingBox();
+            if (pos.x >= bbox.position.x && pos.x <= bbox.position.x + bbox.size.width &&
+                pos.y >= bbox.position.y && pos.y <= bbox.position.y + bbox.size.height) {
+                // Теперь проверяем новую позицию на ЭТОЙ ЖЕ дороге
+                if (new_x >= bbox.position.x && new_x <= bbox.position.x + bbox.size.width &&
+                    new_y >= bbox.position.y && new_y <= bbox.position.y + bbox.size.height) {
+                    can_move = true;
+                    break;
+                }
+            }
+        }
+        
+        if (can_move) {
+            dog.SetPosition({new_x, new_y});
+        } else {
+            dog.SetSpeed({0.0, 0.0});
+        }
+    }
+}*/
+
+
+
+
+
+
+
+
+void GameSession::Tick(double delta_time) {
+    std::cout << "=== GameSession::Tick START ===" << std::endl;
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    std::cout << "DEBUG: Players count: " << players_.size() << std::endl;
+    
+    // Генерация лута
+    GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
+    
+    for (auto& player : players_) {
+        auto& dog = player->GetDog();
+        auto pos = dog.GetPosition();
+        auto speed = dog.GetSpeed();
+        
+        std::cout << "DEBUG: Player " << *player->GetId() 
+                  << " - Pos: [" << pos.x << ", " << pos.y << "]"
+                  << " - Speed: [" << speed.x << ", " << speed.y << "]" 
+                  << " - Delta: " << delta_time << std::endl;
+
+        if (speed.x == 0.0 && speed.y == 0.0) {
+            std::cout << "DEBUG: Player " << *player->GetId() << " - No movement" << std::endl;
+            continue;
+        }
+
+        // ПРОСТО ДВИГАЕМСЯ БЕЗ ПРОВЕРОК!
+        double new_x = pos.x + speed.x * delta_time;
+        double new_y = pos.y + speed.y * delta_time;
+        
+        std::cout << "DEBUG: Player " << *player->GetId() 
+                  << " - New pos: [" << new_x << ", " << new_y << "]" << std::endl;
+        
+        dog.SetPosition({new_x, new_y});
+    }
+    
+    std::cout << "=== GameSession::Tick END ===" << std::endl;
 }
+
+
+
+
+
+
+
+
 
 std::string DirectionToString(Direction dir) {
     switch (dir) {
@@ -1126,6 +1175,7 @@ std::string DirectionToString(Direction dir) {
 #include <optional>
 #include <algorithm>
 #include <chrono>
+#include <iostream>
 
 #include "tagged.h"
 #include "loot_generator.h"
@@ -1186,13 +1236,13 @@ namespace model {
 
         Rectangle GetBoundingBox() const noexcept {
             if (IsHorizontal()) {
-                Coord x0 = std::min(start_.x, end_.x) - 0.4;
-                Coord x1 = std::max(start_.x, end_.x) + 0.4;
+                Coord x0 = std::min(start_.x, end_.x);
+                Coord x1 = std::max(start_.x, end_.x);
                 return { {x0, start_.y - 0.4}, {x1 - x0, 0.8} };
             }
             else {
-                Coord y0 = std::min(start_.y, end_.y) - 0.4;
-                Coord y1 = std::max(start_.y, end_.y) + 0.4;
+                Coord y0 = std::min(start_.y, end_.y);
+                Coord y1 = std::max(start_.y, end_.y);
                 return { {start_.x - 0.4, y0}, {0.8, y1 - y0} };
             }
         }
@@ -1383,7 +1433,7 @@ namespace model {
         }
 
         size_t GetMapLootTypesCount(const Map::Id& map_id) const {
-            std::lock_guard<std::mutex> lock(mutex_);
+            //std::lock_guard<std::mutex> lock(mutex_);
             if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
                 return it->second;
             }
@@ -1406,12 +1456,19 @@ namespace model {
             return nullptr;
         }
 
-        
-
         std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name);
 
         std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
             std::lock_guard<std::mutex> lock(mutex_);
+
+            // ������� ���������� �����
+            std::cout << "DEBUG: Looking for token: " << *token << std::endl;
+            std::cout << "DEBUG: Available tokens: ";
+            for (const auto& pair : token_to_player_) {
+                std::cout << *pair.first << " ";
+            }
+            std::cout << std::endl;
+
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 return it->second;
             }
@@ -1427,18 +1484,56 @@ namespace model {
             }
         }
 
-        void Tick(double delta_time) {
+        /*void Tick(double delta_time) {
+            std::cout << "Game::Tick called, delta: " << delta_time << std::endl;
             std::vector<std::shared_ptr<GameSession>> sessions;
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                for (auto& [_, session] : map_id_to_session_) {
+                for (auto& [map_id, session] : map_id_to_session_) {
                     sessions.push_back(session);
                 }
             }
             for (auto& session : sessions) {
                 session->Tick(delta_time);
             }
+        }*/
+
+
+
+
+
+
+        void Tick(double delta_time) {
+            std::cout << "=== Game::Tick START ===" << std::endl;
+
+            std::vector<std::shared_ptr<GameSession>> sessions;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                std::cout << "DEBUG: Total sessions: " << map_id_to_session_.size() << std::endl;
+
+                for (const auto& [map_id, session] : map_id_to_session_) {
+                    std::cout << "DEBUG: Session for map: " << *map_id
+                        << ", ID: " << *session->GetId() << std::endl;
+                    sessions.push_back(session);
+                }
+            }
+
+            std::cout << "DEBUG: Sessions to process: " << sessions.size() << std::endl;
+
+            for (auto& session : sessions) {
+                std::cout << "DEBUG: Calling GameSession::Tick for session: " << *session->GetId() << std::endl;
+                session->Tick(delta_time);
+            }
+
+            std::cout << "=== Game::Tick END ===" << std::endl;
         }
+
+
+
+
+
+
+
 
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;
@@ -1582,6 +1677,11 @@ StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
                                    "Invalid name", req);
         }
 
+
+        if (is_tick_automatic_) {
+        game_.Tick(0.5); // 500 ms в секундах
+    }
+
         auto player = game_.JoinGame(model::Map::Id{std::string(map_id)}, std::string(user_name));
         if (!player) {
             return MakeErrorResponse(http::status::not_found,
@@ -1671,7 +1771,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
         };
     }
 
-    // Р”РѕР±Р°РІР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕС‚РµСЂСЏРЅРЅС‹С… РїСЂРµРґРјРµС‚Р°С…
+    // Добавляем информацию о потерянных предметах
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (size_t i = 0; i < lost_objects.size(); ++i) {
@@ -1842,7 +1942,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Р—Р°РіСЂСѓР¶Р°РµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ JSON РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ lootTypes
+            // Загружаем оригинальный JSON для получения lootTypes
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -1854,7 +1954,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // РС‰РµРј РєР°СЂС‚Сѓ РІ РєРѕРЅС„РёРіРµ
+            // Ищем карту в конфиге
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -1869,7 +1969,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // РЎРѕР·РґР°РµРј РѕС‚РІРµС‚ СЃ lootTypes
+            // Создаем ответ с lootTypes
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},

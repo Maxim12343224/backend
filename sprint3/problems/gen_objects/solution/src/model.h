@@ -175,6 +175,7 @@ namespace model {
     };
 
     struct LostObject {
+        size_t id;
         size_t type;
         Point position;
     };
@@ -237,7 +238,8 @@ namespace model {
         bool randomize_spawn_points_;
         size_t loot_types_count_ = 0;
         std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
-        mutable std::mutex mutex_;
+        std::atomic<size_t> next_lost_object_id_{ 0 };
+        mutable std::recursive_mutex mutex_;  // »«Ã≈Õ≈ÕŒ: recursive_mutex ‚ÏÂÒÚÓ mutex
     };
 
     class Game {
@@ -263,12 +265,12 @@ namespace model {
         }
 
         void SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  // »«Ã≈Õ≈ÕŒ
             map_loot_types_count_[map_id] = count;
         }
 
         size_t GetMapLootTypesCount(const Map::Id& map_id) const {
-            //std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  // »«Ã≈Õ≈ÕŒ: ‰Ó·‡‚ÎÂÌ‡ ·ÎÓÍËÓ‚Í‡
             if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
                 return it->second;
             }
@@ -284,7 +286,7 @@ namespace model {
         }
 
         std::shared_ptr<GameSession> FindSession(const Map::Id& map_id) {
-            std::lock_guard<std::mutex> lock(mutex_);
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  // »«Ã≈Õ≈ÕŒ
             if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
                 return it->second;
             }
@@ -294,15 +296,7 @@ namespace model {
         std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name);
 
         std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
-            std::lock_guard<std::mutex> lock(mutex_);
-
-            // ƒÓ·‡‚ËÏ ÓÚÎ‡‰Ó˜Ì˚È ‚˚‚Ó‰
-            std::cout << "DEBUG: Looking for token: " << *token << std::endl;
-            std::cout << "DEBUG: Available tokens: ";
-            for (const auto& pair : token_to_player_) {
-                std::cout << *pair.first << " ";
-            }
-            std::cout << std::endl;
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  // »«Ã≈Õ≈ÕŒ
 
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 return it->second;
@@ -319,56 +313,19 @@ namespace model {
             }
         }
 
-        /*void Tick(double delta_time) {
-            std::cout << "Game::Tick called, delta: " << delta_time << std::endl;
-            std::vector<std::shared_ptr<GameSession>> sessions;
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                for (auto& [map_id, session] : map_id_to_session_) {
-                    sessions.push_back(session);
-                }
-            }
-            for (auto& session : sessions) {
-                session->Tick(delta_time);
-            }
-        }*/
-
-
-
-
-
-
         void Tick(double delta_time) {
-            std::cout << "=== Game::Tick START ===" << std::endl;
-
             std::vector<std::shared_ptr<GameSession>> sessions;
             {
-                std::lock_guard<std::mutex> lock(mutex_);
-                std::cout << "DEBUG: Total sessions: " << map_id_to_session_.size() << std::endl;
-
+                std::lock_guard<std::recursive_mutex> lock(mutex_);  // »«Ã≈Õ≈ÕŒ
                 for (const auto& [map_id, session] : map_id_to_session_) {
-                    std::cout << "DEBUG: Session for map: " << *map_id
-                        << ", ID: " << *session->GetId() << std::endl;
                     sessions.push_back(session);
                 }
             }
 
-            std::cout << "DEBUG: Sessions to process: " << sessions.size() << std::endl;
-
             for (auto& session : sessions) {
-                std::cout << "DEBUG: Calling GameSession::Tick for session: " << *session->GetId() << std::endl;
                 session->Tick(delta_time);
             }
-
-            std::cout << "=== Game::Tick END ===" << std::endl;
         }
-
-
-
-
-
-
-
 
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;
@@ -382,7 +339,7 @@ namespace model {
         std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
         double default_dog_speed_ = 1.0;
         bool randomize_spawn_points_ = false;
-        mutable std::mutex mutex_;
+        mutable std::recursive_mutex mutex_;  // »«Ã≈Õ≈ÕŒ: recursive_mutex ‚ÏÂÒÚÓ mutex
         std::atomic<uint32_t> next_session_id_{ 0 };
     };
 

@@ -48,5 +48,5 @@ COPY ./static /app/static
 ENTRYPOINT ["/app/game_server", \
     "-c", "/app/data/config.json", \
     "-w", "/app/static", \
-    "--tick-period", "500", \
-    "--randomize-spawn-points"]
+    "--randomize-spawn-points", \
+    "--tick-period", "500"]
