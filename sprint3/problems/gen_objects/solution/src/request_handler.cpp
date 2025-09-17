@@ -364,6 +364,13 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
     }
 
     if (req.target().starts_with("/api/v1/maps/")) {
+        // ДОБАВЛЕНА ПРОВЕРКА МЕТОДА
+        if (req.method() != http::verb::get && req.method() != http::verb::head) {
+            return MakeErrorResponse(http::status::method_not_allowed,
+                                   "invalidMethod",
+                                   "Only GET and HEAD methods are allowed", req);
+        }
+
         std::string target = req.target().to_string();
         size_t last_slash_pos = target.find_last_of('/');
         if (last_slash_pos == std::string::npos || last_slash_pos == target.size() - 1) {
