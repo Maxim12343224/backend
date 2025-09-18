@@ -118,11 +118,6 @@ StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
                                    "Invalid name", req);
         }
 
-
-        if (is_tick_automatic_) {
-        game_.Tick(0.5); // 500 ms в секундах
-    }
-
         auto player = game_.JoinGame(model::Map::Id{std::string(map_id)}, std::string(user_name));
         if (!player) {
             return MakeErrorResponse(http::status::not_found,
@@ -352,6 +347,14 @@ std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringReque
 
 StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
     if (req.target() == "/api/v1/maps") {
+        if (req.method() != http::verb::get && req.method() != http::verb::head) {
+            auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                           "invalidMethod",
+                                           "Only GET and HEAD methods are allowed", req);
+            response.set(http::field::allow, "GET, HEAD");
+            return response;
+        }
+
         json::array maps_json;
         for (const auto& map : game_.GetMaps()) {
             maps_json.push_back({
@@ -364,11 +367,12 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
     }
 
     if (req.target().starts_with("/api/v1/maps/")) {
-        // ДОБАВЛЕНА ПРОВЕРКА МЕТОДА
         if (req.method() != http::verb::get && req.method() != http::verb::head) {
-            return MakeErrorResponse(http::status::method_not_allowed,
-                                   "invalidMethod",
-                                   "Only GET and HEAD methods are allowed", req);
+            auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                           "invalidMethod",
+                                           "Only GET and HEAD methods are allowed", req);
+            response.set(http::field::allow, "GET, HEAD");
+            return response;
         }
 
         std::string target = req.target().to_string();
