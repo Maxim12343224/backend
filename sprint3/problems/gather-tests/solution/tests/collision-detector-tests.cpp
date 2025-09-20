@@ -3,6 +3,8 @@
 #include <catch2/matchers/catch_matchers_vector.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <sstream>  // Добавлен заголовок для std::ostringstream
+
 #include "../src/collision_detector.h"
 
 namespace collision_detector {
@@ -23,6 +25,7 @@ private:
     std::vector<Gatherer> gatherers_;
 };
 
+// Матчер для сравнения событий с учетом погрешности
 class GatheringEventMatcher : public Catch::Matchers::MatcherBase<GatheringEvent> {
 public:
     GatheringEventMatcher(size_t item_id, size_t gatherer_id, double sq_distance, double time)
@@ -51,111 +54,111 @@ GatheringEventMatcher EqualsEvent(size_t item_id, size_t gatherer_id,
     return GatheringEventMatcher(item_id, gatherer_id, sq_distance, time);
 }
 
-}  
+}  // namespace
+}  // namespace collision_detector
 
+// Специализация StringMaker должна быть в глобальном пространстве имен Catch
 namespace Catch {
 template<>
-struct StringMaker<GatheringEvent> {
-    static std::string convert(GatheringEvent const& value) {
+struct StringMaker<collision_detector::GatheringEvent> {
+    static std::string convert(collision_detector::GatheringEvent const& value) {
         std::ostringstream tmp;
         tmp << "(" << value.gatherer_id << "," << value.item_id << "," 
             << value.sq_distance << "," << value.time << ")";
         return tmp.str();
     }
 };
-}  
+}  // namespace Catch
 
 TEST_CASE("No events when no gatherers or items", "[collision_detector]") {
-    TestProvider provider({}, {});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({}, {});
+    auto events = collision_detector::FindGatherEvents(provider);
     REQUIRE(events.empty());
 }
 
 TEST_CASE("No events when gatherer doesn't move", "[collision_detector]") {
-    Gatherer stationary_gatherer{{0, 0}, {0, 0}, 0.5};
-    Item item{{5, 0}, 0.5};
+    collision_detector::Gatherer stationary_gatherer{{0, 0}, {0, 0}, 0.5};
+    collision_detector::Item item{{5, 0}, 0.5};
 
-    TestProvider provider({item}, {stationary_gatherer});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item}, {stationary_gatherer});
+    auto events = collision_detector::FindGatherEvents(provider);
     REQUIRE(events.empty());
 }
 
 TEST_CASE("Single gatherer collects single item", "[collision_detector]") {
-    Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
-    Item item{{5, 0}, 0.5};
+    collision_detector::Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
+    collision_detector::Item item{{5, 0}, 0.5};
 
-    TestProvider provider({item}, {gatherer});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item}, {gatherer});
+    auto events = collision_detector::FindGatherEvents(provider);
 
     REQUIRE(events.size() == 1);
-    CHECK_THAT(events[0], EqualsEvent(0, 0, 0.0, 0.5));
+    CHECK_THAT(events[0], collision_detector::EqualsEvent(0, 0, 0.0, 0.5));
 }
 
 TEST_CASE("Gatherer misses item by distance", "[collision_detector]") {
-    Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
-    Item item{{5, 1.1}, 0.5};
+    collision_detector::Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
+    collision_detector::Item item{{5, 1.1}, 0.5};  // Расстояние 1.1 > 0.5 + 0.5
 
-    TestProvider provider({item}, {gatherer});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item}, {gatherer});
+    auto events = collision_detector::FindGatherEvents(provider);
     REQUIRE(events.empty());
 }
 
 TEST_CASE("Gatherer misses item by projection", "[collision_detector]") {
-    Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
-    Item item{{15, 0}, 0.5};
+    collision_detector::Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
+    collision_detector::Item item{{15, 0}, 0.5};  // Проекция вне отрезка
 
-    TestProvider provider({item}, {gatherer});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item}, {gatherer});
+    auto events = collision_detector::FindGatherEvents(provider);
     REQUIRE(events.empty());
 }
 
 TEST_CASE("Multiple items collected in correct order", "[collision_detector]") {
-    Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
-    Item item1{{2, 0}, 0.5};
-    Item item2{{8, 0}, 0.5};
+    collision_detector::Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
+    collision_detector::Item item1{{2, 0}, 0.5};  // Время ~0.2
+    collision_detector::Item item2{{8, 0}, 0.5};  // Время ~0.8
 
-    TestProvider provider({item1, item2}, {gatherer});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item1, item2}, {gatherer});
+    auto events = collision_detector::FindGatherEvents(provider);
 
     REQUIRE(events.size() == 2);
     CHECK(events[0].time < events[1].time);
-    CHECK_THAT(events[0], EqualsEvent(0, 0, 0.0, 0.2));
-    CHECK_THAT(events[1], EqualsEvent(1, 0, 0.0, 0.8));
+    CHECK_THAT(events[0], collision_detector::EqualsEvent(0, 0, 0.0, 0.2));
+    CHECK_THAT(events[1], collision_detector::EqualsEvent(1, 0, 0.0, 0.8));
 }
 
 TEST_CASE("Multiple gatherers collect same item", "[collision_detector]") {
-    Gatherer gatherer1{{0, 0}, {10, 0}, 0.5};
-    Gatherer gatherer2{{0, 5}, {10, 5}, 0.5};
-    Item item{{5, 0}, 0.5};
+    collision_detector::Gatherer gatherer1{{0, 0}, {10, 0}, 0.5};
+    collision_detector::Gatherer gatherer2{{0, 5}, {10, 5}, 0.5};
+    collision_detector::Item item{{5, 0}, 0.5};  // Только первый gatherer сможет собрать
 
-    TestProvider provider({item}, {gatherer1, gatherer2});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item}, {gatherer1, gatherer2});
+    auto events = collision_detector::FindGatherEvents(provider);
 
     REQUIRE(events.size() == 1);
-    CHECK_THAT(events[0], EqualsEvent(0, 0, 0.0, 0.5));
+    CHECK_THAT(events[0], collision_detector::EqualsEvent(0, 0, 0.0, 0.5));
 }
 
 TEST_CASE("Diagonal movement collection", "[collision_detector]") {
-    Gatherer gatherer{{0, 0}, {10, 10}, 0.5};
-    Item item{{5, 5}, 0.5};
+    collision_detector::Gatherer gatherer{{0, 0}, {10, 10}, 0.5};
+    collision_detector::Item item{{5, 5}, 0.5};
 
-    TestProvider provider({item}, {gatherer});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item}, {gatherer});
+    auto events = collision_detector::FindGatherEvents(provider);
 
     REQUIRE(events.size() == 1);
-    CHECK_THAT(events[0], EqualsEvent(0, 0, 0.0, 0.5));
+    CHECK_THAT(events[0], collision_detector::EqualsEvent(0, 0, 0.0, 0.5));
 }
 
 TEST_CASE("Exact distance threshold", "[collision_detector]") {
-    Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
-    Item item1{{5, 1.0}, 0.5};
-    Item item2{{5, 1.0 + 1e-11}, 0.5};
+    collision_detector::Gatherer gatherer{{0, 0}, {10, 0}, 0.5};
+    collision_detector::Item item1{{5, 1.0}, 0.5};  // Расстояние 1.0 = 0.5 + 0.5
+    collision_detector::Item item2{{5, 1.0 + 1e-11}, 0.5};  // Слишком далеко
 
-    TestProvider provider({item1, item2}, {gatherer});
-    auto events = FindGatherEvents(provider);
+    collision_detector::TestProvider provider({item1, item2}, {gatherer});
+    auto events = collision_detector::FindGatherEvents(provider);
 
     REQUIRE(events.size() == 1);
-    CHECK_THAT(events[0], EqualsEvent(0, 0, 1.0, 0.5));
-}
-
+    CHECK_THAT(events[0], collision_detector::EqualsEvent(0, 0, 1.0, 0.5));
 }
