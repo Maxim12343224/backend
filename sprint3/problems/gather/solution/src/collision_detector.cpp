@@ -42,8 +42,8 @@ std::vector<GatheringEvent> FindGatherEvents(const ItemGathererProvider& provide
         for (size_t item_idx = 0; item_idx < provider.ItemsCount(); ++item_idx) {
             auto item = provider.GetItem(item_idx);
             
-           
-            double collect_radius = (gatherer.width + item.width) / 2.0;
+            
+            double collect_radius = gatherer.width + item.width;
             
             
             auto collection_result = TryCollectPoint(gatherer.start_pos, 
