@@ -25,6 +25,7 @@ add_executable(game_server
     src/logger.h
     src/loot_generator.cpp
     src/loot_generator.h
+    src/collision_detector.cpp
 )
 
 target_link_libraries(game_server PRIVATE        
@@ -42,6 +43,7 @@ add_executable(game_server_tests
     src/loot_generator.h
     src/loot_generator.cpp
     src/tagged.h
+    src/collision_detector.cpp
     tests/model-tests.cpp
     tests/loot_generator_tests.cpp
 )
