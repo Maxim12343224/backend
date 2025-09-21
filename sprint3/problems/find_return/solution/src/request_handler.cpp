@@ -10,6 +10,7 @@
 #include <optional>
 #include <random>
 #include <chrono>
+#include <cmath>
 
 namespace http_handler {
 namespace beast = boost::beast;
@@ -18,7 +19,18 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
-    json::value SerializeRoad(const model::Road& road) {
+
+
+
+
+    json::value serialize_number(double value) {
+    if (value == std::floor(value)) {
+        return json::value(static_cast<int64_t>(value));
+    }
+    return json::value(value);
+}
+
+json::value SerializeRoad(const model::Road& road) {
     if (road.IsHorizontal()) {
         return {
             {"x0", serialize_number(road.GetStart().x)},
@@ -33,7 +45,7 @@ namespace {
     };
 }
 
-    json::value SerializeBuilding(const model::Building& building) {
+json::value SerializeBuilding(const model::Building& building) {
     const auto& bounds = building.GetBounds();
     return {
         {"x", serialize_number(bounds.position.x)},
@@ -52,6 +64,7 @@ json::value SerializeOffice(const model::Office& office) {
         {"offsetY", serialize_number(office.GetOffset().dy)}
     };
 }
+
 } // namespace
 
 StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
