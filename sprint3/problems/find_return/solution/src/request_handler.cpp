@@ -19,39 +19,39 @@ namespace fs = std::filesystem;
 
 namespace {
     json::value SerializeRoad(const model::Road& road) {
-        if (road.IsHorizontal()) {
-            return {
-                {"x0", road.GetStart().x},
-                {"y0", road.GetStart().y},
-                {"x1", road.GetEnd().x}
-            };
-        }
+    if (road.IsHorizontal()) {
         return {
-            {"x0", road.GetStart().x},
-            {"y0", road.GetStart().y},
-            {"y1", road.GetEnd().y}
+            {"x0", serialize_number(road.GetStart().x)},
+            {"y0", serialize_number(road.GetStart().y)},
+            {"x1", serialize_number(road.GetEnd().x)}
         };
     }
+    return {
+        {"x0", serialize_number(road.GetStart().x)},
+        {"y0", serialize_number(road.GetStart().y)},
+        {"y1", serialize_number(road.GetEnd().y)}
+    };
+}
 
     json::value SerializeBuilding(const model::Building& building) {
-        const auto& bounds = building.GetBounds();
-        return {
-            {"x", bounds.position.x},
-            {"y", bounds.position.y},
-            {"w", bounds.size.width},
-            {"h", bounds.size.height}
-        };
-    }
+    const auto& bounds = building.GetBounds();
+    return {
+        {"x", serialize_number(bounds.position.x)},
+        {"y", serialize_number(bounds.position.y)},
+        {"w", serialize_number(bounds.size.width)},
+        {"h", serialize_number(bounds.size.height)}
+    };
+}
 
-    json::value SerializeOffice(const model::Office& office) {
-        return {
-            {"id", *office.GetId()},
-            {"x", office.GetPosition().x},
-            {"y", office.GetPosition().y},
-            {"offsetX", office.GetOffset().dx},
-            {"offsetY", office.GetOffset().dy}
-        };
-    }
+json::value SerializeOffice(const model::Office& office) {
+    return {
+        {"id", *office.GetId()},
+        {"x", serialize_number(office.GetPosition().x)},
+        {"y", serialize_number(office.GetPosition().y)},
+        {"offsetX", serialize_number(office.GetOffset().dx)},
+        {"offsetY", serialize_number(office.GetOffset().dy)}
+    };
+}
 } // namespace
 
 StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
@@ -431,7 +431,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // Создаем ответ с lootTypes
+            
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},
@@ -442,6 +442,12 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                     ? map_json.as_object()["lootTypes"] 
                     : json::array()}
             };
+
+            
+            if (map_json.as_object().contains("bagCapacity")) {
+                response_json.as_object()["bagCapacity"] = 
+                    map_json.as_object().at("bagCapacity");
+            }
 
             for (const auto& road : map->GetRoads()) {
                 response_json.as_object()["roads"].as_array().push_back(SerializeRoad(road));
