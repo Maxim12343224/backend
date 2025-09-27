@@ -165,7 +165,7 @@ json::value GameSerializer::SerializeGame(const model::Game& game) {
     json::array sessions_json;
     const auto& maps = game.GetMaps();
     for (const auto& map : maps) {
-        if (auto session = const_cast<Game&>(game).FindSession(map.GetId())) {
+        if (auto session = const_cast<model::Game&>(game).FindSession(map.GetId())) {
             sessions_json.push_back(SerializeSession(session));
         }
     }
