@@ -143,7 +143,11 @@ int main(int argc, const char* argv[]) {
         
         if (!state_file.empty()) {
             try {
-                state_manager.LoadState();
+                if (state_manager.LoadState()) {
+                    std::cout << "Game state loaded successfully from: " << state_file << std::endl;
+                } else {
+                    std::cout << "Starting with clean state" << std::endl;
+                }
             } catch (const std::exception& e) {
                 std::cerr << "Failed to load game state: " << e.what() << std::endl;
                 return EXIT_FAILURE;

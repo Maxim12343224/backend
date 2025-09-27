@@ -249,24 +249,11 @@ namespace model {
         void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
 
-        // ћетоды дл€ сериализации/десериализации
-        void AddRestoredPlayer(std::shared_ptr<Player> player) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            players_.push_back(player);
-        }
-
-        void AddRestoredLostObject(const LostObject& obj) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            lost_objects_.push_back(obj);
-        }
-
-        void SetNextLostObjectId(size_t id) {
-            next_lost_object_id_.store(id);
-        }
-
-        size_t GetNextLostObjectId() const {
-            return next_lost_object_id_.load();
-        }
+        // ћетоды дл€ сериализации/десериализации - только объ€влени€
+        void AddRestoredPlayer(std::shared_ptr<Player> player);
+        void AddRestoredLostObject(const LostObject& obj);
+        void SetNextLostObjectId(size_t id);
+        size_t GetNextLostObjectId() const;
 
     private:
         Id id_;
@@ -374,14 +361,7 @@ namespace model {
             return nullptr;
         }
 
-        std::vector<std::shared_ptr<Player>> GetAllPlayers() const {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            std::vector<std::shared_ptr<Player>> players;
-            for (const auto& [token, player] : token_to_player_) {
-                players.push_back(player);
-            }
-            return players;
-        }
+        std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
         void SetPlayerAction(const Player::Token& token, const std::string& move) {
             auto player = FindPlayerByToken(token);
@@ -406,14 +386,7 @@ namespace model {
             }
         }
 
-        void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            map_id_to_session_[map_id] = session;
-
-            for (const auto& player : session->GetPlayers()) {
-                token_to_player_[player->GetToken()] = player;
-            }
-        }
+        void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
 
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;

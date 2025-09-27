@@ -278,7 +278,6 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Сохраняем начальные позиции и вычисляем конечные
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
@@ -295,16 +294,13 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    // Обновляем позиции собак
     for (size_t i = 0; i < players_.size(); ++i) {
         auto& dog = players_[i]->GetDog();
         dog.SetPosition(end_positions[i]);
     }
     
-    // Создаем провайдер для предметов и сборщиков
     ItemGathererProviderImpl provider;
     
-    // Добавляем предметы
     for (const auto& obj : lost_objects_) {
         provider.items.push_back({
             {obj.position.x, obj.position.y},
@@ -313,7 +309,6 @@ void GameSession::Tick(double delta_time) {
         });
     }
     
-    // Добавляем игроков как сборщиков
     for (size_t i = 0; i < players_.size(); ++i) {
         provider.gatherers.push_back({
             {start_positions[i].x, start_positions[i].y},
@@ -324,7 +319,6 @@ void GameSession::Tick(double delta_time) {
         });
     }
     
-    // Добавляем офисы как "предметы" для возврата
     const auto& offices = map_.GetOffices();
     for (const auto& office : offices) {
         provider.items.push_back({
@@ -334,10 +328,8 @@ void GameSession::Tick(double delta_time) {
         });
     }
     
-    // Находим события сбора
     auto gather_events = collision_detector::FindGatherEvents(provider);
     
-    // Сортируем события по времени
     std::vector<Event> events;
     for (const auto& e : gather_events) {
         bool is_office = provider.items[e.item_id].id == std::numeric_limits<size_t>::max();
@@ -355,7 +347,6 @@ void GameSession::Tick(double delta_time) {
         return a.time < b.time;
     });
     
-    // Обрабатываем события в хронологическом порядке
     std::vector<LostObject> collected_items;
     std::vector<bool> item_processed(lost_objects_.size(), false);
     
@@ -381,7 +372,6 @@ void GameSession::Tick(double delta_time) {
         }
     }
     
-    // Удаляем собранные предметы
     auto new_end = std::remove_if(lost_objects_.begin(), lost_objects_.end(),
         [&](const LostObject& obj) {
             auto it = std::find_if(collected_items.begin(), collected_items.end(),
@@ -391,7 +381,7 @@ void GameSession::Tick(double delta_time) {
     lost_objects_.erase(new_end, lost_objects_.end());
 }
 
-// Методы для сериализации/десериализации (добавлены)
+// Реализации методов для сериализации/десериализации
 void GameSession::AddRestoredPlayer(std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     players_.push_back(player);
@@ -427,7 +417,6 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
         token_to_player_[player->GetToken()] = player;
     }
     
-    // Обновляем next_session_id_ если необходимо
     uint32_t session_id = *session->GetId();
     if (session_id >= next_session_id_.load()) {
         next_session_id_.store(session_id + 1);
