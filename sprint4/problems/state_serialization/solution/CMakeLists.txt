@@ -26,6 +26,8 @@ add_executable(game_server
     src/loot_generator.cpp
     src/loot_generator.h
     src/collision_detector.cpp
+    src/serializer.cpp
+    src/state_manager.cpp
 )
 
 target_link_libraries(game_server PRIVATE        
