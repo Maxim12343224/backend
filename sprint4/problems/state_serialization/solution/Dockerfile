@@ -34,10 +34,19 @@ RUN groupadd -r www && useradd -r -g www www
 USER www
 WORKDIR /app
 
+# Создаем директорию для файлов состояния
+RUN mkdir -p /app/state
+
 # Копируем бинарник из стадии сборки
 COPY --from=build /app/build/game_server /app/
 COPY --from=build /app/data /app/data
 COPY --from=build /app/static /app/static
 
-# Используем CMD вместо ENTRYPOINT для гибкости параметров
-CMD ["/app/game_server", "--config-file", "/app/data/config.json", "--www-root", "/app/static"]
+# Используем CMD с поддержкой параметров сериализации
+CMD ["/app/game_server", \
+    "--config-file", "/app/data/config.json", \
+    "--www-root", "/app/static", \
+    "--state-file", "/app/state/game_state.json", \
+    "--save-state-period", "5000", \
+    "--tick-period", "500", \
+    "--randomize-spawn-points"]
