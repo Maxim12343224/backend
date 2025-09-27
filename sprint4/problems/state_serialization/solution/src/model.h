@@ -342,6 +342,14 @@ namespace model {
             return nullptr;
         }
 
+        std::shared_ptr<const GameSession> FindSession(const Map::Id& map_id) const {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+                return it->second;
+            }
+            return nullptr;
+        }
+
         std::shared_ptr<GameSession> FindSession(const Map::Id& map_id) {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
             if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
