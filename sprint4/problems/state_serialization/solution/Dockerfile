@@ -38,7 +38,7 @@ WORKDIR /app
 RUN mkdir -p /app/state
 
 # Копируем бинарник из стадии сборки
-COPY --from=build /app/build/game_server /app/
+COPY --from=build /app/build/bin/game_server /app/
 COPY --from=build /app/data /app/data
 COPY --from=build /app/static /app/static
 
