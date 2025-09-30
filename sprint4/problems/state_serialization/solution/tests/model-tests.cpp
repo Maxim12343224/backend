@@ -10,7 +10,7 @@ TEST_CASE("GameSession loot generation") {
     map.AddRoad(model::Road{model::Road::HORIZONTAL, {0, 0}, 10});
     
     auto loot_gen = std::make_shared<loot_gen::LootGenerator>(1s, 1.0);
-    model::GameSession session(std::move(map), 0, 1.0, false, loot_gen);
+    model::GameSession session(std::move(map), 0, 1.0, false, loot_gen, 3);
     session.SetLootTypesCount(2);
     
     SECTION("Generate loot on empty map") {
