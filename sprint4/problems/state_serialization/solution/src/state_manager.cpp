@@ -11,10 +11,24 @@ StateManager::StateManager(model::Game& game,
     enabled_ = !state_file_.empty();
     
     if (enabled_) {
+        // Создаем директорию для файла состояния, если нужно
+        auto parent_path = state_file_.parent_path();
+        if (!parent_path.empty() && !std::filesystem::exists(parent_path)) {
+            std::error_code ec;
+            if (std::filesystem::create_directories(parent_path, ec)) {
+                std::cout << "Created state directory: " << parent_path << std::endl;
+            } else {
+                std::cerr << "Warning: Could not create state directory " 
+                          << parent_path << ": " << ec.message() << std::endl;
+            }
+        }
+        
         std::cout << "State management enabled. File: " << state_file_ << std::endl;
         if (save_period_.count() > 0) {
             std::cout << "Auto-save period: " << save_period_.count() << " ms" << std::endl;
         }
+    } else {
+        std::cout << "State management disabled" << std::endl;
     }
 }
 
@@ -47,6 +61,7 @@ void StateManager::SaveState() {
 
 bool StateManager::LoadState() {
     if (!enabled_) {
+        std::cout << "State management disabled, starting with clean state" << std::endl;
         return false;
     }
     

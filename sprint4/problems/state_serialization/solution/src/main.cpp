@@ -116,10 +116,26 @@ int main(int argc, const char* argv[]) {
     }
 
     try {
-        logger::InitLogging();
-        
+        // Проверка обязательных параметров
+        if (!vm.count("config-file") || !vm.count("www-root")) {
+            std::cerr << "Error: config-file and www-root are required" << std::endl;
+            return EXIT_FAILURE;
+        }
+
         const fs::path config_path(vm["config-file"].as<std::string>());
         const fs::path static_path(vm["www-root"].as<std::string>());
+        
+        // Проверка существования файлов
+        if (!fs::exists(config_path)) {
+            std::cerr << "Error: config file not found: " << config_path << std::endl;
+            return EXIT_FAILURE;
+        }
+        
+        if (!fs::exists(static_path)) {
+            std::cerr << "Error: static path not found: " << static_path << std::endl;
+            return EXIT_FAILURE;
+        }
+
         const bool randomize_spawn = vm.count("randomize-spawn-points") > 0;
         const int tick_period = vm.count("tick-period") ? vm["tick-period"].as<int>() : 0;
         const bool is_tick_automatic = tick_period > 0;
@@ -129,12 +145,33 @@ int main(int argc, const char* argv[]) {
         
         if (vm.count("state-file")) {
             state_file = vm["state-file"].as<std::string>();
+            
+            // Если путь относительный, создаем его относительно текущей директории
+            if (state_file.is_relative()) {
+                state_file = fs::current_path() / state_file;
+            }
+            
+            std::cout << "State file path: " << state_file << std::endl;
+            
+            // Создаем директорию заранее
+            auto parent_dir = state_file.parent_path();
+            if (!parent_dir.empty() && !fs::exists(parent_dir)) {
+                std::error_code ec;
+                if (fs::create_directories(parent_dir, ec)) {
+                    std::cout << "Created state directory: " << parent_dir << std::endl;
+                } else {
+                    std::cerr << "Warning: Could not create state directory: " 
+                              << ec.message() << std::endl;
+                }
+            }
         }
         
         if (vm.count("save-state-period")) {
             save_state_period = std::chrono::milliseconds(vm["save-state-period"].as<int>());
         }
 
+        logger::InitLogging();
+        
         model::Game game;
         json_loader::LoadGame(config_path, game);
         game.SetRandomizeSpawnPoints(randomize_spawn);

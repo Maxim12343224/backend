@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <filesystem>
 
 namespace serializer {
 
@@ -206,6 +207,18 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
 
 bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::path& path) {
     try {
+        // Создаем директорию, если она не существует
+        auto parent_dir = path.parent_path();
+        if (!parent_dir.empty() && !std::filesystem::exists(parent_dir)) {
+            std::error_code ec;
+            if (!std::filesystem::create_directories(parent_dir, ec)) {
+                std::cerr << "Failed to create directory " << parent_dir 
+                          << ": " << ec.message() << std::endl;
+                return false;
+            }
+            std::cout << "Created directory: " << parent_dir << std::endl;
+        }
+        
         auto temp_path = path;
         temp_path += ".tmp";
         
@@ -227,6 +240,8 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         }
         
         file.close();
+        
+        // Переименовываем временный файл в целевой
         std::filesystem::rename(temp_path, path);
         
         return true;
