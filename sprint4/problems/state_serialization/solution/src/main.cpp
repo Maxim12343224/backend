@@ -145,25 +145,6 @@ int main(int argc, const char* argv[]) {
         
         if (vm.count("state-file")) {
             state_file = vm["state-file"].as<std::string>();
-            
-            // Если путь относительный, создаем его относительно текущей директории
-            if (state_file.is_relative()) {
-                state_file = fs::current_path() / state_file;
-            }
-            
-            std::cout << "State file path: " << state_file << std::endl;
-            
-            // Создаем директорию заранее
-            auto parent_dir = state_file.parent_path();
-            if (!parent_dir.empty() && !fs::exists(parent_dir)) {
-                std::error_code ec;
-                if (fs::create_directories(parent_dir, ec)) {
-                    std::cout << "Created state directory: " << parent_dir << std::endl;
-                } else {
-                    std::cerr << "Warning: Could not create state directory: " 
-                              << ec.message() << std::endl;
-                }
-            }
         }
         
         if (vm.count("save-state-period")) {
@@ -178,14 +159,16 @@ int main(int argc, const char* argv[]) {
 
         StateManager state_manager(game, state_file, save_state_period);
         
+        // Загрузка состояния - если ошибка, просто продолжаем с чистым состоянием
         if (!state_file.empty()) {
             try {
                 if (state_manager.LoadState()) {
-                    std::cout << "Game state loaded successfully from: " << state_file << std::endl;
+                    std::cout << "Game state loaded successfully" << std::endl;
                 } else {
                     std::cout << "Starting with clean state" << std::endl;
                 }
             } catch (const std::exception& e) {
+                // Критическая ошибка формата файла - завершаем работу
                 std::cerr << "Failed to load game state: " << e.what() << std::endl;
                 return EXIT_FAILURE;
             }
@@ -201,7 +184,6 @@ int main(int argc, const char* argv[]) {
         };
 
         if (is_tick_automatic) {
-            std::cout << "Starting automatic ticker with period: " << tick_period << " ms" << std::endl;
             auto ticker = std::make_shared<Ticker>(
                 api_strand, 
                 std::chrono::milliseconds(tick_period),
@@ -213,7 +195,6 @@ int main(int argc, const char* argv[]) {
         net::signal_set signals(ioc, SIGINT, SIGTERM);
         signals.async_wait([&ioc, &state_manager](const boost::system::error_code& ec, int) {
             if (!ec) {
-                std::cout << "Received shutdown signal, saving state..." << std::endl;
                 state_manager.OnShutdown();
                 ioc.stop();
             }

@@ -2,7 +2,6 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-#include <filesystem>
 
 namespace serializer {
 
@@ -207,24 +206,11 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
 
 bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::path& path) {
     try {
-        // Создаем директорию, если она не существует
-        auto parent_dir = path.parent_path();
-        if (!parent_dir.empty() && !std::filesystem::exists(parent_dir)) {
-            std::error_code ec;
-            if (!std::filesystem::create_directories(parent_dir, ec)) {
-                std::cerr << "Failed to create directory " << parent_dir 
-                          << ": " << ec.message() << std::endl;
-                return false;
-            }
-            std::cout << "Created directory: " << parent_dir << std::endl;
-        }
-        
         auto temp_path = path;
         temp_path += ".tmp";
         
         std::ofstream file(temp_path, std::ios::binary);
         if (!file.is_open()) {
-            std::cerr << "Failed to open file for writing: " << temp_path << std::endl;
             return false;
         }
         
@@ -233,7 +219,6 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         file.write(json_str.c_str(), json_str.size());
         
         if (!file.good()) {
-            std::cerr << "Failed to write to file: " << temp_path << std::endl;
             file.close();
             std::filesystem::remove(temp_path);
             return false;
@@ -246,7 +231,6 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Error saving state: " << e.what() << std::endl;
         return false;
     }
 }
@@ -254,13 +238,11 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
 bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path& path) {
     try {
         if (!std::filesystem::exists(path)) {
-            std::cout << "State file does not exist, starting with clean state" << std::endl;
             return false;
         }
         
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
-            std::cerr << "Failed to open file for reading: " << path << std::endl;
             return false;
         }
         
@@ -269,7 +251,6 @@ bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path
         std::string json_str = buffer.str();
         
         if (json_str.empty()) {
-            std::cerr << "State file is empty" << std::endl;
             return false;
         }
         
@@ -278,8 +259,7 @@ bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path
         
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Error loading state from " << path << ": " << e.what() << std::endl;
-        throw;
+        throw std::runtime_error("Failed to load state: " + std::string(e.what()));
     }
 }
 
