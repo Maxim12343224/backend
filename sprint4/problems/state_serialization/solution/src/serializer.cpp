@@ -71,7 +71,6 @@ json::value SerializePlayer(const std::shared_ptr<model::Player>& player) {
         {"bag", bag_json}
     };
 }
-
 std::shared_ptr<model::Player> DeserializePlayer(
     const json::value& player_val, 
     std::shared_ptr<model::GameSession> session) {
@@ -79,13 +78,18 @@ std::shared_ptr<model::Player> DeserializePlayer(
     const auto& obj = player_val.as_object();
     
     uint32_t id = obj.at("id").as_uint64();
-    std::string token = obj.at("token").as_string().c_str();
+    std::string token_str = obj.at("token").as_string().c_str();
     model::Dog dog = DeserializeDog(obj.at("dog"));
     int score = obj.at("score").as_int64();
     size_t bag_capacity = obj.at("bag_capacity").as_uint64();
     
+    // СОЗДАЕМ ИГРОКА С СОХРАНЕННЫМ ТОКЕНОМ
     auto player = std::make_shared<model::Player>(
-        session, std::move(dog), id, token, bag_capacity
+        session, 
+        std::move(dog), 
+        id, 
+        token_str,  // ← ПЕРЕДАЕМ СОХРАНЕННЫЙ ТОКЕН
+        bag_capacity
     );
     
     player->AddScore(score);
