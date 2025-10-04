@@ -16,14 +16,20 @@ void StateManager::SetSavePeriod(std::chrono::milliseconds period) {
 }
 
 void StateManager::SaveState() {
+    std::cout << "DEBUG: SaveState called" << std::endl;
+    
     if (!enabled_ || is_saving_.exchange(true)) {
+        std::cout << "DEBUG: SaveState skipped - disabled or already saving" << std::endl;
         return;
     }
     
+    std::cout << "DEBUG: Attempting to save state to: " << state_file_ << std::endl;
+    
     try {
-        serializer::GameSerializer::SaveToFile(game_, state_file_);
+        bool result = serializer::GameSerializer::SaveToFile(game_, state_file_);
+        std::cout << "DEBUG: SaveState result: " << result << std::endl;
     } catch (const std::exception& e) {
-        
+        std::cerr << "DEBUG: SaveState error: " << e.what() << std::endl;
     }
     
     is_saving_.store(false);
@@ -43,12 +49,20 @@ bool StateManager::LoadState() {
 }
 
 void StateManager::OnTick(std::chrono::milliseconds delta) {
+    std::cout << "DEBUG: OnTick called, enabled: " << enabled_ 
+              << ", save_period: " << save_period_.count() 
+              << ", time_since_last_save: " << time_since_last_save_.count() << std::endl;
+    
     if (!enabled_ || save_period_.count() == 0) {
+        std::cout << "DEBUG: State saving disabled or period is 0" << std::endl;
         return;
     }
     
     time_since_last_save_ += delta;
+    std::cout << "DEBUG: time_since_last_save after add: " << time_since_last_save_.count() << std::endl;
+    
     if (time_since_last_save_ >= save_period_) {
+        std::cout << "DEBUG: Time to save! Calling SaveState()" << std::endl;
         SaveState();
         time_since_last_save_ = std::chrono::milliseconds(0);
     }
