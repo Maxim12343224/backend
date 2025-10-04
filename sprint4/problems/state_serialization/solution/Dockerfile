@@ -46,7 +46,3 @@ COPY --from=build /app/static /app/static
 CMD ["/app/game_server", \
     "--config-file", "/app/data/config.json", \
     "--www-root", "/app/static", \
-    "--state-file", "/app/state/game_state.json", \
-    "--save-state-period", "5000", \
-    "--tick-period", "500", \
-    "--randomize-spawn-points"]
