@@ -206,8 +206,17 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
 
 bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::path& path) {
     try {
+        if (path.empty()) {
+            return false;
+        }
+
         auto temp_path = path;
         temp_path += ".tmp";
+        
+        auto parent_dir = temp_path.parent_path();
+        if (!parent_dir.empty() && !std::filesystem::exists(parent_dir)) {
+            std::filesystem::create_directories(parent_dir);
+        }
         
         std::ofstream file(temp_path, std::ios::binary);
         if (!file.is_open()) {
@@ -226,11 +235,14 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         
         file.close();
         
-        // Переименовываем временный файл в целевой
         std::filesystem::rename(temp_path, path);
         
         return true;
     } catch (const std::exception& e) {
+        try {
+            std::filesystem::remove(path.string() + ".tmp");
+        } catch (...) {
+        }
         return false;
     }
 }

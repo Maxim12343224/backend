@@ -1,5 +1,10 @@
 #include "state_manager.h"
 #include <iostream>
+#include <boost/log/trivial.hpp>
+#include <boost/json.hpp>
+#include "logger.h"
+
+namespace json = boost::json;
 
 StateManager::StateManager(model::Game& game, 
                          std::filesystem::path state_file,
@@ -9,6 +14,13 @@ StateManager::StateManager(model::Game& game,
     , save_period_(save_period) {
     
     enabled_ = !state_file_.empty();
+    
+    if (enabled_) {
+        auto parent_path = state_file_.parent_path();
+        if (!parent_path.empty() && !std::filesystem::exists(parent_path)) {
+            std::filesystem::create_directories(parent_path);
+        }
+    }
 }
 
 void StateManager::SetSavePeriod(std::chrono::milliseconds period) {
@@ -16,20 +28,32 @@ void StateManager::SetSavePeriod(std::chrono::milliseconds period) {
 }
 
 void StateManager::SaveState() {
-    std::cout << "DEBUG: SaveState called" << std::endl;
-    
-    if (!enabled_ || is_saving_.exchange(true)) {
-        std::cout << "DEBUG: SaveState skipped - disabled or already saving" << std::endl;
+    if (!enabled_) {
         return;
     }
     
-    std::cout << "DEBUG: Attempting to save state to: " << state_file_ << std::endl;
+    bool expected = false;
+    if (!is_saving_.compare_exchange_strong(expected, true)) {
+        return;
+    }
     
     try {
         bool result = serializer::GameSerializer::SaveToFile(game_, state_file_);
-        std::cout << "DEBUG: SaveState result: " << result << std::endl;
+        
+        json::value save_data{
+            {"state_file", state_file_.string()},
+            {"success", result}
+        };
+        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, save_data)
+            << "state saved";
+            
     } catch (const std::exception& e) {
-        std::cerr << "DEBUG: SaveState error: " << e.what() << std::endl;
+        json::value error_data{
+            {"state_file", state_file_.string()},
+            {"error", e.what()}
+        };
+        BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, error_data)
+            << "state save error";
     }
     
     is_saving_.store(false);
@@ -41,28 +65,46 @@ bool StateManager::LoadState() {
     }
     
     try {
-        return serializer::GameSerializer::LoadFromFile(game_, state_file_);
-    } catch (const std::exception& e) {
+        if (!std::filesystem::exists(state_file_)) {
+            json::value info_data{
+                {"state_file", state_file_.string()},
+                {"info", "state file does not exist, starting fresh"}
+            };
+            BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, info_data)
+                << "state load";
+            return false;
+        }
         
+        bool result = serializer::GameSerializer::LoadFromFile(game_, state_file_);
+        
+        json::value load_data{
+            {"state_file", state_file_.string()},
+            {"success", result}
+        };
+        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, load_data)
+            << "state loaded";
+            
+        return result;
+        
+    } catch (const std::exception& e) {
+        json::value error_data{
+            {"state_file", state_file_.string()},
+            {"error", e.what()}
+        };
+        BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, error_data)
+            << "state load error";
         throw;
     }
 }
 
 void StateManager::OnTick(std::chrono::milliseconds delta) {
-    std::cout << "DEBUG: OnTick called, enabled: " << enabled_ 
-              << ", save_period: " << save_period_.count() 
-              << ", time_since_last_save: " << time_since_last_save_.count() << std::endl;
-    
     if (!enabled_ || save_period_.count() == 0) {
-        std::cout << "DEBUG: State saving disabled or period is 0" << std::endl;
         return;
     }
     
     time_since_last_save_ += delta;
-    std::cout << "DEBUG: time_since_last_save after add: " << time_since_last_save_.count() << std::endl;
     
     if (time_since_last_save_ >= save_period_) {
-        std::cout << "DEBUG: Time to save! Calling SaveState()" << std::endl;
         SaveState();
         time_since_last_save_ = std::chrono::milliseconds(0);
     }
@@ -73,4 +115,3 @@ void StateManager::OnShutdown() {
         SaveState();
     }
 }
-

@@ -784,10 +784,26 @@ int main(int argc, const char* argv[]) {
     }
 
     try {
-        logger::InitLogging();
-        
+        // Проверка обязательных параметров
+        if (!vm.count("config-file") || !vm.count("www-root")) {
+            std::cerr << "Error: config-file and www-root are required" << std::endl;
+            return EXIT_FAILURE;
+        }
+
         const fs::path config_path(vm["config-file"].as<std::string>());
         const fs::path static_path(vm["www-root"].as<std::string>());
+        
+        // Проверка существования файлов
+        if (!fs::exists(config_path)) {
+            std::cerr << "Error: config file not found: " << config_path << std::endl;
+            return EXIT_FAILURE;
+        }
+        
+        if (!fs::exists(static_path)) {
+            std::cerr << "Error: static path not found: " << static_path << std::endl;
+            return EXIT_FAILURE;
+        }
+
         const bool randomize_spawn = vm.count("randomize-spawn-points") > 0;
         const int tick_period = vm.count("tick-period") ? vm["tick-period"].as<int>() : 0;
         const bool is_tick_automatic = tick_period > 0;
@@ -803,20 +819,24 @@ int main(int argc, const char* argv[]) {
             save_state_period = std::chrono::milliseconds(vm["save-state-period"].as<int>());
         }
 
+        logger::InitLogging();
+        
         model::Game game;
         json_loader::LoadGame(config_path, game);
         game.SetRandomizeSpawnPoints(randomize_spawn);
 
         StateManager state_manager(game, state_file, save_state_period);
         
+        // Загрузка состояния - если ошибка, просто продолжаем с чистым состоянием
         if (!state_file.empty()) {
             try {
                 if (state_manager.LoadState()) {
-                    std::cout << "Game state loaded successfully from: " << state_file << std::endl;
+                    std::cout << "Game state loaded successfully" << std::endl;
                 } else {
                     std::cout << "Starting with clean state" << std::endl;
                 }
             } catch (const std::exception& e) {
+                // Критическая ошибка формата файла - завершаем работу
                 std::cerr << "Failed to load game state: " << e.what() << std::endl;
                 return EXIT_FAILURE;
             }
@@ -832,7 +852,6 @@ int main(int argc, const char* argv[]) {
         };
 
         if (is_tick_automatic) {
-            std::cout << "Starting automatic ticker with period: " << tick_period << " ms" << std::endl;
             auto ticker = std::make_shared<Ticker>(
                 api_strand, 
                 std::chrono::milliseconds(tick_period),
@@ -844,7 +863,6 @@ int main(int argc, const char* argv[]) {
         net::signal_set signals(ioc, SIGINT, SIGTERM);
         signals.async_wait([&ioc, &state_manager](const boost::system::error_code& ec, int) {
             if (!ec) {
-                std::cout << "Received shutdown signal, saving state..." << std::endl;
                 state_manager.OnShutdown();
                 ioc.stop();
             }
@@ -2770,7 +2788,6 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         
         std::ofstream file(temp_path, std::ios::binary);
         if (!file.is_open()) {
-            std::cerr << "Failed to open file for writing: " << temp_path << std::endl;
             return false;
         }
         
@@ -2779,18 +2796,18 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         file.write(json_str.c_str(), json_str.size());
         
         if (!file.good()) {
-            std::cerr << "Failed to write to file: " << temp_path << std::endl;
             file.close();
             std::filesystem::remove(temp_path);
             return false;
         }
         
         file.close();
+        
+        // Переименовываем временный файл в целевой
         std::filesystem::rename(temp_path, path);
         
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Error saving state: " << e.what() << std::endl;
         return false;
     }
 }
@@ -2798,13 +2815,11 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
 bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path& path) {
     try {
         if (!std::filesystem::exists(path)) {
-            std::cout << "State file does not exist, starting with clean state" << std::endl;
             return false;
         }
         
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
-            std::cerr << "Failed to open file for reading: " << path << std::endl;
             return false;
         }
         
@@ -2813,7 +2828,6 @@ bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path
         std::string json_str = buffer.str();
         
         if (json_str.empty()) {
-            std::cerr << "State file is empty" << std::endl;
             return false;
         }
         
@@ -2822,8 +2836,7 @@ bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path
         
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Error loading state from " << path << ": " << e.what() << std::endl;
-        throw;
+        throw std::runtime_error("Failed to load state: " + std::string(e.what()));
     }
 }
 
@@ -2861,37 +2874,27 @@ StateManager::StateManager(model::Game& game,
     , save_period_(save_period) {
     
     enabled_ = !state_file_.empty();
-    
-    if (enabled_) {
-        std::cout << "State management enabled. File: " << state_file_ << std::endl;
-        if (save_period_.count() > 0) {
-            std::cout << "Auto-save period: " << save_period_.count() << " ms" << std::endl;
-        }
-    }
 }
 
 void StateManager::SetSavePeriod(std::chrono::milliseconds period) {
     save_period_ = period;
-    if (enabled_ && save_period_.count() > 0) {
-        std::cout << "Auto-save period set to: " << save_period_.count() << " ms" << std::endl;
-    }
 }
 
 void StateManager::SaveState() {
+    std::cout << "DEBUG: SaveState called" << std::endl;
+    
     if (!enabled_ || is_saving_.exchange(true)) {
+        std::cout << "DEBUG: SaveState skipped - disabled or already saving" << std::endl;
         return;
     }
     
+    std::cout << "DEBUG: Attempting to save state to: " << state_file_ << std::endl;
+    
     try {
-        std::cout << "Saving game state to: " << state_file_ << std::endl;
-        
-        if (serializer::GameSerializer::SaveToFile(game_, state_file_)) {
-            std::cout << "Game state saved successfully" << std::endl;
-        } else {
-            std::cerr << "Failed to save game state" << std::endl;
-        }
+        bool result = serializer::GameSerializer::SaveToFile(game_, state_file_);
+        std::cout << "DEBUG: SaveState result: " << result << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Error saving game state: " << e.what() << std::endl;
+        std::cerr << "DEBUG: SaveState error: " << e.what() << std::endl;
     }
     
     is_saving_.store(false);
@@ -2903,28 +2906,28 @@ bool StateManager::LoadState() {
     }
     
     try {
-        std::cout << "Loading game state from: " << state_file_ << std::endl;
-        
-        if (serializer::GameSerializer::LoadFromFile(game_, state_file_)) {
-            std::cout << "Game state loaded successfully" << std::endl;
-            return true;
-        } else {
-            std::cout << "Starting with clean state" << std::endl;
-            return false;
-        }
+        return serializer::GameSerializer::LoadFromFile(game_, state_file_);
     } catch (const std::exception& e) {
-        std::cerr << "Error loading game state: " << e.what() << std::endl;
+        
         throw;
     }
 }
 
 void StateManager::OnTick(std::chrono::milliseconds delta) {
+    std::cout << "DEBUG: OnTick called, enabled: " << enabled_ 
+              << ", save_period: " << save_period_.count() 
+              << ", time_since_last_save: " << time_since_last_save_.count() << std::endl;
+    
     if (!enabled_ || save_period_.count() == 0) {
+        std::cout << "DEBUG: State saving disabled or period is 0" << std::endl;
         return;
     }
     
     time_since_last_save_ += delta;
+    std::cout << "DEBUG: time_since_last_save after add: " << time_since_last_save_.count() << std::endl;
+    
     if (time_since_last_save_ >= save_period_) {
+        std::cout << "DEBUG: Time to save! Calling SaveState()" << std::endl;
         SaveState();
         time_since_last_save_ = std::chrono::milliseconds(0);
     }
@@ -2932,10 +2935,11 @@ void StateManager::OnTick(std::chrono::milliseconds delta) {
 
 void StateManager::OnShutdown() {
     if (enabled_) {
-        std::cout << "Shutdown: saving game state..." << std::endl;
         SaveState();
     }
 }
+
+
 
 
 ===== state_manager.h =====

@@ -8,6 +8,7 @@
 #include <boost/json.hpp>
 #include <boost/log/trivial.hpp>
 #include "logger.h"
+#include "state_manager.h"
 
 namespace http_handler {
     namespace beast = boost::beast;
@@ -20,8 +21,12 @@ namespace http_handler {
 
     class RequestHandler {
     public:
-        explicit RequestHandler(model::Game& game, const fs::path& static_path, bool is_tick_automatic, const fs::path& config_path)
-            : game_{ game }, static_path_{ static_path }, is_tick_automatic_{ is_tick_automatic }, config_path_{ config_path } {
+        explicit RequestHandler(model::Game& game, const fs::path& static_path,
+            bool is_tick_automatic, const fs::path& config_path,
+            StateManager& state_manager)
+            : game_{ game }, static_path_{ static_path },
+            is_tick_automatic_{ is_tick_automatic }, config_path_{ config_path },
+            state_manager_{ state_manager } {
         }
 
         RequestHandler(const RequestHandler&) = delete;
@@ -29,7 +34,8 @@ namespace http_handler {
 
         RequestHandler(RequestHandler&& other) noexcept
             : game_{ other.game_ }, static_path_{ std::move(other.static_path_) },
-            is_tick_automatic_{ other.is_tick_automatic_ }, config_path_{ std::move(other.config_path_) } {
+            is_tick_automatic_{ other.is_tick_automatic_ }, config_path_{ std::move(other.config_path_) },
+            state_manager_{ other.state_manager_ } {
         }
 
         template <typename Body, typename Allocator, typename Send>
@@ -98,6 +104,7 @@ namespace http_handler {
         fs::path static_path_;
         bool is_tick_automatic_;
         fs::path config_path_;
+        StateManager& state_manager_;
 
         StringResponse HandleApiRequest(StringRequest&& req);
         StringResponse HandleStaticRequest(StringRequest&& req);

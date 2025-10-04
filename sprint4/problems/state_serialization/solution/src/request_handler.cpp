@@ -342,7 +342,9 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
+        auto delta_ms = std::chrono::milliseconds(delta);
         game_.Tick(static_cast<double>(delta) / 1000.0);
+        state_manager_.OnTick(delta_ms);
 
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {

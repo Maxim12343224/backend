@@ -116,7 +116,6 @@ int main(int argc, const char* argv[]) {
     }
 
     try {
-        // Проверка обязательных параметров
         if (!vm.count("config-file") || !vm.count("www-root")) {
             std::cerr << "Error: config-file and www-root are required" << std::endl;
             return EXIT_FAILURE;
@@ -125,7 +124,6 @@ int main(int argc, const char* argv[]) {
         const fs::path config_path(vm["config-file"].as<std::string>());
         const fs::path static_path(vm["www-root"].as<std::string>());
         
-        // Проверка существования файлов
         if (!fs::exists(config_path)) {
             std::cerr << "Error: config file not found: " << config_path << std::endl;
             return EXIT_FAILURE;
@@ -159,16 +157,14 @@ int main(int argc, const char* argv[]) {
 
         StateManager state_manager(game, state_file, save_state_period);
         
-        // Загрузка состояния - если ошибка, просто продолжаем с чистым состоянием
         if (!state_file.empty()) {
             try {
-                if (state_manager.LoadState()) {
-                    std::cout << "Game state loaded successfully" << std::endl;
-                } else {
+                if (!state_manager.LoadState()) {
                     std::cout << "Starting with clean state" << std::endl;
+                } else {
+                    std::cout << "Game state loaded successfully" << std::endl;
                 }
             } catch (const std::exception& e) {
-                // Критическая ошибка формата файла - завершаем работу
                 std::cerr << "Failed to load game state: " << e.what() << std::endl;
                 return EXIT_FAILURE;
             }
@@ -200,7 +196,9 @@ int main(int argc, const char* argv[]) {
             }
         });
 
-        http_handler::RequestHandler base_handler{ game, static_path, is_tick_automatic, config_path };
+        http_handler::RequestHandler base_handler{ 
+            game, static_path, is_tick_automatic, config_path, state_manager 
+        };
         http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
 
         const auto address = net::ip::make_address("0.0.0.0");
