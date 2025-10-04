@@ -342,6 +342,7 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
+        // ВАЖНО: Вызываем StateManager для ручных тиков
         auto delta_ms = std::chrono::milliseconds(delta);
         game_.Tick(static_cast<double>(delta) / 1000.0);
         state_manager_.OnTick(delta_ms);

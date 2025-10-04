@@ -32,7 +32,7 @@ model::Dog DeserializeDog(const json::value& dog_val) {
     
     model::Dog dog(name, position);
     dog.SetSpeed(DeserializePoint(obj.at("speed")));
-    dog.SetDirection(static_cast<model::Direction>(obj.at("direction").as_int64()));
+    dog.SetDirection(static_cast<model::Direction>(obj.at("direction").as_uint64()));
     
     return dog;
 }
@@ -205,29 +205,41 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
 }
 
 bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::path& path) {
+    std::cout << "DEBUG: GameSerializer::SaveToFile - path: " << path.string() << std::endl;
+    
     try {
         if (path.empty()) {
+            std::cout << "DEBUG: SaveToFile - empty path, returning false" << std::endl;
             return false;
         }
 
         auto temp_path = path;
         temp_path += ".tmp";
         
+        std::cout << "DEBUG: SaveToFile - temp path: " << temp_path.string() << std::endl;
+        
+        // Создаем директорию, если не существует
         auto parent_dir = temp_path.parent_path();
         if (!parent_dir.empty() && !std::filesystem::exists(parent_dir)) {
+            std::cout << "DEBUG: SaveToFile - creating directory: " << parent_dir.string() << std::endl;
             std::filesystem::create_directories(parent_dir);
         }
         
+        std::cout << "DEBUG: SaveToFile - opening file: " << temp_path.string() << std::endl;
         std::ofstream file(temp_path, std::ios::binary);
         if (!file.is_open()) {
+            std::cout << "DEBUG: SaveToFile - failed to open file" << std::endl;
             return false;
         }
         
         auto state = SerializeGame(game);
         std::string json_str = json::serialize(state);
+        
+        std::cout << "DEBUG: SaveToFile - writing " << json_str.size() << " bytes" << std::endl;
         file.write(json_str.c_str(), json_str.size());
         
         if (!file.good()) {
+            std::cout << "DEBUG: SaveToFile - file write failed" << std::endl;
             file.close();
             std::filesystem::remove(temp_path);
             return false;
@@ -235,13 +247,24 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         
         file.close();
         
+        std::cout << "DEBUG: SaveToFile - renaming " << temp_path.string() << " to " << path.string() << std::endl;
+        
+        // Атомарная замена файла
         std::filesystem::rename(temp_path, path);
         
+        std::cout << "DEBUG: SaveToFile - SUCCESS" << std::endl;
         return true;
+        
     } catch (const std::exception& e) {
+        std::cout << "DEBUG: SaveToFile - EXCEPTION: " << e.what() << std::endl;
+        // Удаляем временный файл в случае ошибки
         try {
-            std::filesystem::remove(path.string() + ".tmp");
+            auto temp_path = path.string() + ".tmp";
+            if (std::filesystem::exists(temp_path)) {
+                std::filesystem::remove(temp_path);
+            }
         } catch (...) {
+            // Игнорируем ошибки удаления
         }
         return false;
     }
