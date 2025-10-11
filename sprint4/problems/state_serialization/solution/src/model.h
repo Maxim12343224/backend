@@ -249,7 +249,7 @@ namespace model {
         void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
 
-        // Методы для сериализации/десериализации - только объявления
+        // Методы для восстановления состояния
         void AddRestoredPlayer(std::shared_ptr<Player> player);
         void AddRestoredLostObject(const LostObject& obj);
         void SetNextLostObjectId(size_t id);
@@ -394,7 +394,9 @@ namespace model {
             }
         }
 
+        // Методы для восстановления состояния
         void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
+        void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
 
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;

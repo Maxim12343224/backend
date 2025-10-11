@@ -101,11 +101,11 @@ SerPlayer DeserializePlayer(const json::value& player_val) {
     }
     
     return {
-        obj.at("id").as_uint64(),
-        obj.at("token").as_string().c_str(),
+        static_cast<uint32_t>(obj.at("id").as_uint64()),
+        std::string(obj.at("token").as_string()),
         DeserializeDog(obj.at("dog")),
-        obj.at("score").as_int64(),
-        obj.at("bag_capacity").as_uint64(),
+        static_cast<int>(obj.at("score").as_int64()),
+        static_cast<size_t>(obj.at("bag_capacity").as_uint64()),
         bag
     };
 }
@@ -147,10 +147,10 @@ SerGameSession DeserializeSession(const json::value& session_val) {
     }
     
     return {
-        obj.at("id").as_uint64(),
-        obj.at("map_id").as_string().c_str(),
+        static_cast<uint32_t>(obj.at("id").as_uint64()),
+        std::string(obj.at("map_id").as_string()),
         obj.at("dog_speed").as_double(),
-        obj.at("next_lost_object_id").as_uint64(),
+        static_cast<size_t>(obj.at("next_lost_object_id").as_uint64()),
         players,
         lost_objects
     };
@@ -172,6 +172,7 @@ json::value GameSerializer::SerializeGame(const model::Game& game) {
     }
     state["sessions"] = sessions_json;
     
+    // Явно сериализуем mapping токенов
     json::object token_map;
     auto players = game.GetAllPlayers();
     for (const auto& player : players) {
@@ -194,8 +195,12 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
     }
     
     if (obj.contains("default_bag_capacity")) {
-        game.SetDefaultBagCapacity(obj.at("default_bag_capacity").as_uint64());
+        game.SetDefaultBagCapacity(static_cast<size_t>(obj.at("default_bag_capacity").as_uint64()));
     }
+    
+    // Создаем временный mapping для восстановления токенов
+    std::unordered_map<uint32_t, std::shared_ptr<model::Player>> player_id_to_player;
+    std::vector<std::pair<std::string, std::shared_ptr<model::GameSession>>> sessions_to_add;
     
     if (obj.contains("sessions")) {
         const auto& sessions_arr = obj.at("sessions").as_array();
@@ -216,7 +221,7 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
             session->SetLootValues(game.GetMapLootValues(model::Map::Id{ser_session.map_id}));
             session->SetNextLostObjectId(ser_session.next_lost_object_id);
             
-            // Восстанавливаем игроков
+            // Восстанавливаем игроков и сохраняем их в mapping
             for (const auto& ser_player : ser_session.players) {
                 auto dog = ser_player.dog.ToModel();
                 auto player = std::make_shared<model::Player>(
@@ -230,6 +235,9 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                 }
                 
                 session->AddRestoredPlayer(player);
+                player_id_to_player[ser_player.id] = player;
+                std::cout << "DEBUG: Created player ID: " << ser_player.id 
+                          << " with token: " << ser_player.token << std::endl;
             }
             
             // Восстанавливаем потерянные предметы
@@ -237,9 +245,39 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                 session->AddRestoredLostObject(ser_obj.ToModel());
             }
             
-            game.AddRestoredSession(model::Map::Id{ser_session.map_id}, session);
+            sessions_to_add.emplace_back(ser_session.map_id, session);
         }
     }
+    
+    // Явно восстанавливаем mapping токенов
+    if (obj.contains("token_to_player")) {
+        const auto& token_map = obj.at("token_to_player").as_object();
+        for (const auto& [token_str, player_id_val] : token_map) {
+            uint32_t player_id = static_cast<uint32_t>(player_id_val.as_uint64());
+            auto it = player_id_to_player.find(player_id);
+            if (it != player_id_to_player.end()) {
+                game.RestoreTokenToPlayerMapping(
+                    model::Player::Token{std::string(token_str)}, 
+                    it->second
+                );
+                std::cout << "DEBUG: Restored token mapping: " << token_str 
+                          << " -> player " << player_id << std::endl;
+            } else {
+                std::cout << "DEBUG: WARNING - Player not found for token: " << token_str 
+                          << ", player ID: " << player_id << std::endl;
+            }
+        }
+    } else {
+        std::cout << "DEBUG: WARNING - No token_to_player found in saved state" << std::endl;
+    }
+    
+    // Добавляем сессии в игру
+    for (auto& [map_id, session] : sessions_to_add) {
+        game.AddRestoredSession(model::Map::Id{map_id}, session);
+    }
+    
+    std::cout << "DEBUG: DeserializeGame completed. Total players: " 
+              << player_id_to_player.size() << std::endl;
 }
 
 bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::path& path) {

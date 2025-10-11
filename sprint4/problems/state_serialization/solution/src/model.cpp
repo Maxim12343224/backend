@@ -413,14 +413,26 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     map_id_to_session_[map_id] = session;
     
+    // Восстанавливаем mapping токенов для игроков этой сессии
     for (const auto& player : session->GetPlayers()) {
         token_to_player_[player->GetToken()] = player;
+        std::cout << "DEBUG: AddRestoredSession - Added token: " << *player->GetToken() 
+                  << " for player ID: " << *player->GetId() << std::endl;
     }
     
     uint32_t session_id = *session->GetId();
     if (session_id >= next_session_id_.load()) {
         next_session_id_.store(session_id + 1);
     }
+    
+    std::cout << "DEBUG: AddRestoredSession completed. Total tokens: " << token_to_player_.size() << std::endl;
+}
+
+void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    token_to_player_[token] = player;
+    std::cout << "DEBUG: RestoreTokenToPlayerMapping - token: " << *token 
+              << " -> player ID: " << *player->GetId() << std::endl;
 }
 
 std::string DirectionToString(Direction dir) {

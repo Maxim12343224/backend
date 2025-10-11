@@ -784,7 +784,6 @@ int main(int argc, const char* argv[]) {
     }
 
     try {
-        // Проверка обязательных параметров
         if (!vm.count("config-file") || !vm.count("www-root")) {
             std::cerr << "Error: config-file and www-root are required" << std::endl;
             return EXIT_FAILURE;
@@ -793,7 +792,6 @@ int main(int argc, const char* argv[]) {
         const fs::path config_path(vm["config-file"].as<std::string>());
         const fs::path static_path(vm["www-root"].as<std::string>());
         
-        // Проверка существования файлов
         if (!fs::exists(config_path)) {
             std::cerr << "Error: config file not found: " << config_path << std::endl;
             return EXIT_FAILURE;
@@ -827,20 +825,21 @@ int main(int argc, const char* argv[]) {
 
         StateManager state_manager(game, state_file, save_state_period);
         
-        // Загрузка состояния - если ошибка, просто продолжаем с чистым состоянием
-        if (!state_file.empty()) {
-            try {
-                if (state_manager.LoadState()) {
-                    std::cout << "Game state loaded successfully" << std::endl;
-                } else {
-                    std::cout << "Starting with clean state" << std::endl;
-                }
-            } catch (const std::exception& e) {
-                // Критическая ошибка формата файла - завершаем работу
-                std::cerr << "Failed to load game state: " << e.what() << std::endl;
-                return EXIT_FAILURE;
-            }
+        // В функции main, после создания StateManager, замените блок загрузки состояния на:
+if (!state_file.empty()) {
+    try {
+        if (!state_manager.LoadState()) {
+            std::cout << "Starting with clean state" << std::endl;
+        } else {
+            std::cout << "Game state loaded successfully" << std::endl;
         }
+    } catch (const std::exception& e) {
+        // ВАЖНО: Не завершаем работу при ошибке загрузки состояния
+        // Продолжаем с чистым состоянием вместо завершения работы
+        std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
+        // НЕ возвращаем EXIT_FAILURE - продолжаем работу!
+    }
+}
 
         const unsigned num_threads = std::thread::hardware_concurrency();
         net::io_context ioc(num_threads);
@@ -868,7 +867,9 @@ int main(int argc, const char* argv[]) {
             }
         });
 
-        http_handler::RequestHandler base_handler{ game, static_path, is_tick_automatic, config_path };
+        http_handler::RequestHandler base_handler{ 
+            game, static_path, is_tick_automatic, config_path, state_manager 
+        };
         http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
 
         const auto address = net::ip::make_address("0.0.0.0");
@@ -1327,14 +1328,19 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     map_id_to_session_[map_id] = session;
     
+    // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Добавляем игроков в карту токенов
     for (const auto& player : session->GetPlayers()) {
         token_to_player_[player->GetToken()] = player;
+        std::cout << "DEBUG: AddRestoredSession - Added token: " << *player->GetToken() 
+                  << " for player ID: " << *player->GetId() << std::endl;
     }
     
     uint32_t session_id = *session->GetId();
     if (session_id >= next_session_id_.load()) {
         next_session_id_.store(session_id + 1);
     }
+    
+    std::cout << "DEBUG: AddRestoredSession completed. Total tokens: " << token_to_player_.size() << std::endl;
 }
 
 std::string DirectionToString(Direction dir) {
@@ -2118,7 +2124,10 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
+        // ВАЖНО: Вызываем StateManager для ручных тиков
+        auto delta_ms = std::chrono::milliseconds(delta);
         game_.Tick(static_cast<double>(delta) / 1000.0);
+        state_manager_.OnTick(delta_ms);
 
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {
@@ -2405,6 +2414,7 @@ bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
 #include <boost/json.hpp>
 #include <boost/log/trivial.hpp>
 #include "logger.h"
+#include "state_manager.h"
 
 namespace http_handler {
     namespace beast = boost::beast;
@@ -2417,8 +2427,12 @@ namespace http_handler {
 
     class RequestHandler {
     public:
-        explicit RequestHandler(model::Game& game, const fs::path& static_path, bool is_tick_automatic, const fs::path& config_path)
-            : game_{ game }, static_path_{ static_path }, is_tick_automatic_{ is_tick_automatic }, config_path_{ config_path } {
+        explicit RequestHandler(model::Game& game, const fs::path& static_path,
+            bool is_tick_automatic, const fs::path& config_path,
+            StateManager& state_manager)
+            : game_{ game }, static_path_{ static_path },
+            is_tick_automatic_{ is_tick_automatic }, config_path_{ config_path },
+            state_manager_{ state_manager } {
         }
 
         RequestHandler(const RequestHandler&) = delete;
@@ -2426,7 +2440,8 @@ namespace http_handler {
 
         RequestHandler(RequestHandler&& other) noexcept
             : game_{ other.game_ }, static_path_{ std::move(other.static_path_) },
-            is_tick_automatic_{ other.is_tick_automatic_ }, config_path_{ std::move(other.config_path_) } {
+            is_tick_automatic_{ other.is_tick_automatic_ }, config_path_{ std::move(other.config_path_) },
+            state_manager_{ other.state_manager_ } {
         }
 
         template <typename Body, typename Allocator, typename Send>
@@ -2495,6 +2510,7 @@ namespace http_handler {
         fs::path static_path_;
         bool is_tick_automatic_;
         fs::path config_path_;
+        StateManager& state_manager_;
 
         StringResponse HandleApiRequest(StringRequest&& req);
         StringResponse HandleStaticRequest(StringRequest&& req);
@@ -2584,6 +2600,7 @@ namespace serializer {
 
 namespace json = boost::json;
 
+// Сериализация DTO классов
 json::value SerializePoint(const model::Point& point) {
     return json::array{point.x, point.y};
 }
@@ -2593,28 +2610,46 @@ model::Point DeserializePoint(const json::value& point_val) {
     return {arr[0].as_double(), arr[1].as_double()};
 }
 
-json::value SerializeDog(const model::Dog& dog) {
+json::value SerializeDirection(model::Direction dir) {
+    switch (dir) {
+        case model::Direction::North: return "U";
+        case model::Direction::South: return "D";
+        case model::Direction::West: return "L";
+        case model::Direction::East: return "R";
+    }
+    return "U";
+}
+
+model::Direction DeserializeDirection(const json::value& dir_val) {
+    std::string dir_str = dir_val.as_string().c_str();
+    if (dir_str == "U") return model::Direction::North;
+    if (dir_str == "D") return model::Direction::South;
+    if (dir_str == "L") return model::Direction::West;
+    if (dir_str == "R") return model::Direction::East;
+    return model::Direction::North;
+}
+
+// Сериализация DTO объектов
+json::value SerializeDog(const SerDog& dog) {
     return {
-        {"name", dog.GetName()},
-        {"position", SerializePoint(dog.GetPosition())},
-        {"speed", SerializePoint(dog.GetSpeed())},
-        {"direction", static_cast<int>(dog.GetDirection())}
+        {"name", dog.name},
+        {"position", SerializePoint(dog.position)},
+        {"speed", SerializePoint(dog.speed)},
+        {"direction", SerializeDirection(dog.direction)}
     };
 }
 
-model::Dog DeserializeDog(const json::value& dog_val) {
+SerDog DeserializeDog(const json::value& dog_val) {
     const auto& obj = dog_val.as_object();
-    std::string name = obj.at("name").as_string().c_str();
-    model::Point position = DeserializePoint(obj.at("position"));
-    
-    model::Dog dog(name, position);
-    dog.SetSpeed(DeserializePoint(obj.at("speed")));
-    dog.SetDirection(static_cast<model::Direction>(obj.at("direction").as_int64()));
-    
-    return dog;
+    return {
+        obj.at("name").as_string().c_str(),
+        DeserializePoint(obj.at("position")),
+        DeserializePoint(obj.at("speed")),
+        DeserializeDirection(obj.at("direction"))
+    };
 }
 
-json::value SerializeLostObject(const model::LostObject& obj) {
+json::value SerializeLostObject(const SerLostObject& obj) {
     return {
         {"id", obj.id},
         {"type", obj.type},
@@ -2623,7 +2658,7 @@ json::value SerializeLostObject(const model::LostObject& obj) {
     };
 }
 
-model::LostObject DeserializeLostObject(const json::value& obj_val) {
+SerLostObject DeserializeLostObject(const json::value& obj_val) {
     const auto& obj = obj_val.as_object();
     return {
         obj.at("id").as_uint64(),
@@ -2633,117 +2668,99 @@ model::LostObject DeserializeLostObject(const json::value& obj_val) {
     };
 }
 
-json::value SerializePlayer(const std::shared_ptr<model::Player>& player) {
+json::value SerializePlayer(const SerPlayer& player) {
     json::array bag_json;
-    for (const auto& item : player->GetBag()) {
+    for (const auto& item : player.bag) {
         bag_json.push_back(SerializeLostObject(item));
     }
     
     return {
-        {"id", *player->GetId()},
-        {"token", *player->GetToken()},
-        {"dog", SerializeDog(player->GetDog())},
-        {"score", player->GetScore()},
-        {"bag_capacity", player->GetBagCapacity()},
+        {"id", player.id},
+        {"token", player.token},
+        {"dog", SerializeDog(player.dog)},
+        {"score", player.score},
+        {"bag_capacity", player.bag_capacity},
         {"bag", bag_json}
     };
 }
 
-std::shared_ptr<model::Player> DeserializePlayer(
-    const json::value& player_val, 
-    std::shared_ptr<model::GameSession> session) {
-    
+SerPlayer DeserializePlayer(const json::value& player_val) {
     const auto& obj = player_val.as_object();
     
-    uint32_t id = obj.at("id").as_uint64();
-    std::string token = obj.at("token").as_string().c_str();
-    model::Dog dog = DeserializeDog(obj.at("dog"));
-    int score = obj.at("score").as_int64();
-    size_t bag_capacity = obj.at("bag_capacity").as_uint64();
-    
-    auto player = std::make_shared<model::Player>(
-        session, std::move(dog), id, token, bag_capacity
-    );
-    
-    player->AddScore(score);
-    
+    std::vector<SerLostObject> bag;
     const auto& bag_arr = obj.at("bag").as_array();
     for (const auto& item_val : bag_arr) {
-        player->AddItemToBag(DeserializeLostObject(item_val));
+        bag.push_back(DeserializeLostObject(item_val));
     }
     
-    return player;
+    return {
+        static_cast<uint32_t>(obj.at("id").as_uint64()),  // Явное приведение
+        std::string(obj.at("token").as_string()),
+        DeserializeDog(obj.at("dog")),
+        static_cast<int>(obj.at("score").as_int64()),     // Явное приведение
+        static_cast<size_t>(obj.at("bag_capacity").as_uint64()),
+        bag
+    };
 }
 
-json::value SerializeSession(const std::shared_ptr<model::GameSession>& session) {
+json::value SerializeSession(const SerGameSession& session) {
     json::array players_json;
-    for (const auto& player : session->GetPlayers()) {
+    for (const auto& player : session.players) {
         players_json.push_back(SerializePlayer(player));
     }
     
     json::array lost_objects_json;
-    for (const auto& obj : session->GetLostObjects()) {
+    for (const auto& obj : session.lost_objects) {
         lost_objects_json.push_back(SerializeLostObject(obj));
     }
     
     return {
-        {"id", *session->GetId()},
-        {"map_id", *session->GetMap().GetId()},
-        {"dog_speed", session->GetDogSpeed()},
-        {"next_lost_object_id", session->GetNextLostObjectId()},
+        {"id", session.id},
+        {"map_id", session.map_id},
+        {"dog_speed", session.dog_speed},
+        {"next_lost_object_id", session.next_lost_object_id},
         {"players", players_json},
         {"lost_objects", lost_objects_json}
     };
 }
 
-void DeserializeSession(model::Game& game, const json::value& session_val) {
+SerGameSession DeserializeSession(const json::value& session_val) {
     const auto& obj = session_val.as_object();
     
-    uint32_t session_id = obj.at("id").as_uint64();
-    std::string map_id = obj.at("map_id").as_string().c_str();
-    double dog_speed = obj.at("dog_speed").as_double();
-    size_t next_lost_object_id = obj.at("next_lost_object_id").as_uint64();
-    
-    const auto* map = game.FindMap(model::Map::Id{map_id});
-    if (!map) {
-        throw std::runtime_error("Map not found: " + map_id);
-    }
-    
-    auto session = std::make_shared<model::GameSession>(
-        *map, session_id, dog_speed, false, game.GetLootGenerator(), 
-        game.GetMapBagCapacity(model::Map::Id{map_id})
-    );
-    
-    session->SetLootTypesCount(game.GetMapLootTypesCount(model::Map::Id{map_id}));
-    session->SetLootValues(game.GetMapLootValues(model::Map::Id{map_id}));
-    session->SetNextLostObjectId(next_lost_object_id);
-    
+    std::vector<SerPlayer> players;
     const auto& players_arr = obj.at("players").as_array();
     for (const auto& player_val : players_arr) {
-        auto player = DeserializePlayer(player_val, session);
-        session->AddRestoredPlayer(player);
+        players.push_back(DeserializePlayer(player_val));
     }
     
+    std::vector<SerLostObject> lost_objects;
     const auto& objects_arr = obj.at("lost_objects").as_array();
     for (const auto& obj_val : objects_arr) {
-        session->AddRestoredLostObject(DeserializeLostObject(obj_val));
+        lost_objects.push_back(DeserializeLostObject(obj_val));
     }
     
-    game.AddRestoredSession(model::Map::Id{map_id}, session);
+    return {
+        static_cast<uint32_t>(obj.at("id").as_uint64()),  // Явное приведение
+        std::string(obj.at("map_id").as_string()),
+        obj.at("dog_speed").as_double(),
+        static_cast<size_t>(obj.at("next_lost_object_id").as_uint64()),
+        players,
+        lost_objects
+    };
 }
 
+// Основные методы сериализации/десериализации игры
 json::value GameSerializer::SerializeGame(const model::Game& game) {
     json::object state;
     
     state["default_dog_speed"] = game.GetDefaultDogSpeed();
     state["default_bag_capacity"] = game.GetDefaultBagCapacity();
-    state["randomize_spawn_points"] = false;
     
     json::array sessions_json;
     const auto& maps = game.GetMaps();
     for (const auto& map : maps) {
         if (auto session = const_cast<model::Game&>(game).FindSession(map.GetId())) {
-            sessions_json.push_back(SerializeSession(session));
+            sessions_json.push_back(SerializeSession(SerGameSession::FromModel(session)));
         }
     }
     state["sessions"] = sessions_json;
@@ -2776,15 +2793,61 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
     if (obj.contains("sessions")) {
         const auto& sessions_arr = obj.at("sessions").as_array();
         for (const auto& session_val : sessions_arr) {
-            DeserializeSession(game, session_val);
+            auto ser_session = DeserializeSession(session_val);
+            
+            const auto* map = game.FindMap(model::Map::Id{ser_session.map_id});
+            if (!map) {
+                throw std::runtime_error("Map not found: " + ser_session.map_id);
+            }
+            
+            auto session = std::make_shared<model::GameSession>(
+                *map, ser_session.id, ser_session.dog_speed, false, 
+                game.GetLootGenerator(), game.GetMapBagCapacity(model::Map::Id{ser_session.map_id})
+            );
+            
+            session->SetLootTypesCount(game.GetMapLootTypesCount(model::Map::Id{ser_session.map_id}));
+            session->SetLootValues(game.GetMapLootValues(model::Map::Id{ser_session.map_id}));
+            session->SetNextLostObjectId(ser_session.next_lost_object_id);
+            
+            // Восстанавливаем игроков
+            for (const auto& ser_player : ser_session.players) {
+                auto dog = ser_player.dog.ToModel();
+                auto player = std::make_shared<model::Player>(
+                    session, std::move(dog), ser_player.id, ser_player.token, ser_player.bag_capacity
+                );
+                
+                player->AddScore(ser_player.score);
+                
+                for (const auto& ser_item : ser_player.bag) {
+                    player->AddItemToBag(ser_item.ToModel());
+                }
+                
+                session->AddRestoredPlayer(player);
+            }
+            
+            // Восстанавливаем потерянные предметы
+            for (const auto& ser_obj : ser_session.lost_objects) {
+                session->AddRestoredLostObject(ser_obj.ToModel());
+            }
+            
+            game.AddRestoredSession(model::Map::Id{ser_session.map_id}, session);
         }
     }
 }
 
 bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::path& path) {
     try {
+        if (path.empty()) {
+            return false;
+        }
+
         auto temp_path = path;
         temp_path += ".tmp";
+        
+        auto parent_dir = temp_path.parent_path();
+        if (!parent_dir.empty() && !std::filesystem::exists(parent_dir)) {
+            std::filesystem::create_directories(parent_dir);
+        }
         
         std::ofstream file(temp_path, std::ios::binary);
         if (!file.is_open()) {
@@ -2803,11 +2866,14 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         
         file.close();
         
-        // Переименовываем временный файл в целевой
         std::filesystem::rename(temp_path, path);
         
         return true;
     } catch (const std::exception& e) {
+        try {
+            std::filesystem::remove(path.string() + ".tmp");
+        } catch (...) {
+        }
         return false;
     }
 }
@@ -2851,6 +2917,104 @@ bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path
 
 namespace serializer {
 
+    namespace json = boost::json;
+
+    // DTO ������ - ������������� ���� ��� ������������
+    struct SerDog {
+        std::string name;
+        model::Point position;
+        model::Point speed;
+        model::Direction direction;
+
+        // ����������� �� model::Dog
+        static SerDog FromModel(const model::Dog& dog) {
+            return {
+                dog.GetName(),
+                dog.GetPosition(),
+                dog.GetSpeed(),
+                dog.GetDirection()
+            };
+        }
+
+        // ����������� � model::Dog
+        model::Dog ToModel() const {
+            model::Dog dog(name, position);
+            dog.SetSpeed(speed);
+            dog.SetDirection(direction);
+            return dog;
+        }
+    };
+
+    struct SerLostObject {
+        size_t id;
+        size_t type;
+        model::Point position;
+        int value;
+
+        static SerLostObject FromModel(const model::LostObject& obj) {
+            return { obj.id, obj.type, obj.position, obj.value };
+        }
+
+        model::LostObject ToModel() const {
+            return { id, type, position, value };
+        }
+    };
+
+    struct SerPlayer {
+        uint32_t id;
+        std::string token;
+        SerDog dog;
+        int score;
+        size_t bag_capacity;
+        std::vector<SerLostObject> bag;
+
+        static SerPlayer FromModel(const std::shared_ptr<model::Player>& player) {
+            std::vector<SerLostObject> ser_bag;
+            for (const auto& item : player->GetBag()) {
+                ser_bag.push_back(SerLostObject::FromModel(item));
+            }
+
+            return {
+                *player->GetId(),
+                *player->GetToken(),
+                SerDog::FromModel(player->GetDog()),
+                player->GetScore(),
+                player->GetBagCapacity(),
+                ser_bag
+            };
+        }
+    };
+
+    struct SerGameSession {
+        uint32_t id;
+        std::string map_id;
+        double dog_speed;
+        size_t next_lost_object_id;
+        std::vector<SerPlayer> players;
+        std::vector<SerLostObject> lost_objects;
+
+        static SerGameSession FromModel(const std::shared_ptr<model::GameSession>& session) {
+            std::vector<SerPlayer> ser_players;
+            for (const auto& player : session->GetPlayers()) {
+                ser_players.push_back(SerPlayer::FromModel(player));
+            }
+
+            std::vector<SerLostObject> ser_lost_objects;
+            for (const auto& obj : session->GetLostObjects()) {
+                ser_lost_objects.push_back(SerLostObject::FromModel(obj));
+            }
+
+            return {
+                *session->GetId(),
+                *session->GetMap().GetId(),
+                session->GetDogSpeed(),
+                session->GetNextLostObjectId(),
+                ser_players,
+                ser_lost_objects
+            };
+        }
+    };
+
     class GameSerializer {
     public:
         static boost::json::value SerializeGame(const model::Game& game);
@@ -2865,6 +3029,11 @@ namespace serializer {
 ===== state_manager.cpp =====
 #include "state_manager.h"
 #include <iostream>
+#include <boost/log/trivial.hpp>
+#include <boost/json.hpp>
+#include "logger.h"
+
+namespace json = boost::json;
 
 StateManager::StateManager(model::Game& game, 
                          std::filesystem::path state_file,
@@ -2874,27 +3043,52 @@ StateManager::StateManager(model::Game& game,
     , save_period_(save_period) {
     
     enabled_ = !state_file_.empty();
+    
+    std::cout << "DEBUG: StateManager initialized - enabled: " << enabled_ 
+              << ", file: " << state_file_.string()
+              << ", period: " << save_period_.count() << "ms" << std::endl;
+    
+    if (enabled_) {
+        auto parent_path = state_file_.parent_path();
+        if (!parent_path.empty() && !std::filesystem::exists(parent_path)) {
+            std::filesystem::create_directories(parent_path);
+        }
+    }
 }
 
 void StateManager::SetSavePeriod(std::chrono::milliseconds period) {
     save_period_ = period;
+    std::cout << "DEBUG: Save period set to: " << save_period_.count() << "ms" << std::endl;
 }
 
 void StateManager::SaveState() {
-    std::cout << "DEBUG: SaveState called" << std::endl;
-    
-    if (!enabled_ || is_saving_.exchange(true)) {
-        std::cout << "DEBUG: SaveState skipped - disabled or already saving" << std::endl;
+    if (!enabled_) {
+        std::cout << "DEBUG: SaveState skipped - not enabled" << std::endl;
         return;
     }
     
-    std::cout << "DEBUG: Attempting to save state to: " << state_file_ << std::endl;
+    bool expected = false;
+    if (!is_saving_.compare_exchange_strong(expected, true)) {
+        std::cout << "DEBUG: SaveState skipped - already saving" << std::endl;
+        return;
+    }
+    
+    std::cout << "DEBUG: Starting SaveState to: " << state_file_.string() << std::endl;
     
     try {
         bool result = serializer::GameSerializer::SaveToFile(game_, state_file_);
-        std::cout << "DEBUG: SaveState result: " << result << std::endl;
+        
+        if (result) {
+            std::cout << "DEBUG: SaveState SUCCESS - file created: " << state_file_.string() << std::endl;
+            BOOST_LOG_TRIVIAL(info) << "State saved successfully to: " << state_file_.string();
+        } else {
+            std::cout << "DEBUG: SaveState FAILED - serializer returned false" << std::endl;
+            BOOST_LOG_TRIVIAL(error) << "Failed to save state to: " << state_file_.string();
+        }
+            
     } catch (const std::exception& e) {
-        std::cerr << "DEBUG: SaveState error: " << e.what() << std::endl;
+        std::cout << "DEBUG: SaveState EXCEPTION: " << e.what() << std::endl;
+        BOOST_LOG_TRIVIAL(error) << "State save error: " << e.what();
     }
     
     is_saving_.store(false);
@@ -2902,44 +3096,61 @@ void StateManager::SaveState() {
 
 bool StateManager::LoadState() {
     if (!enabled_) {
+        std::cout << "DEBUG: LoadState skipped - not enabled" << std::endl;
         return false;
     }
     
+    std::cout << "DEBUG: Attempting LoadState from: " << state_file_.string() << std::endl;
+    
     try {
-        return serializer::GameSerializer::LoadFromFile(game_, state_file_);
-    } catch (const std::exception& e) {
+        if (!std::filesystem::exists(state_file_)) {
+            std::cout << "DEBUG: LoadState - file does not exist, starting fresh" << std::endl;
+            BOOST_LOG_TRIVIAL(info) << "State file does not exist, starting fresh: " << state_file_.string();
+            return false;
+        }
         
+        bool result = serializer::GameSerializer::LoadFromFile(game_, state_file_);
+        
+        if (result) {
+            std::cout << "DEBUG: LoadState SUCCESS" << std::endl;
+            BOOST_LOG_TRIVIAL(info) << "State loaded successfully from: " << state_file_.string();
+        } else {
+            std::cout << "DEBUG: LoadState FAILED - serializer returned false" << std::endl;
+            BOOST_LOG_TRIVIAL(warning) << "Failed to load state from: " << state_file_.string();
+        }
+            
+        return result;
+        
+    } catch (const std::exception& e) {
+        std::cout << "DEBUG: LoadState EXCEPTION: " << e.what() << std::endl;
+        BOOST_LOG_TRIVIAL(error) << "State load error: " << e.what();
         throw;
     }
 }
 
 void StateManager::OnTick(std::chrono::milliseconds delta) {
-    std::cout << "DEBUG: OnTick called, enabled: " << enabled_ 
-              << ", save_period: " << save_period_.count() 
-              << ", time_since_last_save: " << time_since_last_save_.count() << std::endl;
-    
     if (!enabled_ || save_period_.count() == 0) {
-        std::cout << "DEBUG: State saving disabled or period is 0" << std::endl;
         return;
     }
     
     time_since_last_save_ += delta;
-    std::cout << "DEBUG: time_since_last_save after add: " << time_since_last_save_.count() << std::endl;
+    
+    std::cout << "DEBUG: OnTick - time_since_last_save: " << time_since_last_save_.count() 
+              << "ms, save_period: " << save_period_.count() << "ms" << std::endl;
     
     if (time_since_last_save_ >= save_period_) {
-        std::cout << "DEBUG: Time to save! Calling SaveState()" << std::endl;
+        std::cout << "DEBUG: OnTick - triggering auto-save" << std::endl;
         SaveState();
         time_since_last_save_ = std::chrono::milliseconds(0);
     }
 }
 
 void StateManager::OnShutdown() {
+    std::cout << "DEBUG: OnShutdown called - saving state" << std::endl;
     if (enabled_) {
         SaveState();
     }
 }
-
-
 
 
 ===== state_manager.h =====

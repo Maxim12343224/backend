@@ -157,21 +157,21 @@ int main(int argc, const char* argv[]) {
 
         StateManager state_manager(game, state_file, save_state_period);
         
-        // В функции main, после создания StateManager, замените блок загрузки состояния на:
-if (!state_file.empty()) {
-    try {
-        if (!state_manager.LoadState()) {
-            std::cout << "Starting with clean state" << std::endl;
-        } else {
-            std::cout << "Game state loaded successfully" << std::endl;
+        // Загружаем состояние, если указан файл состояния
+        if (!state_file.empty()) {
+            try {
+                if (!state_manager.LoadState()) {
+                    std::cout << "Starting with clean state" << std::endl;
+                } else {
+                    std::cout << "Game state loaded successfully" << std::endl;
+                }
+            } catch (const std::exception& e) {
+                // ВАЖНО: Не завершаем работу при ошибке загрузки состояния
+                // Продолжаем с чистым состоянием вместо завершения работы
+                std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
+                // НЕ возвращаем EXIT_FAILURE - продолжаем работу!
+            }
         }
-    } catch (const std::exception& e) {
-        // ВАЖНО: Не завершаем работу при ошибке загрузки состояния
-        // Продолжаем с чистым состоянием вместо завершения работы
-        std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
-        // НЕ возвращаем EXIT_FAILURE - продолжаем работу!
-    }
-}
 
         const unsigned num_threads = std::thread::hardware_concurrency();
         net::io_context ioc(num_threads);
