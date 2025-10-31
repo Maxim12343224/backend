@@ -9,23 +9,20 @@ BookManager::BookManager(const std::string& connection_string)
 }
 
 void BookManager::prepare_statements(pqxx::connection& conn) {
-    // Подготавливаем запросы один раз при инициализации
     constexpr auto insert_with_isbn = "insert_book_with_isbn"_zv;
     constexpr auto insert_null_isbn = "insert_book_null_isbn"_zv;
     constexpr auto get_all_books = "get_all_books"_zv;
     
-    if (!conn.is_prepared(insert_with_isbn)) {
+    try {
         conn.prepare(insert_with_isbn,
             "INSERT INTO books (title, author, year, isbn) VALUES ($1, $2, $3, $4)");
-    }
-    if (!conn.is_prepared(insert_null_isbn)) {
         conn.prepare(insert_null_isbn,
             "INSERT INTO books (title, author, year, isbn) VALUES ($1, $2, $3, NULL)");
-    }
-    if (!conn.is_prepared(get_all_books)) {
         conn.prepare(get_all_books,
             "SELECT id, title, author, year, isbn FROM books "
             "ORDER BY year DESC, title ASC, author ASC, isbn ASC");
+    } catch (const pqxx::duplicate_prepared_statement& e) {
+        
     }
 }
 
@@ -75,7 +72,7 @@ bool BookManager::add_book(const std::string& title, const std::string& author,
         return true;
         
     } catch (const pqxx::unique_violation& e) {
-        // ISBN duplicate violation
+        
         return false;
     } catch (const std::exception& e) {
         std::cerr << "Error adding book: " << e.what() << std::endl;
@@ -101,7 +98,7 @@ std::vector<Book> BookManager::get_all_books() {
             book.author = row[2].as<std::string>();
             book.year = row[3].as<int>();
             
-            // Обрабатываем возможный NULL в ISBN
+            
             if (!row[4].is_null()) {
                 book.isbn = row[4].as<std::string>();
             }
