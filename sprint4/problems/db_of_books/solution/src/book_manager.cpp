@@ -8,30 +8,11 @@ BookManager::BookManager(const std::string& connection_string)
     : connection_string_(connection_string) {
 }
 
-void BookManager::prepare_statements(pqxx::connection& conn) {
-    constexpr auto insert_with_isbn = "insert_book_with_isbn"_zv;
-    constexpr auto insert_null_isbn = "insert_book_null_isbn"_zv;
-    constexpr auto get_all_books = "get_all_books"_zv;
-    
-    try {
-        conn.prepare(insert_with_isbn,
-            "INSERT INTO books (title, author, year, isbn) VALUES ($1, $2, $3, $4)");
-        conn.prepare(insert_null_isbn,
-            "INSERT INTO books (title, author, year, isbn) VALUES ($1, $2, $3, NULL)");
-        conn.prepare(get_all_books,
-            "SELECT id, title, author, year, isbn FROM books "
-            "ORDER BY year DESC, title ASC, author ASC, isbn ASC");
-    } catch (const pqxx::duplicate_prepared_statement& e) {
-        
-    }
-}
-
 bool BookManager::initialize_database() {
     try {
         pqxx::connection conn(connection_string_);
-        prepare_statements(conn);
-        
         pqxx::work txn(conn);
+        
         create_table_if_not_exists(txn);
         txn.commit();
         
@@ -58,21 +39,24 @@ bool BookManager::add_book(const std::string& title, const std::string& author,
                           int year, const std::string& isbn) {
     try {
         pqxx::connection conn(connection_string_);
-        prepare_statements(conn);
-        
         pqxx::work txn(conn);
         
         if (isbn.empty() || isbn == "null") {
-            txn.exec_prepared("insert_book_null_isbn"_zv, title, author, year);
+            // Используем exec с экранированием вместо подготовленных запросов
+            txn.exec("INSERT INTO books (title, author, year, isbn) VALUES (" + 
+                     txn.quote(title) + ", " + txn.quote(author) + ", " + 
+                     std::to_string(year) + ", NULL)");
         } else {
-            txn.exec_prepared("insert_book_with_isbn"_zv, title, author, year, isbn);
+            txn.exec("INSERT INTO books (title, author, year, isbn) VALUES (" + 
+                     txn.quote(title) + ", " + txn.quote(author) + ", " + 
+                     std::to_string(year) + ", " + txn.quote(isbn) + ")");
         }
         
         txn.commit();
         return true;
         
     } catch (const pqxx::unique_violation& e) {
-        
+        // ISBN duplicate violation
         return false;
     } catch (const std::exception& e) {
         std::cerr << "Error adding book: " << e.what() << std::endl;
@@ -85,11 +69,11 @@ std::vector<Book> BookManager::get_all_books() {
     
     try {
         pqxx::connection conn(connection_string_);
-        prepare_statements(conn);
-        
         pqxx::read_transaction txn(conn);
         
-        auto result = txn.exec_prepared("get_all_books"_zv);
+        auto result = txn.exec(
+            "SELECT id, title, author, year, isbn FROM books "
+            "ORDER BY year DESC, title ASC, author ASC, isbn ASC");
         
         for (const auto& row : result) {
             Book book;
@@ -98,7 +82,7 @@ std::vector<Book> BookManager::get_all_books() {
             book.author = row[2].as<std::string>();
             book.year = row[3].as<int>();
             
-            
+            // Обрабатываем возможный NULL в ISBN
             if (!row[4].is_null()) {
                 book.isbn = row[4].as<std::string>();
             }
