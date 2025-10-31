@@ -25,4 +25,5 @@ private:
     std::string connection_string_;
 
     void create_table_if_not_exists(pqxx::work& txn);
+    void prepare_statements(pqxx::connection& conn);
 };

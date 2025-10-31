@@ -16,7 +16,6 @@ int main(int argc, char* argv[]) {
     try {
         BookManager manager(connection_string);
         
-        // Initialize database
         if (!manager.initialize_database()) {
             return 1;
         }
@@ -43,14 +42,13 @@ int main(int argc, char* argv[]) {
                     }
                     
                     bool success = manager.add_book(title, author, year, isbn);
-                    
                     json response = {{"result", success}};
                     std::cout << response.dump() << std::endl;
                     
                 } else if (action == "all_books") {
                     auto books = manager.get_all_books();
-                    
                     json books_array = json::array();
+                    
                     for (const auto& book : books) {
                         json book_json = {
                             {"id", book.id},
