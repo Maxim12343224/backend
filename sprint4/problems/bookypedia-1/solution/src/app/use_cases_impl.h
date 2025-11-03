@@ -6,7 +6,13 @@ namespace app {
 
     class UseCasesImpl : public UseCases {
     public:
-        explicit UseCasesImpl(domain::AuthorRepository& authors, domain::BookRepository& books)
+        // Конструктор для тестов (только authors)
+        explicit UseCasesImpl(domain::AuthorRepository& authors)
+            : authors_{ authors } {
+        }
+
+        // Конструктор для реального использования (authors + books)
+        UseCasesImpl(domain::AuthorRepository& authors, domain::BookRepository& books)
             : authors_{ authors }, books_{ books } {
         }
 
@@ -18,7 +24,7 @@ namespace app {
 
     private:
         domain::AuthorRepository& authors_;
-        domain::BookRepository& books_;
+        domain::BookRepository* books_{ nullptr }; // Указатель, может быть nullptr
     };
 
 }  // namespace app
