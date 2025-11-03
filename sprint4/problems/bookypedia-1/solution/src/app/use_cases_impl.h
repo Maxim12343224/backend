@@ -21,4 +21,4 @@ namespace app {
         domain::BookRepository& books_;
     };
 
-}  // namespace app
+}

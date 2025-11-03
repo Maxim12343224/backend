@@ -3,6 +3,7 @@
 #include <pqxx/transaction>
 
 #include "../domain/author.h"
+#include "../app/use_cases.h"
 
 namespace postgres {
 

@@ -3,14 +3,14 @@
 #include <vector>
 
 #include "../util/tagged_uuid.h"
-#include "app/use_cases.h"
+
 
 namespace domain {
 
     namespace detail {
         struct AuthorTag {};
         struct BookTag {};
-    }  // namespace detail
+    }  
 
     using AuthorId = util::TaggedUUID<detail::AuthorTag>;
     using BookId = util::TaggedUUID<detail::BookTag>;
@@ -86,4 +86,4 @@ namespace domain {
         ~BookRepository() = default;
     };
 
-}  // namespace domain
+}  

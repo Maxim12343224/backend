@@ -23,7 +23,7 @@ std::ostream& operator<<(std::ostream& out, const BookInfo& book) {
     return out;
 }
 
-}  // namespace detail
+} 
 
 template <typename T>
 void PrintVector(std::ostream& out, const std::vector<T>& vector) {
