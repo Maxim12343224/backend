@@ -1,19 +1,16 @@
 #include "postgres.h"
 
-#include <pqxx/zview.hxx>
+#include <pqxx/pqxx>
 
 namespace postgres {
 
 using namespace std::literals;
-using pqxx::operator"" _zv;
 
 void AuthorRepositoryImpl::Save(const domain::Author& author) {
     pqxx::work work{connection_};
     try {
         work.exec_params(
-            R"(
-INSERT INTO authors (id, name) VALUES ($1, $2)
-)"_zv,
+            "INSERT INTO authors (id, name) VALUES ($1, $2)"_zv,
             author.GetId().ToString(), author.GetName());
         work.commit();
     } catch (const pqxx::unique_violation&) {
@@ -24,11 +21,11 @@ INSERT INTO authors (id, name) VALUES ($1, $2)
 
 std::vector<domain::Author> AuthorRepositoryImpl::GetAll() {
     pqxx::read_transaction r{connection_};
-    auto query_text = "SELECT id, name FROM authors ORDER BY name"_zv;
-    auto result = r.exec(query_text);
+    auto result = r.exec("SELECT id, name FROM authors ORDER BY name");
     std::vector<domain::Author> authors;
     
-    for (const auto& row : result) {
+    for (auto i = 0u; i < result.size(); ++i) {
+        const auto& row = result[i];
         auto id = row[0].as<std::string>();
         auto name = row[1].as<std::string>();
         authors.emplace_back(domain::AuthorId::FromString(id), std::move(name));
@@ -40,10 +37,7 @@ std::vector<domain::Author> AuthorRepositoryImpl::GetAll() {
 void BookRepositoryImpl::Save(const domain::Book& book) {
     pqxx::work work{connection_};
     work.exec_params(
-        R"(
-INSERT INTO books (id, author_id, title, publication_year) 
-VALUES ($1, $2, $3, $4)
-)"_zv,
+        "INSERT INTO books (id, author_id, title, publication_year) VALUES ($1, $2, $3, $4)"_zv,
         book.GetId().ToString(), 
         book.GetAuthorId().ToString(), 
         book.GetTitle(), 
@@ -53,11 +47,11 @@ VALUES ($1, $2, $3, $4)
 
 std::vector<domain::Book> BookRepositoryImpl::GetAll() {
     pqxx::read_transaction r{connection_};
-    auto query_text = "SELECT id, author_id, title, publication_year FROM books ORDER BY title"_zv;
-    auto result = r.exec(query_text);
+    auto result = r.exec("SELECT id, author_id, title, publication_year FROM books ORDER BY title");
     std::vector<domain::Book> books;
     
-    for (const auto& row : result) {
+    for (auto i = 0u; i < result.size(); ++i) {
+        const auto& row = result[i];
         auto id = row[0].as<std::string>();
         auto author_id = row[1].as<std::string>();
         auto title = row[2].as<std::string>();
@@ -75,11 +69,13 @@ std::vector<domain::Book> BookRepositoryImpl::GetAll() {
 
 std::vector<domain::Book> BookRepositoryImpl::GetByAuthorId(const domain::AuthorId& author_id) {
     pqxx::read_transaction r{connection_};
-    auto query_text = "SELECT id, title, publication_year FROM books WHERE author_id = $1 ORDER BY publication_year, title"_zv;
-    auto result = r.exec_params(query_text, author_id.ToString());
+    auto result = r.exec_params(
+        "SELECT id, title, publication_year FROM books WHERE author_id = $1 ORDER BY publication_year, title",
+        author_id.ToString());
     std::vector<domain::Book> books;
     
-    for (const auto& row : result) {
+    for (auto i = 0u; i < result.size(); ++i) {
+        const auto& row = result[i];
         auto id = row[0].as<std::string>();
         auto title = row[1].as<std::string>();
         auto year = row[2].as<int>();
@@ -98,21 +94,21 @@ Database::Database(pqxx::connection connection)
     : connection_{std::move(connection)} {
     pqxx::work work{connection_};
     
-    work.exec(R"(
-CREATE TABLE IF NOT EXISTS authors (
-    id UUID CONSTRAINT author_id_constraint PRIMARY KEY,
-    name varchar(100) UNIQUE NOT NULL
-);
-)"_zv);
+    work.exec(
+        "CREATE TABLE IF NOT EXISTS authors ("
+        "id UUID CONSTRAINT author_id_constraint PRIMARY KEY,"
+        "name varchar(100) UNIQUE NOT NULL"
+        ")"
+    );
     
-    work.exec(R"(
-CREATE TABLE IF NOT EXISTS books (
-    id UUID CONSTRAINT book_id_constraint PRIMARY KEY,
-    author_id UUID NOT NULL REFERENCES authors(id),
-    title varchar(100) NOT NULL,
-    publication_year INTEGER NOT NULL
-);
-)"_zv);
+    work.exec(
+        "CREATE TABLE IF NOT EXISTS books ("
+        "id UUID CONSTRAINT book_id_constraint PRIMARY KEY,"
+        "author_id UUID NOT NULL REFERENCES authors(id),"
+        "title varchar(100) NOT NULL,"
+        "publication_year INTEGER NOT NULL"
+        ")"
+    );
 
     work.commit();
 }
