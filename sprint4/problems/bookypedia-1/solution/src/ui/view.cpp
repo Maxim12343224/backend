@@ -13,15 +13,8 @@ namespace ph = std::placeholders;
 namespace ui {
 namespace detail {
 
-std::ostream& operator<<(std::ostream& out, const AuthorInfo& author) {
-    out << author.name;
-    return out;
-}
-
-std::ostream& operator<<(std::ostream& out, const BookInfo& book) {
-    out << book.title << ", " << book.publication_year;
-    return out;
-}
+using AuthorInfo = app::AuthorInfo;
+using BookInfo = app::BookInfo;
 
 }  // namespace detail
 

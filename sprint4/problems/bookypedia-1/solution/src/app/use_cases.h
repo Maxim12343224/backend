@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <iostream>
 
 namespace app {
 
@@ -15,6 +16,17 @@ namespace app {
         int publication_year;
     };
 
+    
+    inline std::ostream& operator<<(std::ostream& out, const AuthorInfo& author) {
+        out << author.name;
+        return out;
+    }
+
+    inline std::ostream& operator<<(std::ostream& out, const BookInfo& book) {
+        out << book.title << ", " << book.publication_year;
+        return out;
+    }
+
     class UseCases {
     public:
         virtual void AddAuthor(const std::string& name) = 0;
@@ -27,4 +39,4 @@ namespace app {
         ~UseCases() = default;
     };
 
-}  // namespace app
+}
