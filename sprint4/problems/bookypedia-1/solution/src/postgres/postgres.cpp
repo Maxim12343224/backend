@@ -20,20 +20,6 @@ void AuthorRepositoryImpl::Save(const domain::Author& author) {
     }
 }
 
-std::vector<domain::Author> AuthorQueriesImpl::GetAllAuthors() {
-    pqxx::nontransaction work{connection_};
-    auto result = work.exec("SELECT id, name FROM authors ORDER BY name");
-    std::vector<domain::Author> authors;
-    
-    for (int i = 0; i < result.size(); ++i) {
-        std::string id = result[i][0].as<std::string>();
-        std::string name = result[i][1].as<std::string>();
-        authors.emplace_back(domain::AuthorId::FromString(id), std::move(name));
-    }
-    
-    return authors;
-}
-
 void BookRepositoryImpl::Save(const domain::Book& book) {
     pqxx::work work{connection_};
     std::string query = "INSERT INTO books (id, author_id, title, publication_year) VALUES ('" +

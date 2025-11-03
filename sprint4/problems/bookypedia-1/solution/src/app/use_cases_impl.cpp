@@ -38,7 +38,6 @@ std::vector<AuthorInfo> UseCasesImpl::GetAuthors() {
         
         return authors;
     } catch (const std::exception& e) {
-        // В реальной программе здесь должно быть логирование ошибки
         return {};
     }
 }
