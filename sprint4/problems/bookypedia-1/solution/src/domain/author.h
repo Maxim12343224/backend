@@ -69,6 +69,7 @@ namespace domain {
     class AuthorRepository {
     public:
         virtual void Save(const Author& author) = 0;
+        virtual std::vector<Author> GetAll() = 0; // днаюбхрэ
 
     protected:
         ~AuthorRepository() = default;
