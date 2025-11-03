@@ -13,7 +13,7 @@ namespace postgres {
         }
 
         void Save(const domain::Author& author) override;
-        std::vector<domain::Author> GetAll() override;
+        // УБИРАЕМ GetAll - он не в интерфейсе
 
     private:
         pqxx::connection& connection_;

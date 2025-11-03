@@ -20,19 +20,7 @@ void AuthorRepositoryImpl::Save(const domain::Author& author) {
     }
 }
 
-std::vector<domain::Author> AuthorRepositoryImpl::GetAll() {
-    pqxx::nontransaction work{connection_};
-    auto result = work.exec("SELECT id, name FROM authors ORDER BY name");
-    std::vector<domain::Author> authors;
-    
-    for (int i = 0; i < result.size(); ++i) {
-        std::string id = result[i][0].as<std::string>();
-        std::string name = result[i][1].as<std::string>();
-        authors.emplace_back(domain::AuthorId::FromString(id), std::move(name));
-    }
-    
-    return authors;
-}
+// УБИРАЕМ GetAll для AuthorRepositoryImpl
 
 void BookRepositoryImpl::Save(const domain::Book& book) {
     pqxx::work work{connection_};

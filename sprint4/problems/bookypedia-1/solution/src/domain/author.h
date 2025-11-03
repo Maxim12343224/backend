@@ -69,7 +69,7 @@ namespace domain {
     class AuthorRepository {
     public:
         virtual void Save(const Author& author) = 0;
-        virtual std::vector<Author> GetAll() = 0; // ƒќЅј¬»“№
+        // ”Ѕ»–ј≈ћ GetAll отсюда - он не нужен дл€ тестов
 
     protected:
         ~AuthorRepository() = default;

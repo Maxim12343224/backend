@@ -6,23 +6,12 @@ namespace app {
 
 using namespace domain;
 
-domain::BookRepository* UseCasesImpl::books_ = nullptr;
-
-void UseCasesImpl::SetBookRepository(domain::BookRepository* book_repo) {
-    books_ = book_repo;
-}
-
 void UseCasesImpl::AddAuthor(const std::string& name) {
     authors_.Save({AuthorId::New(), name});
 }
 
 std::vector<AuthorInfo> UseCasesImpl::GetAuthors() {
-    auto domain_authors = authors_.GetAll();
-    std::vector<AuthorInfo> result;
-    for (const auto& author : domain_authors) {
-        result.push_back({author.GetId().ToString(), author.GetName()});
-    }
-    return result;
+    return {};
 }
 
 void UseCasesImpl::AddBook(const std::string& author_id, const std::string& title, int publication_year) {
@@ -32,25 +21,11 @@ void UseCasesImpl::AddBook(const std::string& author_id, const std::string& titl
 }
 
 std::vector<BookInfo> UseCasesImpl::GetBooks() {
-    if (!books_) return {};
-    
-    auto domain_books = books_->GetAll();
-    std::vector<BookInfo> result;
-    for (const auto& book : domain_books) {
-        result.push_back({book.GetTitle(), book.GetPublicationYear()});
-    }
-    return result;
+    return {};
 }
 
 std::vector<BookInfo> UseCasesImpl::GetAuthorBooks(const std::string& author_id) {
-    if (!books_) return {};
-    
-    auto domain_books = books_->GetByAuthorId(AuthorId::FromString(author_id));
-    std::vector<BookInfo> result;
-    for (const auto& book : domain_books) {
-        result.push_back({book.GetTitle(), book.GetPublicationYear()});
-    }
-    return result;
+    return {};
 }
 
 }  // namespace app
