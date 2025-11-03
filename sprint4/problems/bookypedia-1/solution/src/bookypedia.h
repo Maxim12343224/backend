@@ -18,7 +18,7 @@ namespace bookypedia {
 
     private:
         postgres::Database db_;
-        app::UseCasesImpl use_cases_{ db_.GetAuthors(), db_.GetBooks() }; // Оба репозитория
+        app::UseCasesImpl use_cases_{ db_.GetAuthors() };
     };
 
 }  // namespace bookypedia

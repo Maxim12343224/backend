@@ -6,14 +6,8 @@ namespace app {
 
     class UseCasesImpl : public UseCases {
     public:
-        // Конструктор для тестов (только authors)
         explicit UseCasesImpl(domain::AuthorRepository& authors)
             : authors_{ authors } {
-        }
-
-        // Конструктор для реального использования (authors + books)
-        UseCasesImpl(domain::AuthorRepository& authors, domain::BookRepository& books)
-            : authors_{ authors }, books_{ books } {
         }
 
         void AddAuthor(const std::string& name) override;
@@ -22,9 +16,12 @@ namespace app {
         std::vector<BookInfo> GetBooks() override;
         std::vector<BookInfo> GetAuthorBooks(const std::string& author_id) override;
 
+        // Статический метод для установки book repository
+        static void SetBookRepository(domain::BookRepository* book_repo);
+
     private:
         domain::AuthorRepository& authors_;
-        domain::BookRepository* books_{ nullptr }; // Указатель, может быть nullptr
+        static domain::BookRepository* books_; // Статический указатель
     };
 
 }  // namespace app
