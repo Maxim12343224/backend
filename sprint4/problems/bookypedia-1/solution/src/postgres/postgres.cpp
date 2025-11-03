@@ -20,8 +20,6 @@ void AuthorRepositoryImpl::Save(const domain::Author& author) {
     }
 }
 
-// УБИРАЕМ GetAll для AuthorRepositoryImpl
-
 void BookRepositoryImpl::Save(const domain::Book& book) {
     pqxx::work work{connection_};
     std::string query = "INSERT INTO books (id, author_id, title, publication_year) VALUES ('" +

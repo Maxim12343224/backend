@@ -69,7 +69,6 @@ namespace domain {
     class AuthorRepository {
     public:
         virtual void Save(const Author& author) = 0;
-        // ”Ѕ»–ј≈ћ GetAll отсюда - он не нужен дл€ тестов
 
     protected:
         ~AuthorRepository() = default;

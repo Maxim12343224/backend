@@ -6,6 +6,7 @@ namespace app {
 
 using namespace domain;
 
+
 domain::BookRepository* UseCasesImpl::books_ = nullptr;
 
 void UseCasesImpl::SetBookRepository(domain::BookRepository* book_repo) {
@@ -34,4 +35,4 @@ std::vector<BookInfo> UseCasesImpl::GetAuthorBooks(const std::string& author_id)
     return {};
 }
 
-}  // namespace app
+}  
