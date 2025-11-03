@@ -3,7 +3,6 @@
 #include <pqxx/transaction>
 
 #include "../domain/author.h"
-#include "../app/use_cases.h"
 
 namespace postgres {
 
@@ -14,7 +13,7 @@ namespace postgres {
         }
 
         void Save(const domain::Author& author) override;
-        std::vector<app::AuthorInfo> GetAll() override;
+        std::vector<domain::Author> GetAll() override;
 
     private:
         pqxx::connection& connection_;
@@ -27,8 +26,8 @@ namespace postgres {
         }
 
         void Save(const domain::Book& book) override;
-        std::vector<app::BookInfo> GetAll() override;
-        std::vector<app::BookInfo> GetByAuthorId(const domain::AuthorId& author_id) override;
+        std::vector<domain::Book> GetAll() override;
+        std::vector<domain::Book> GetByAuthorId(const domain::AuthorId& author_id) override;
 
     private:
         pqxx::connection& connection_;

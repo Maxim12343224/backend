@@ -4,13 +4,12 @@
 
 #include "../util/tagged_uuid.h"
 
-
 namespace domain {
 
     namespace detail {
         struct AuthorTag {};
         struct BookTag {};
-    }  
+    }  // namespace detail
 
     using AuthorId = util::TaggedUUID<detail::AuthorTag>;
     using BookId = util::TaggedUUID<detail::BookTag>;
@@ -70,7 +69,7 @@ namespace domain {
     class AuthorRepository {
     public:
         virtual void Save(const Author& author) = 0;
-        virtual std::vector<app::AuthorInfo> GetAll() = 0;
+        virtual std::vector<Author> GetAll() = 0;
 
     protected:
         ~AuthorRepository() = default;
@@ -79,11 +78,11 @@ namespace domain {
     class BookRepository {
     public:
         virtual void Save(const Book& book) = 0;
-        virtual std::vector<app::BookInfo> GetAll() = 0;
-        virtual std::vector<app::BookInfo> GetByAuthorId(const AuthorId& author_id) = 0;
+        virtual std::vector<Book> GetAll() = 0;
+        virtual std::vector<Book> GetByAuthorId(const AuthorId& author_id) = 0;
 
     protected:
         ~BookRepository() = default;
     };
 
-}  
+}  // namespace domain

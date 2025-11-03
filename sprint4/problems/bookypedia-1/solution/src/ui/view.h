@@ -3,7 +3,6 @@
 #include <optional>
 #include <string>
 #include <vector>
-#include "app/use_cases.h"  
 
 namespace menu {
     class Menu;
@@ -11,6 +10,8 @@ namespace menu {
 
 namespace app {
     class UseCases;
+    struct AuthorInfo;
+    struct BookInfo;
 }
 
 namespace ui {
@@ -22,11 +23,10 @@ namespace ui {
             int publication_year = 0;
         };
 
-        
         using AuthorInfo = app::AuthorInfo;
         using BookInfo = app::BookInfo;
 
-    }
+    }  // namespace detail
 
     class View {
     public:
@@ -51,4 +51,4 @@ namespace ui {
         std::ostream& output_;
     };
 
-}  
+}  // namespace ui
