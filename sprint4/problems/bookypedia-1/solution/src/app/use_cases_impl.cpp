@@ -6,6 +6,12 @@ namespace app {
 
 using namespace domain;
 
+domain::BookRepository* UseCasesImpl::books_ = nullptr;
+
+void UseCasesImpl::SetBookRepository(domain::BookRepository* book_repo) {
+    books_ = book_repo;
+}
+
 void UseCasesImpl::AddAuthor(const std::string& name) {
     authors_.Save({AuthorId::New(), name});
 }
