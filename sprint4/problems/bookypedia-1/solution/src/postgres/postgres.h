@@ -32,6 +32,18 @@ namespace postgres {
         pqxx::connection& connection_;
     };
 
+    class AuthorQueriesImpl : public domain::AuthorQueries {
+    public:
+        explicit AuthorQueriesImpl(pqxx::connection& connection)
+            : connection_{ connection } {
+        }
+
+        std::vector<domain::Author> GetAllAuthors() override;
+
+    private:
+        pqxx::connection& connection_;
+    };
+
     class Database {
     public:
         explicit Database(pqxx::connection connection);
@@ -44,10 +56,15 @@ namespace postgres {
             return books_;
         }
 
+        AuthorQueriesImpl& GetAuthorQueries()& {
+            return author_queries_;
+        }
+
     private:
         pqxx::connection connection_;
         AuthorRepositoryImpl authors_{ connection_ };
         BookRepositoryImpl books_{ connection_ };
+        AuthorQueriesImpl author_queries_{ connection_ };
     };
 
 }  // namespace postgres

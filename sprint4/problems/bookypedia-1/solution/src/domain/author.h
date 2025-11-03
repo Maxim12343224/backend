@@ -84,4 +84,13 @@ namespace domain {
         ~BookRepository() = default;
     };
 
+    // Новый интерфейс для получения данных (не нарушает существующие тесты)
+    class AuthorQueries {
+    public:
+        virtual std::vector<Author> GetAllAuthors() = 0;
+
+    protected:
+        ~AuthorQueries() = default;
+    };
+
 }  // namespace domain

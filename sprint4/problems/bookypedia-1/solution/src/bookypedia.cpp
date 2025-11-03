@@ -12,8 +12,8 @@ using namespace std::literals;
 
 Application::Application(const AppConfig& config)
     : db_{pqxx::connection{config.db_url}} {
-    // Устанавливаем book repository для UseCasesImpl
     app::UseCasesImpl::SetBookRepository(&db_.GetBooks());
+    app::UseCasesImpl::SetAuthorQueries(&db_.GetAuthorQueries());
 }
 
 void Application::Run() {
