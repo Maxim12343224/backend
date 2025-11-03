@@ -24,10 +24,13 @@ INSERT INTO authors (id, name) VALUES ($1, $2)
 
 std::vector<domain::Author> AuthorRepositoryImpl::GetAll() {
     pqxx::read_transaction r{connection_};
-    auto query = "SELECT id, name FROM authors ORDER BY name"_zv;
+    auto query_text = "SELECT id, name FROM authors ORDER BY name"_zv;
+    auto result = r.exec(query_text);
     std::vector<domain::Author> authors;
     
-    for (auto [id, name] : r.query<std::string, std::string>(query)) {
+    for (const auto& row : result) {
+        auto id = row[0].as<std::string>();
+        auto name = row[1].as<std::string>();
         authors.emplace_back(domain::AuthorId::FromString(id), std::move(name));
     }
     
@@ -50,10 +53,15 @@ VALUES ($1, $2, $3, $4)
 
 std::vector<domain::Book> BookRepositoryImpl::GetAll() {
     pqxx::read_transaction r{connection_};
-    auto query = "SELECT id, author_id, title, publication_year FROM books ORDER BY title"_zv;
+    auto query_text = "SELECT id, author_id, title, publication_year FROM books ORDER BY title"_zv;
+    auto result = r.exec(query_text);
     std::vector<domain::Book> books;
     
-    for (auto [id, author_id, title, year] : r.query<std::string, std::string, std::string, int>(query)) {
+    for (const auto& row : result) {
+        auto id = row[0].as<std::string>();
+        auto author_id = row[1].as<std::string>();
+        auto title = row[2].as<std::string>();
+        auto year = row[3].as<int>();
         books.emplace_back(
             domain::BookId::FromString(id),
             domain::AuthorId::FromString(author_id),
@@ -67,10 +75,14 @@ std::vector<domain::Book> BookRepositoryImpl::GetAll() {
 
 std::vector<domain::Book> BookRepositoryImpl::GetByAuthorId(const domain::AuthorId& author_id) {
     pqxx::read_transaction r{connection_};
-    auto query = "SELECT id, title, publication_year FROM books WHERE author_id = $1 ORDER BY publication_year, title"_zv;
+    auto query_text = "SELECT id, title, publication_year FROM books WHERE author_id = $1 ORDER BY publication_year, title"_zv;
+    auto result = r.exec_params(query_text, author_id.ToString());
     std::vector<domain::Book> books;
     
-    for (auto [id, title, year] : r.query<std::string, std::string, int>(query, author_id.ToString())) {
+    for (const auto& row : result) {
+        auto id = row[0].as<std::string>();
+        auto title = row[1].as<std::string>();
+        auto year = row[2].as<int>();
         books.emplace_back(
             domain::BookId::FromString(id),
             author_id,
