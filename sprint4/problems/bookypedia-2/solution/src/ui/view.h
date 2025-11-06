@@ -13,6 +13,7 @@ namespace app {
     class UseCases;
     struct AuthorInfo;
     struct BookInfo;
+    struct BookInfoExtended; // Добавляем forward declaration
 }
 
 namespace ui {
@@ -20,7 +21,7 @@ namespace ui {
 
         struct AddBookParams {
             std::string title;
-            std::string author_id;
+            std::string author_name; // Изменяем на имя автора вместо ID
             int publication_year = 0;
             std::vector<std::string> tags;
         };
@@ -53,7 +54,7 @@ namespace ui {
         std::vector<detail::BookInfo> GetBooks() const;
         std::vector<detail::BookInfo> GetAuthorBooks(const std::string& author_id) const;
         std::vector<std::string> ParseAndNormalizeTags(const std::string& tags_input) const;
-        void PrintBookDetails(const detail::BookInfo& book) const;
+        void PrintBookDetails(const app::BookInfoExtended& book) const; // Изменяем тип параметра
 
         menu::Menu& menu_;
         app::UseCases& use_cases_;

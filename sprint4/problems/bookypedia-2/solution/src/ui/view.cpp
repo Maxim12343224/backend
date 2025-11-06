@@ -67,7 +67,9 @@ bool View::AddAuthor(std::istream& cmd_input) const {
 bool View::AddBook(std::istream& cmd_input) const {
     try {
         if (auto params = GetBookParams(cmd_input)) {
-            use_cases_.AddBook(params->author_id, params->title, params->publication_year, params->tags);
+            // Используем новый метод для добавления книги с автором и тегами
+            use_cases_.AddBookWithAuthorAndTags(params->author_name, params->title, 
+                                               params->publication_year, params->tags);
             output_ << "Book added"sv << std::endl;
         }
     } catch (const std::exception& e) {
@@ -82,7 +84,13 @@ bool View::ShowAuthors() const {
 }
 
 bool View::ShowBooks() const {
-    PrintVector(output_, GetBooks());
+    // Используем расширенный метод для показа книг с авторами
+    auto books = use_cases_.GetBooksExtended();
+    int i = 1;
+    for (const auto& book : books) {
+        output_ << i++ << " " << book.title << " by " << book.author_name 
+               << ", " << book.publication_year << std::endl;
+    }
     return true;
 }
 
@@ -315,7 +323,18 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
         if (!author_id) {
             return std::nullopt;
         }
-        params.author_id = *author_id;
+        // Получаем автора по ID чтобы узнать его имя
+        auto authors = GetAuthors();
+        for (const auto& author : authors) {
+            if (author.id == *author_id) {
+                params.author_name = author.name;
+                break;
+            }
+        }
+        if (params.author_name.empty()) {
+            output_ << "Author not found" << std::endl;
+            return std::nullopt;
+        }
     } else {
         auto author = use_cases_.GetAuthorByName(author_name);
         if (!author) {
@@ -325,18 +344,13 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
             boost::algorithm::trim(answer);
             if (answer == "y" || answer == "Y") {
                 use_cases_.AddAuthor(author_name);
-                author = use_cases_.GetAuthorByName(author_name);
-                if (!author) {
-                    output_ << "Failed to add author" << std::endl;
-                    return std::nullopt;
-                }
-                params.author_id = author->id;
+                params.author_name = author_name;
             } else {
                 output_ << "Failed to add book" << std::endl;
                 return std::nullopt;
             }
         } else {
-            params.author_id = author->id;
+            params.author_name = author->name;
         }
     }
 
@@ -375,11 +389,16 @@ std::optional<std::string> View::SelectAuthor() const {
 }
 
 std::optional<std::string> View::SelectBook(const std::string& title) const {
-    std::vector<detail::BookInfo> books;
+    std::vector<app::BookInfoExtended> books;
     
     if (title.empty()) {
-        books = GetBooks();
+        books = use_cases_.GetBooksExtended();
         output_ << "Select book:" << std::endl;
+        int i = 1;
+        for (const auto& book : books) {
+            output_ << i++ << " " << book.title << " by " << book.author_name 
+                   << ", " << book.publication_year << std::endl;
+        }
     } else {
         books = use_cases_.GetBooksByTitle(title);
         if (books.empty()) {
@@ -389,10 +408,19 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
             return books[0].id;
         } else {
             output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
+            int i = 1;
+            for (const auto& book : books) {
+                output_ << i++ << " " << book.title << " by " << book.author_name 
+                       << ", " << book.publication_year << std::endl;
+            }
         }
     }
     
-    PrintVector(output_, books);
+    if (books.empty()) {
+        output_ << "No books found" << std::endl;
+        return std::nullopt;
+    }
+    
     output_ << "Enter the book # or empty line to cancel" << std::endl;
 
     std::string str;
@@ -464,7 +492,7 @@ std::vector<std::string> View::ParseAndNormalizeTags(const std::string& tags_inp
     return tags;
 }
 
-void View::PrintBookDetails(const detail::BookInfo& book) const {
+void View::PrintBookDetails(const app::BookInfoExtended& book) const {
     output_ << "Title: " << book.title << std::endl;
     output_ << "Author: " << book.author_name << std::endl;
     output_ << "Publication year: " << book.publication_year << std::endl;
