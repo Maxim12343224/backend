@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <stdexcept>
 
 #include "../util/tagged_uuid.h"
 
@@ -72,16 +73,18 @@ namespace domain {
     public:
         virtual void Save(const Author& author) = 0;
 
-        // Новые методы для расширенного функционала - делаем их опциональными
-        // с реализацией по умолчанию, которая выбрасывает исключение
+        // Новые методы для расширенного функционала
         virtual std::vector<Author> GetAll() {
             throw std::runtime_error("GetAll not implemented");
+            return {};
         }
         virtual std::optional<Author> GetById(const AuthorId&) {
             throw std::runtime_error("GetById not implemented");
+            return std::nullopt;
         }
         virtual std::optional<Author> GetByName(const std::string&) {
             throw std::runtime_error("GetByName not implemented");
+            return std::nullopt;
         }
         virtual void Delete(const AuthorId&) {
             throw std::runtime_error("Delete not implemented");
@@ -100,12 +103,14 @@ namespace domain {
         virtual std::vector<Book> GetAll() = 0;
         virtual std::vector<Book> GetByAuthorId(const AuthorId& author_id) = 0;
 
-        // Новые методы для расширенного функционала - делаем их опциональными
+        // Новые методы для расширенного функционала
         virtual std::optional<Book> GetById(const BookId&) {
             throw std::runtime_error("GetById not implemented");
+            return std::nullopt;
         }
         virtual std::vector<Book> GetByTitle(const std::string&) {
             throw std::runtime_error("GetByTitle not implemented");
+            return {};
         }
         virtual void Delete(const BookId&) {
             throw std::runtime_error("Delete not implemented");
@@ -115,6 +120,7 @@ namespace domain {
         }
         virtual std::vector<std::string> GetBookTags(const BookId&) {
             throw std::runtime_error("GetBookTags not implemented");
+            return {};
         }
         virtual void SetBookTags(const BookId&, const std::vector<std::string>&) {
             throw std::runtime_error("SetBookTags not implemented");
