@@ -16,9 +16,9 @@ namespace postgres {
         void Save(const domain::Author& author) override;
         std::vector<domain::Author> GetAll() override;
         std::optional<domain::Author> GetById(const domain::AuthorId& id) override;
+        std::optional<domain::Author> GetByName(const std::string& name) override;
         void Delete(const domain::AuthorId& id) override;
         void Update(const domain::Author& author) override;
-        std::optional<domain::Author> GetByName(const std::string& name) override;
 
     private:
         pqxx::connection& connection_;
@@ -34,9 +34,9 @@ namespace postgres {
         std::vector<domain::Book> GetAll() override;
         std::vector<domain::Book> GetByAuthorId(const domain::AuthorId& author_id) override;
         std::optional<domain::Book> GetById(const domain::BookId& id) override;
+        std::vector<domain::Book> GetByTitle(const std::string& title) override;
         void Delete(const domain::BookId& id) override;
         void Update(const domain::Book& book) override;
-        std::vector<domain::Book> GetByTitle(const std::string& title) override;
         std::vector<std::string> GetBookTags(const domain::BookId& id) override;
         void SetBookTags(const domain::BookId& id, const std::vector<std::string>& tags) override;
 

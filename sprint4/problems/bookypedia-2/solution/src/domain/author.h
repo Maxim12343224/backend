@@ -71,11 +71,13 @@ namespace domain {
     class AuthorRepository {
     public:
         virtual void Save(const Author& author) = 0;
+
+        // Новые методы для расширенного функционала
         virtual std::vector<Author> GetAll() = 0;
         virtual std::optional<Author> GetById(const AuthorId& id) = 0;
+        virtual std::optional<Author> GetByName(const std::string& name) = 0;
         virtual void Delete(const AuthorId& id) = 0;
         virtual void Update(const Author& author) = 0;
-        virtual std::optional<Author> GetByName(const std::string& name) = 0;
 
     protected:
         ~AuthorRepository() = default;
@@ -86,10 +88,12 @@ namespace domain {
         virtual void Save(const Book& book) = 0;
         virtual std::vector<Book> GetAll() = 0;
         virtual std::vector<Book> GetByAuthorId(const AuthorId& author_id) = 0;
+
+        // Новые методы для расширенного функционала
         virtual std::optional<Book> GetById(const BookId& id) = 0;
+        virtual std::vector<Book> GetByTitle(const std::string& title) = 0;
         virtual void Delete(const BookId& id) = 0;
         virtual void Update(const Book& book) = 0;
-        virtual std::vector<Book> GetByTitle(const std::string& title) = 0;
         virtual std::vector<std::string> GetBookTags(const BookId& id) = 0;
         virtual void SetBookTags(const BookId& id, const std::vector<std::string>& tags) = 0;
 
