@@ -13,6 +13,8 @@ using namespace std::literals;
 
 Application::Application(const AppConfig& config)
     : db_{pqxx::connection{config.db_url}} {
+    app::UseCasesImpl::SetBookRepository(&db_.GetBooks());
+    app::UseCasesImpl::SetConnection(&db_.GetConnection());
 }
 
 void Application::Run() {
@@ -28,4 +30,4 @@ void Application::Run() {
     menu.Run();
 }
 
-}  
+}

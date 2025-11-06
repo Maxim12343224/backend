@@ -12,7 +12,6 @@ namespace app {
             : authors_{ authors } {
         }
 
-        // Существующие методы
         void AddAuthor(const std::string& name) override;
         std::vector<AuthorInfo> GetAuthors() override;
         void AddBook(const std::string& author_id, const std::string& title, int publication_year) override;

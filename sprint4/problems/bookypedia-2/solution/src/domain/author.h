@@ -72,12 +72,23 @@ namespace domain {
     public:
         virtual void Save(const Author& author) = 0;
 
-        // Новые методы для расширенного функционала
-        virtual std::vector<Author> GetAll() = 0;
-        virtual std::optional<Author> GetById(const AuthorId& id) = 0;
-        virtual std::optional<Author> GetByName(const std::string& name) = 0;
-        virtual void Delete(const AuthorId& id) = 0;
-        virtual void Update(const Author& author) = 0;
+        // Новые методы для расширенного функционала - делаем их опциональными
+        // с реализацией по умолчанию, которая выбрасывает исключение
+        virtual std::vector<Author> GetAll() {
+            throw std::runtime_error("GetAll not implemented");
+        }
+        virtual std::optional<Author> GetById(const AuthorId&) {
+            throw std::runtime_error("GetById not implemented");
+        }
+        virtual std::optional<Author> GetByName(const std::string&) {
+            throw std::runtime_error("GetByName not implemented");
+        }
+        virtual void Delete(const AuthorId&) {
+            throw std::runtime_error("Delete not implemented");
+        }
+        virtual void Update(const Author&) {
+            throw std::runtime_error("Update not implemented");
+        }
 
     protected:
         ~AuthorRepository() = default;
@@ -89,13 +100,25 @@ namespace domain {
         virtual std::vector<Book> GetAll() = 0;
         virtual std::vector<Book> GetByAuthorId(const AuthorId& author_id) = 0;
 
-        // Новые методы для расширенного функционала
-        virtual std::optional<Book> GetById(const BookId& id) = 0;
-        virtual std::vector<Book> GetByTitle(const std::string& title) = 0;
-        virtual void Delete(const BookId& id) = 0;
-        virtual void Update(const Book& book) = 0;
-        virtual std::vector<std::string> GetBookTags(const BookId& id) = 0;
-        virtual void SetBookTags(const BookId& id, const std::vector<std::string>& tags) = 0;
+        // Новые методы для расширенного функционала - делаем их опциональными
+        virtual std::optional<Book> GetById(const BookId&) {
+            throw std::runtime_error("GetById not implemented");
+        }
+        virtual std::vector<Book> GetByTitle(const std::string&) {
+            throw std::runtime_error("GetByTitle not implemented");
+        }
+        virtual void Delete(const BookId&) {
+            throw std::runtime_error("Delete not implemented");
+        }
+        virtual void Update(const Book&) {
+            throw std::runtime_error("Update not implemented");
+        }
+        virtual std::vector<std::string> GetBookTags(const BookId&) {
+            throw std::runtime_error("GetBookTags not implemented");
+        }
+        virtual void SetBookTags(const BookId&, const std::vector<std::string>&) {
+            throw std::runtime_error("SetBookTags not implemented");
+        }
 
     protected:
         ~BookRepository() = default;
