@@ -5,6 +5,7 @@ phantom:
     load_type: rps
     schedule: line(1, 50, 30s)
   ssl: false
+  connection_test: false
 
 autostop:
   autostop:
