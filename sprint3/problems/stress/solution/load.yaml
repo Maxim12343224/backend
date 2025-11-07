@@ -7,5 +7,7 @@ phantom:
   ssl: false
 
 telegraf:
-  package: yandextank.plugins.Telegraf
-  config: monitoring.xml
+  enabled: false
+
+console:
+  enabled: false
