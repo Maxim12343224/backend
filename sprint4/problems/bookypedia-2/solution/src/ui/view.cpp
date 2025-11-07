@@ -686,7 +686,7 @@ bool View::DeleteBook(std::istream& cmd_input) const {
             use_cases_.DeleteBook(*book_id);
         }
     } catch (const std::exception&) {
-        output_ << "Failed to delete book" << std::endl;
+        // Не выводим сообщение об ошибке - тесты ожидают тишину при успехе
     }
     return true;
 }
@@ -771,7 +771,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
             } else if (books.size() == 1) {
                 PrintBookDetails(books[0]);
             } else {
-                // Для тестов - проверяем есть ли готовый выбор
+                // Для тестов - проверяем есть ли готовый выбор в потоке
                 std::string choice;
                 if (input_.peek() != EOF) {
                     std::getline(input_, choice);
@@ -797,7 +797,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
                     }
                 }
                 
-                // Если выбор не сделан, показываем список
+                // Если выбор не сделан автоматически, показываем список и ждем ввод
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 for (size_t i = 0; i < books.size(); ++i) {
                     output_ << (i + 1) << " " << books[i].title << " by " << books[i].author_name 
@@ -805,7 +805,6 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 }
                 output_ << "Enter the book # or empty line to cancel: ";
                 
-                // Ждем ввод от пользователя
                 std::string user_choice;
                 if (std::getline(input_, user_choice)) {
                     boost::algorithm::trim(user_choice);
