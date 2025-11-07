@@ -5,6 +5,7 @@ phantom:
     load_type: rps
     schedule: const(100000, 1m)
   ssl: false
+  connection_test: false
 
 telegraf:
   enabled: false
