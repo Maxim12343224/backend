@@ -191,14 +191,13 @@ std::vector<BookInfoExtended> UseCasesImpl::GetBooksExtended() {
             "SELECT b.id, b.title, a.name, b.publication_year "
             "FROM books b "
             "JOIN authors a ON b.author_id = a.id "
-            "ORDER BY b.title, a.name, b.publication_year"
+            "ORDER BY b.title, a.name, b.publication_year" 
         );
         
         std::vector<BookInfoExtended> books;
         for (const auto& row : result) {
             auto book_id = row[0].as<std::string>();
             
-            // Получение тегов для книги
             auto tags_result = work.exec(
                 "SELECT tag FROM book_tags WHERE book_id = " + work.quote(book_id) + " ORDER BY tag"
             );
@@ -231,14 +230,13 @@ std::vector<BookInfoExtended> UseCasesImpl::GetBooksByTitle(const std::string& t
             "FROM books b "
             "JOIN authors a ON b.author_id = a.id "
             "WHERE b.title = " + work.quote(title) + 
-            " ORDER BY a.name, b.publication_year"
+            " ORDER BY a.name, b.publication_year"  // Сортируем по имени автора и году
         );
         
         std::vector<BookInfoExtended> books;
         for (const auto& row : result) {
             auto book_id = row[0].as<std::string>();
             
-            // Получение тегов для книги
             auto tags_result = work.exec(
                 "SELECT tag FROM book_tags WHERE book_id = " + work.quote(book_id) + " ORDER BY tag"
             );
