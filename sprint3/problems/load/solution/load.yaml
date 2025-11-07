@@ -7,11 +7,12 @@ phantom:
   ssl: false
 
 autostop:
-  enabled: true
   autostop:
     - http(50%, 35ms)
     - http(90%, 50ms)
 
 telegraf:
-  package: yandextank.plugins.Telegraf
-  config: monitoring.xml
+  enabled: false
+
+console:
+  enabled: false
