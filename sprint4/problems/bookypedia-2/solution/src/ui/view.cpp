@@ -147,7 +147,8 @@ bool View::EditAuthor(std::istream& cmd_input) const {
         
         output_ << "Enter new name: ";
         std::string new_name;
-        if (!std::getline(input_, new_name)) return true;
+        // ВСЕГДА читаем пользовательский ввод из std::cin
+        if (!std::getline(std::cin, new_name)) return true;
         boost::algorithm::trim(new_name);
         
         if (new_name.empty()) {
@@ -189,7 +190,8 @@ bool View::DeleteBook(std::istream& cmd_input) const {
                 output_ << "Enter the book # or empty line to cancel" << std::endl;
                 
                 std::string choice;
-                if (!std::getline(input_, choice)) return true;
+                // ВСЕГДА читаем пользовательский ввод из std::cin
+                if (!std::getline(std::cin, choice)) return true;
                 boost::algorithm::trim(choice);
                 if (!choice.empty()) {
                     try {
@@ -241,7 +243,8 @@ bool View::EditBook(std::istream& cmd_input) const {
                 output_ << "Enter the book # or empty line to cancel" << std::endl;
                 
                 std::string choice;
-                if (!std::getline(input_, choice)) return true;
+                // ВСЕГДА читаем пользовательский ввод из std::cin
+                if (!std::getline(std::cin, choice)) return true;
                 boost::algorithm::trim(choice);
                 if (choice.empty()) return true;
                 
@@ -272,7 +275,8 @@ bool View::EditBook(std::istream& cmd_input) const {
         
         output_ << "Enter new title or empty line to use the current one (" << book->title << "): ";
         std::string new_title;
-        if (!std::getline(input_, new_title)) return true;
+        // ВСЕГДА читаем пользовательский ввод из std::cin
+        if (!std::getline(std::cin, new_title)) return true;
         boost::algorithm::trim(new_title);
         if (new_title.empty()) {
             new_title = book->title;
@@ -280,7 +284,8 @@ bool View::EditBook(std::istream& cmd_input) const {
         
         output_ << "Enter publication year or empty line to use the current one (" << book->publication_year << "): ";
         std::string year_str;
-        if (!std::getline(input_, year_str)) return true;
+        // ВСЕГДА читаем пользовательский ввод из std::cin
+        if (!std::getline(std::cin, year_str)) return true;
         boost::algorithm::trim(year_str);
         int new_year = book->publication_year;
         if (!year_str.empty()) {
@@ -304,7 +309,8 @@ bool View::EditBook(std::istream& cmd_input) const {
         output_ << "): ";
         
         std::string tags_input;
-        if (!std::getline(input_, tags_input)) return true;
+        // ВСЕГДА читаем пользовательский ввод из std::cin
+        if (!std::getline(std::cin, tags_input)) return true;
         auto tags = ParseAndNormalizeTags(tags_input);
         
         use_cases_.EditBook(book_id, new_title, new_year, tags);
@@ -344,7 +350,8 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 output_ << "Enter the book # or empty line to cancel: ";
                 
                 std::string choice;
-                if (!std::getline(input_, choice)) return true;
+                // ВСЕГДА читаем пользовательский ввод из std::cin
+                if (!std::getline(std::cin, choice)) return true;
                 boost::algorithm::trim(choice);
                 if (!choice.empty()) {
                     try {
@@ -383,18 +390,17 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
 
     output_ << "Enter author name or empty line to select from list:" << std::endl;
     std::string author_name;
-    if (!std::getline(input_, author_name)) return std::nullopt;
+    // ВСЕГДА читаем пользовательский ввод из std::cin
+    if (!std::getline(std::cin, author_name)) return std::nullopt;
     boost::algorithm::trim(author_name);
 
     if (author_name.empty()) {
-        // ВЫБОР АВТОРА ИЗ СПИСКА - ИСПРАВЛЕННАЯ ЛОГИКА
         auto author_id = SelectAuthor();
         if (!author_id) {
             output_ << "No author selected" << std::endl;
             return std::nullopt;
         }
         
-        // Получаем свежий список авторов для поиска имени
         auto current_authors = use_cases_.GetAuthors();
         bool author_found = false;
         for (const auto& author : current_authors) {
@@ -410,12 +416,12 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
             return std::nullopt;
         }
     } else {
-        // ИСПОЛЬЗОВАНИЕ ВВЕДЕННОГО ИМЕНИ АВТОРА
         auto author = use_cases_.GetAuthorByName(author_name);
         if (!author) {
             output_ << "No author found. Do you want to add " << author_name << " (y/n)?" << std::endl;
             std::string answer;
-            if (!std::getline(input_, answer)) return std::nullopt;
+            // ВСЕГДА читаем пользовательский ввод из std::cin
+            if (!std::getline(std::cin, answer)) return std::nullopt;
             boost::algorithm::trim(answer);
             if (answer == "y" || answer == "Y") {
                 use_cases_.AddAuthor(author_name);
@@ -431,7 +437,8 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
 
     output_ << "Enter tags (comma separated):" << std::endl;
     std::string tags_input;
-    if (!std::getline(input_, tags_input)) return std::nullopt;
+    // ВСЕГДА читаем пользовательский ввод из std::cin
+    if (!std::getline(std::cin, tags_input)) return std::nullopt;
     
     params.tags = ParseAndNormalizeTags(tags_input);
 
@@ -450,7 +457,8 @@ std::optional<std::string> View::SelectAuthor() const {
     output_ << "Enter author # or empty line to cancel" << std::endl;
 
     std::string str;
-    if (!std::getline(input_, str)) {
+    // ВСЕГДА читаем пользовательский ввод из std::cin
+    if (!std::getline(std::cin, str)) {
         return std::nullopt;
     }
     
@@ -512,7 +520,8 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
     output_ << "Enter the book # or empty line to cancel" << std::endl;
 
     std::string str;
-    if (!std::getline(input_, str)) {
+    // ВСЕГДА читаем пользовательский ввод из std::cin
+    if (!std::getline(std::cin, str)) {
         return std::nullopt;
     }
     
