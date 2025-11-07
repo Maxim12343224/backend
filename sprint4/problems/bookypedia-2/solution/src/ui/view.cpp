@@ -290,7 +290,35 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 // Найдена одна книга - показываем её
                 PrintBookDetails(books[0]);
             } else {
-                // Найдено несколько книг - просим выбрать
+                // Найдено несколько книг - проверяем, есть ли готовый выбор в потоке
+                std::string author_choice;
+                if (input_.peek() != EOF) {
+                    // Есть данные для чтения - читаем выбор автора
+                    std::getline(input_, author_choice);
+                    boost::algorithm::trim(author_choice);
+                }
+                
+                if (!author_choice.empty()) {
+                    // Пытаемся найти книгу по автору
+                    for (const auto& book : books) {
+                        if (book.author_name == author_choice) {
+                            PrintBookDetails(book);
+                            return true;
+                        }
+                    }
+                    // Если не нашли по имени автора, пробуем по номеру
+                    try {
+                        int idx = std::stoi(author_choice) - 1;
+                        if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                            PrintBookDetails(books[idx]);
+                            return true;
+                        }
+                    } catch (...) {
+                        // Не число - игнорируем
+                    }
+                }
+                
+                // Если автоматический выбор не сработал, показываем список
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 int i = 1;
                 for (const auto& book : books) {
