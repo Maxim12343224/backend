@@ -1,19 +1,39 @@
-[Connection: close]
-[Host: localhost]
-/api/healthcheck
+36
+GET /api/v1/maps HTTP/1.1
+Host: localhost:8080
+Connection: close
 
-[Connection: close]
-[Host: localhost]
-/api/v1/maps
+48
+GET /api/v1/maps/map1 HTTP/1.1
+Host: localhost:8080
+Connection: close
 
-[Connection: close]
-[Host: localhost]
-/api/v1/maps/map1
+48
+GET /api/v1/maps/map2 HTTP/1.1
+Host: localhost:8080
+Connection: close
 
-[Connection: close]
-[Host: localhost]
-/api/v1/info
+48
+GET /api/v1/maps/map3 HTTP/1.1
+Host: localhost:8080
+Connection: close
 
-[Connection: close]
-[Host: localhost]
-/public/docs
+48
+GET /api/v1/maps/test HTTP/1.1
+Host: localhost:8080
+Connection: close
+
+48
+GET /api/v1/maps/sample HTTP/1.1
+Host: localhost:8080
+Connection: close
+
+48
+GET /api/v1/maps/default HTTP/1.1
+Host: localhost:8080
+Connection: close
+
+48
+GET /api/v1/maps/demo HTTP/1.1
+Host: localhost:8080
+Connection: close
