@@ -1,0 +1,24 @@
+phantom:
+  address: localhost:8080
+  ammofile: /sprint3/problems/ammo/ammo.txt
+  load_profile:
+    load_type: rps
+    schedule: line(1, 50, 30s)
+  ssl: false
+  uris:
+    - /api/v1/maps
+    - /api/v1/maps/map1
+    - /api/v1/maps/map2
+    - /api/v1/maps/map3
+    - /api/v1/maps/test
+    - /api/v1/maps/sample
+    - /api/v1/maps/default
+    - /api/v1/maps/demo
+
+autostop:
+  - http(50%, 35ms)
+  - http(90%, 50ms)
+
+telegraf:
+  package: yandextank.plugins.Telegraf
+  config: monitoring.xml
