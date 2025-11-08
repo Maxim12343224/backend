@@ -1,3 +1,4 @@
+// solution/src/app/use_cases_impl.cpp
 #include "use_cases_impl.h"
 
 #include "../domain/author.h"
@@ -80,17 +81,16 @@ std::vector<BookInfo> UseCasesImpl::GetAuthorBooks(const std::string& author_id)
 
 void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, const std::string& title, 
                                            int publication_year, const std::vector<std::string>& tags) {
-    if (!connection_) return;
+    if (!books_ || !connection_) return;
     
     try {
         pqxx::work work{*connection_};
         
-        // Поиск автора по имени
+        // Находим или создаем автора
         auto author_result = work.exec("SELECT id FROM authors WHERE name = " + work.quote(author_name));
         domain::AuthorId author_id;
         
         if (author_result.empty()) {
-            // Автор не найден - создаем нового
             author_id = AuthorId::New();
             work.exec("INSERT INTO authors (id, name) VALUES (" +
                       work.quote(author_id.ToString()) + ", " +
@@ -99,7 +99,7 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
             author_id = domain::AuthorId::FromString(author_result[0][0].as<std::string>());
         }
         
-        // Создание книги
+        // Создаем книгу
         auto book_id = BookId::New();
         work.exec("INSERT INTO books (id, author_id, title, publication_year) VALUES (" +
                   work.quote(book_id.ToString()) + ", " +
@@ -107,7 +107,7 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
                   work.quote(title) + ", " +
                   work.quote(publication_year) + ")");
         
-        // Добавление тегов
+        // Добавляем теги
         for (const auto& tag : tags) {
             work.exec("INSERT INTO book_tags (book_id, tag) VALUES (" +
                       work.quote(book_id.ToString()) + ", " +
@@ -116,7 +116,7 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
         
         work.commit();
     } catch (const std::exception& e) {
-        throw std::runtime_error("Failed to add book");
+        throw std::runtime_error("Failed to add book: " + std::string(e.what()));
     }
 }
 
@@ -141,7 +141,7 @@ void UseCasesImpl::EditAuthor(const std::string& author_id, const std::string& n
                   " WHERE id = " + work.quote(author_id));
         work.commit();
     } catch (const std::exception& e) {
-        throw std::runtime_error("Failed to edit author");
+        throw std::runtime_error("Failed to edit author: " + std::string(e.what()));
     }
 }
 
@@ -157,19 +157,17 @@ void UseCasesImpl::DeleteBook(const std::string& book_id) {
     }
 }
 
-void UseCasesImpl::EditBook(const std::string& book_id, const std::string& new_title, 
+void UseCasesImpl::EditBook(const std::string& book_id, const std::string& new_title,
                            int new_publication_year, const std::vector<std::string>& tags) {
     if (!connection_) return;
     
     try {
         pqxx::work work{*connection_};
         
-        // Обновление информации о книге
         work.exec("UPDATE books SET title = " + work.quote(new_title) + 
                   ", publication_year = " + work.quote(new_publication_year) +
                   " WHERE id = " + work.quote(book_id));
         
-        // Обновление тегов
         work.exec("DELETE FROM book_tags WHERE book_id = " + work.quote(book_id));
         for (const auto& tag : tags) {
             work.exec("INSERT INTO book_tags (book_id, tag) VALUES (" +
@@ -178,7 +176,7 @@ void UseCasesImpl::EditBook(const std::string& book_id, const std::string& new_t
         
         work.commit();
     } catch (const std::exception& e) {
-        throw std::runtime_error("Failed to edit book");
+        throw std::runtime_error("Failed to edit book: " + std::string(e.what()));
     }
 }
 
@@ -191,7 +189,7 @@ std::vector<BookInfoExtended> UseCasesImpl::GetBooksExtended() {
             "SELECT b.id, b.title, a.name, b.publication_year "
             "FROM books b "
             "JOIN authors a ON b.author_id = a.id "
-            "ORDER BY b.title, a.name, b.publication_year" 
+            "ORDER BY b.title, a.name, b.publication_year"
         );
         
         std::vector<BookInfoExtended> books;
@@ -230,7 +228,7 @@ std::vector<BookInfoExtended> UseCasesImpl::GetBooksByTitle(const std::string& t
             "FROM books b "
             "JOIN authors a ON b.author_id = a.id "
             "WHERE b.title = " + work.quote(title) + 
-            " ORDER BY a.name, b.publication_year"  // Сортируем по имени автора и году
+            " ORDER BY a.name, b.publication_year"
         );
         
         std::vector<BookInfoExtended> books;
@@ -275,7 +273,6 @@ std::optional<BookInfoExtended> UseCasesImpl::GetBookById(const std::string& boo
             return std::nullopt;
         }
         
-        // Получение тегов для книги
         auto tags_result = work.exec(
             "SELECT tag FROM book_tags WHERE book_id = " + work.quote(book_id) + " ORDER BY tag"
         );
