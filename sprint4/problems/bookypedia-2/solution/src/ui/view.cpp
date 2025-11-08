@@ -443,6 +443,10 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
     
     if (title.empty()) {
         books = use_cases_.GetBooksExtended();
+        if (books.empty()) {
+            return std::nullopt;
+        }
+        
         output_ << "Select book:" << std::endl;
         int i = 1;
         for (const auto& book : books) {
@@ -452,11 +456,35 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
     } else {
         books = use_cases_.GetBooksByTitle(title);
         if (books.empty()) {
-            output_ << "Book not found" << std::endl;
             return std::nullopt;
         } else if (books.size() == 1) {
             return books[0].id;
         } else {
+            // Проверяем, есть ли готовый выбор в потоке
+            std::string pre_selected_choice;
+            if (input_.peek() != EOF) {
+                std::getline(input_, pre_selected_choice);
+                boost::algorithm::trim(pre_selected_choice);
+            }
+            
+            if (!pre_selected_choice.empty()) {
+                // Пытаемся найти по автору
+                for (const auto& book : books) {
+                    if (book.author_name == pre_selected_choice) {
+                        return book.id;
+                    }
+                }
+                // Пытаемся найти по номеру
+                try {
+                    int idx = std::stoi(pre_selected_choice) - 1;
+                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                        return books[idx].id;
+                    }
+                } catch (...) {
+                    // Не число - продолжаем показывать список
+                }
+            }
+            
             output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
             int i = 1;
             for (const auto& book : books) {
@@ -464,11 +492,6 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
                        << ", " << book.publication_year << std::endl;
             }
         }
-    }
-    
-    if (books.empty()) {
-        output_ << "No books found" << std::endl;
-        return std::nullopt;
     }
     
     output_ << "Enter the book # or empty line to cancel" << std::endl;
@@ -482,12 +505,12 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
     try {
         book_idx = std::stoi(str);
     } catch (std::exception const&) {
-        throw std::runtime_error("Invalid book num");
+        return std::nullopt;
     }
 
     --book_idx;
-    if (book_idx < 0 or book_idx >= static_cast<int>(books.size())) {
-        throw std::runtime_error("Invalid book num");
+    if (book_idx < 0 || book_idx >= static_cast<int>(books.size())) {
+        return std::nullopt;
     }
 
     return books[book_idx].id;
