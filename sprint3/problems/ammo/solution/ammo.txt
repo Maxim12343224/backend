@@ -1,32 +1,40 @@
 [Connection: close]
-[Host: localhost]
-/api/v1/maps
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 
 [Connection: close]
-[Host: localhost]
-/api/v1/maps/map1
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 
 [Connection: close]
-[Host: localhost]
-/api/v1/maps/map2
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 
 [Connection: close]
-[Host: localhost]
-/api/v1/maps/map3
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 
 [Connection: close]
-[Host: localhost]
-/api/v1/maps/test
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 
 [Connection: close]
-[Host: localhost]
-/api/v1/maps/sample
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 
 [Connection: close]
-[Host: localhost]
-/api/v1/maps/default
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 
 [Connection: close]
-[Host: localhost]
-/api/v1/maps/demo
+[Host: localhost:8080]
+[User-Agent: tank]
+GET /api/v1/maps HTTP/1.1
 EOF
