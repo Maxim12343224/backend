@@ -1,6 +1,7 @@
 phantom:
   address: localhost:8080
   ammofile: /sprint3/problems/ammo/solution/ammo.txt
+  ammo_type: uri  
   load_profile:
     load_type: rps
     schedule: line(1, 50, 30s)
@@ -9,8 +10,8 @@ phantom:
 
 autostop:
   autostop:
-    - http(50%, 35)
-    - http(90%, 50)
+    - http(50%, 35, 5s)
+    - http(90%, 50, 5s)
 
 telegraf:
   enabled: false
