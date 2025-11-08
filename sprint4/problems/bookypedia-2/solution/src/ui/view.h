@@ -50,6 +50,7 @@ namespace ui {
         std::optional<detail::AddBookParams> GetBookParams(std::istream& cmd_input) const;
         std::optional<std::string> SelectAuthor() const;
         std::optional<std::string> SelectBook(const std::string& title = "") const;
+        std::optional<std::string> SelectBookWithPreChoice(const std::string& title, const std::string& pre_choice) const;
         std::vector<detail::AuthorInfo> GetAuthors() const;
         std::vector<detail::BookInfo> GetBooks() const;
         std::vector<detail::BookInfo> GetAuthorBooks(const std::string& author_id) const;
