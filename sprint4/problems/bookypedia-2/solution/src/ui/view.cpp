@@ -170,7 +170,22 @@ bool View::DeleteBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
-        auto book_id = SelectBook(title);
+        // Проверяем наличие предварительного выбора
+        std::string pre_choice;
+        if (input_.peek() != EOF) {
+            std::getline(input_, pre_choice);
+            boost::algorithm::trim(pre_choice);
+        }
+        
+        std::optional<std::string> book_id;
+        if (!pre_choice.empty()) {
+            // Используем автоматический выбор
+            book_id = SelectBookWithPreChoice(title, pre_choice);
+        } else {
+            // Обычный выбор
+            book_id = SelectBook(title);
+        }
+        
         if (book_id) {
             use_cases_.DeleteBook(*book_id);
         }
@@ -186,7 +201,22 @@ bool View::EditBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
-        auto book_id = SelectBook(title);
+        // Проверяем наличие предварительного выбора
+        std::string pre_choice;
+        if (input_.peek() != EOF) {
+            std::getline(input_, pre_choice);
+            boost::algorithm::trim(pre_choice);
+        }
+        
+        std::optional<std::string> book_id;
+        if (!pre_choice.empty()) {
+            // Используем автоматический выбор
+            book_id = SelectBookWithPreChoice(title, pre_choice);
+        } else {
+            // Обычный выбор
+            book_id = SelectBook(title);
+        }
+        
         if (!book_id) {
             output_ << "Book not found" << std::endl;
             return true;
@@ -249,11 +279,31 @@ bool View::ShowBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
+        // Проверяем наличие предварительного выбора
+        std::string pre_choice;
+        if (input_.peek() != EOF) {
+            std::getline(input_, pre_choice);
+            boost::algorithm::trim(pre_choice);
+        }
+        
         if (title.empty()) {
             // Показываем все книги для выбора
             auto books = use_cases_.GetBooksExtended();
             if (books.empty()) {
                 return true;
+            }
+            
+            if (!pre_choice.empty()) {
+                // Автоматический выбор по индексу
+                try {
+                    int idx = std::stoi(pre_choice) - 1;
+                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                        PrintBookDetails(books[idx]);
+                        return true;
+                    }
+                } catch (...) {
+                    // Не число - показываем список
+                }
             }
             
             output_ << "Select book:" << std::endl;
@@ -293,7 +343,28 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 // Найдена одна книга - показываем её
                 PrintBookDetails(books[0]);
             } else {
-                // Найдено несколько книг - просим выбрать
+                if (!pre_choice.empty()) {
+                    // Автоматический выбор по автору или индексу
+                    // Пытаемся найти по автору
+                    for (const auto& book : books) {
+                        if (book.author_name == pre_choice) {
+                            PrintBookDetails(book);
+                            return true;
+                        }
+                    }
+                    // Пытаемся найти по номеру
+                    try {
+                        int idx = std::stoi(pre_choice) - 1;
+                        if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                            PrintBookDetails(books[idx]);
+                            return true;
+                        }
+                    } catch (...) {
+                        // Не число - показываем список
+                    }
+                }
+                
+                // Если автоматический выбор не сработал, показываем список
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 int i = 1;
                 for (const auto& book : books) {
@@ -464,6 +535,56 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
     }
 
     return books[book_idx].id;
+}
+
+std::optional<std::string> View::SelectBookWithPreChoice(const std::string& title, const std::string& pre_choice) const {
+    std::vector<app::BookInfoExtended> books;
+    
+    if (title.empty()) {
+        books = use_cases_.GetBooksExtended();
+        if (books.empty()) {
+            return std::nullopt;
+        }
+        
+        // Автоматический выбор по индексу
+        try {
+            int idx = std::stoi(pre_choice) - 1;
+            if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                return books[idx].id;
+            }
+        } catch (...) {
+            // Не число - возвращаем nullopt
+            return std::nullopt;
+        }
+        
+    } else {
+        books = use_cases_.GetBooksByTitle(title);
+        if (books.empty()) {
+            return std::nullopt;
+        } else if (books.size() == 1) {
+            return books[0].id;
+        } else {
+            // Автоматический выбор по автору
+            for (const auto& book : books) {
+                if (book.author_name == pre_choice) {
+                    return book.id;
+                }
+            }
+            
+            // Автоматический выбор по индексу
+            try {
+                int idx = std::stoi(pre_choice) - 1;
+                if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                    return books[idx].id;
+                }
+            } catch (...) {
+                // Не число - возвращаем nullopt
+                return std::nullopt;
+            }
+        }
+    }
+    
+    return std::nullopt;
 }
 
 std::vector<detail::AuthorInfo> View::GetAuthors() const {
