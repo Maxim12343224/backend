@@ -2,8 +2,8 @@ overload:
   enabled: false
 
 phantom:
-  address: localhost:8080
-  ammofile: ./ammo.txt
+  address: 127.0.0.1:8080
+  ammofile: /sprint3/problems/ammo/solution/ammo.txt
   ammo_type: uri
   load_profile:
     load_type: rps
