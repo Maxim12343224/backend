@@ -9,8 +9,8 @@ phantom:
 
 autostop:
   autostop:
-    - http(50%, 35ms)
-    - http(90%, 50ms)
+    - http(50%, 35)
+    - http(90%, 50)
 
 telegraf:
   enabled: false
