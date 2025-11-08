@@ -1,16 +1,17 @@
 overload:
   enabled: false
+
 phantom:
   address: localhost:8080
-  ammofile: /sprint3/problems/stress/solution/ammo.txt
+  ammofile: ./ammo.txt
+  ammo_type: uri
   load_profile:
     load_type: rps
     schedule: const(100000, 1m)
   ssl: false
-  connection_test: false
-
-telegraf:
-  enabled: false
 
 console:
+  enabled: false
+
+telegraf:
   enabled: false

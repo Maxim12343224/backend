@@ -1,22 +1,22 @@
 overload:
   enabled: false
+
 phantom:
   address: localhost:8080
-  ammofile: /sprint3/problems/load/solution/ammo.txt
-  ammo_type: uri  
+  ammofile: ./ammo.txt
+  ammo_type: uri
   load_profile:
     load_type: rps
-    schedule: line(1, 50, 30s)
+    schedule: line(1, 20, 30s)
   ssl: false
-  connection_test: false
 
 autostop:
   autostop:
     - http(50%, 35, 5s)
     - http(90%, 50, 5s)
 
-telegraf:
+console:
   enabled: false
 
-console:
+telegraf:
   enabled: false
