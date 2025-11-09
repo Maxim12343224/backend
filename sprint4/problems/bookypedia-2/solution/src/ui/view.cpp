@@ -187,63 +187,46 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 return true;
             }
             
-            // If we have pre-choice (index), use it directly
+            // Check if we have a pre-choice from the command
             if (!author_pre_choice.empty()) {
                 try {
                     int idx = std::stoi(author_pre_choice) - 1;
                     if (idx >= 0 && idx < static_cast<int>(books.size())) {
                         PrintBookDetails(books[idx]);
+                        return true;
                     }
                 } catch (...) {
-                    // Not a number, show selection list
-                    output_ << "Select book:" << std::endl;
-                    int i = 1;
-                    for (const auto& book : books) {
-                        output_ << i++ << " " << book.title << " by " << book.author_name 
-                               << ", " << book.publication_year << std::endl;
-                    }
-                    output_ << "Enter the book # or empty line to cancel: ";
-                    
-                    std::string choice;
-                    if (std::getline(input_, choice)) {
-                        boost::algorithm::trim(choice);
-                        if (!choice.empty()) {
-                            try {
-                                int idx = std::stoi(choice) - 1;
-                                if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                    PrintBookDetails(books[idx]);
-                                }
-                            } catch (...) {
-                                // Invalid input
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Show selection list
-                output_ << "Select book:" << std::endl;
-                int i = 1;
-                for (const auto& book : books) {
-                    output_ << i++ << " " << book.title << " by " << book.author_name 
-                           << ", " << book.publication_year << std::endl;
-                }
-                output_ << "Enter the book # or empty line to cancel: ";
-                
-                std::string choice;
-                if (std::getline(input_, choice)) {
-                    boost::algorithm::trim(choice);
-                    if (!choice.empty()) {
-                        try {
-                            int idx = std::stoi(choice) - 1;
-                            if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                PrintBookDetails(books[idx]);
-                            }
-                        } catch (...) {
-                            // Invalid input
-                        }
-                    }
+                    // Not a number, continue to show list
                 }
             }
+            
+            output_ << "Select book:" << std::endl;
+            int i = 1;
+            for (const auto& book : books) {
+                output_ << i++ << " " << book.title << " by " << book.author_name 
+                       << ", " << book.publication_year << std::endl;
+            }
+            output_ << "Enter the book # or empty line to cancel: ";
+            
+            std::string choice;
+            if (!std::getline(input_, choice)) {
+                return true;
+            }
+            boost::algorithm::trim(choice);
+            
+            if (choice.empty()) {
+                return true;
+            }
+            
+            try {
+                int idx = std::stoi(choice) - 1;
+                if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                    PrintBookDetails(books[idx]);
+                }
+            } catch (...) {
+                // Invalid input
+            }
+            
         } else {
             // Search books by title
             auto books = use_cases_.GetBooksByTitle(title);
@@ -254,80 +237,66 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 // Found one book - show it
                 PrintBookDetails(books[0]);
             } else {
-                // Multiple books found
-                if (!author_pre_choice.empty()) {
-                    // Try to find by author name first
-                    bool found_by_author = false;
-                    for (const auto& book : books) {
-                        if (book.author_name == author_pre_choice) {
-                            PrintBookDetails(book);
-                            found_by_author = true;
-                            break;
-                        }
+                // Multiple books found - check for pre-choice
+                
+                // If pre_choice is empty (empty_chooser), return silently without showing anything
+                if (author_pre_choice.empty()) {
+                    return true;
+                }
+                
+                // Try to find by author name first
+                bool found_by_author = false;
+                for (const auto& book : books) {
+                    // Use exact comparison for author name
+                    if (book.author_name == author_pre_choice) {
+                        PrintBookDetails(book);
+                        found_by_author = true;
+                        break;
                     }
-                    
-                    // If not found by author, try by index
-                    if (!found_by_author) {
-                        try {
-                            int idx = std::stoi(author_pre_choice) - 1;
-                            if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                PrintBookDetails(books[idx]);
-                                found_by_author = true;
-                            }
-                        } catch (...) {
-                            // Not a number
-                        }
+                }
+                
+                // If found by author, we're done
+                if (found_by_author) {
+                    return true;
+                }
+                
+                // If not found by author, try by index
+                try {
+                    int idx = std::stoi(author_pre_choice) - 1;
+                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                        PrintBookDetails(books[idx]);
+                        return true;
                     }
-                    
-                    // If still not found, show selection list
-                    if (!found_by_author) {
-                        output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
-                        int i = 1;
-                        for (const auto& book : books) {
-                            output_ << i++ << " " << book.title << " by " << book.author_name 
-                                   << ", " << book.publication_year << std::endl;
-                        }
-                        output_ << "Enter the book # or empty line to cancel: ";
-                        
-                        std::string choice;
-                        if (std::getline(input_, choice)) {
-                            boost::algorithm::trim(choice);
-                            if (!choice.empty()) {
-                                try {
-                                    int idx = std::stoi(choice) - 1;
-                                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                        PrintBookDetails(books[idx]);
-                                    }
-                                } catch (...) {
-                                    // Invalid input
-                                }
-                            }
-                        }
+                } catch (...) {
+                    // Not a number, continue to show list
+                }
+                
+                // If we reach here, show selection list
+                output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
+                int i = 1;
+                for (const auto& book : books) {
+                    output_ << i++ << " " << book.title << " by " << book.author_name 
+                           << ", " << book.publication_year << std::endl;
+                }
+                output_ << "Enter the book # or empty line to cancel: ";
+                
+                std::string choice;
+                if (!std::getline(input_, choice)) {
+                    return true;
+                }
+                boost::algorithm::trim(choice);
+                
+                if (choice.empty()) {
+                    return true;
+                }
+                
+                try {
+                    int idx = std::stoi(choice) - 1;
+                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                        PrintBookDetails(books[idx]);
                     }
-                } else {
-                    // Show selection list
-                    output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
-                    int i = 1;
-                    for (const auto& book : books) {
-                        output_ << i++ << " " << book.title << " by " << book.author_name 
-                               << ", " << book.publication_year << std::endl;
-                    }
-                    output_ << "Enter the book # or empty line to cancel: ";
-                    
-                    std::string choice;
-                    if (std::getline(input_, choice)) {
-                        boost::algorithm::trim(choice);
-                        if (!choice.empty()) {
-                            try {
-                                int idx = std::stoi(choice) - 1;
-                                if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                    PrintBookDetails(books[idx]);
-                                }
-                            } catch (...) {
-                                // Invalid input
-                            }
-                        }
-                    }
+                } catch (...) {
+                    // Invalid input
                 }
             }
         }
