@@ -180,44 +180,6 @@ void UseCasesImpl::EditBook(const std::string& book_id, const std::string& new_t
     }
 }
 
-std::vector<BookInfoExtended> UseCasesImpl::GetBooksByTitle(const std::string& title) {
-    if (!connection_) return {};
-    
-    try {
-        pqxx::read_transaction work{*connection_};
-        auto result = work.exec(
-            "SELECT b.id, a.name, b.publication_year "
-            "FROM books b "
-            "JOIN authors a ON b.author_id = a.id "
-            "WHERE b.title = " + work.quote(title) + 
-            " ORDER BY a.name, b.publication_year"
-        );
-        
-        std::vector<BookInfoExtended> books;
-        for (const auto& row : result) {
-            auto book_id = row[0].as<std::string>();
-            
-            auto tags_result = work.exec(
-                "SELECT tag FROM book_tags WHERE book_id = " + work.quote(book_id) + " ORDER BY tag"
-            );
-            std::vector<std::string> tags;
-            for (const auto& tag_row : tags_result) {
-                tags.push_back(tag_row[0].as<std::string>());
-            }
-            
-            books.push_back(BookInfoExtended{
-                book_id,
-                title,
-                row[1].as<std::string>(),
-                row[2].as<int>(),
-                tags
-            });
-        }
-        return books;
-    } catch (const std::exception& e) {
-        return {};
-    }
-}
 
 std::vector<BookInfoExtended> UseCasesImpl::GetBooksByTitle(const std::string& title) {
     if (!connection_) return {};
