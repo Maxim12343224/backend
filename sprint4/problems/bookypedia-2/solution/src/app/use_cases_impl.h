@@ -1,4 +1,3 @@
-// solution/src/app/use_cases_impl.h
 #pragma once
 #include "../domain/author_fwd.h"
 #include "use_cases.h"
