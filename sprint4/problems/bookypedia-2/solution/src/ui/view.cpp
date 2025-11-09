@@ -249,11 +249,13 @@ bool View::ShowBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
+        std::vector<app::BookInfoExtended> books;
+        
         if (title.empty()) {
             // Показываем все книги для выбора
-            auto books = use_cases_.GetBooksExtended();
+            books = use_cases_.GetBooksExtended();
             if (books.empty()) {
-                return true;
+                return true; // Ничего не выводим, если книг нет
             }
             
             output_ << "Select book:" << std::endl;
@@ -280,14 +282,14 @@ bool View::ShowBook(std::istream& cmd_input) const {
                     PrintBookDetails(books[idx]);
                 }
             } catch (...) {
-                // Неверный ввод
+                // Неверный ввод - ничего не делаем
             }
             
         } else {
             // Ищем книги по названию
-            auto books = use_cases_.GetBooksByTitle(title);
+            books = use_cases_.GetBooksByTitle(title);
             if (books.empty()) {
-                // Книга не найдена - ничего не выводим
+                // Книга не найдена - ничего не выводим (по требованию тестов)
                 return true;
             } else if (books.size() == 1) {
                 // Найдена одна книга - показываем её
@@ -308,7 +310,8 @@ bool View::ShowBook(std::istream& cmd_input) const {
                             return true;
                         }
                     }
-                    // Если не нашли по имени автора, пробуем по номеру
+                    
+                    // Пытаемся найти по номеру
                     try {
                         int idx = std::stoi(pre_choice) - 1;
                         if (idx >= 0 && idx < static_cast<int>(books.size())) {
@@ -316,7 +319,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
                             return true;
                         }
                     } catch (...) {
-                        // Не число - игнорируем
+                        // Не число - показываем список
                     }
                 }
                 
@@ -345,12 +348,12 @@ bool View::ShowBook(std::istream& cmd_input) const {
                         PrintBookDetails(books[idx]);
                     }
                 } catch (...) {
-                    // Неверный ввод
+                    // Неверный ввод - ничего не делаем
                 }
             }
         }
     } catch (const std::exception& e) {
-        // В случае ошибки просто возвращаемся
+        // В случае ошибки просто возвращаемся (не выводим сообщение об ошибке)
     }
     return true;
 }
