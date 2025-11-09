@@ -1,4 +1,4 @@
-// solution/src/bookypedia.cpp
+
 #include "bookypedia.h"
 
 #include <iostream>
