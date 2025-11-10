@@ -24,8 +24,16 @@ void Menu::Run() {
     std::string line;
     while (std::getline(input_, line)) {
         std::istringstream cmd_stream{std::move(line)};
-        if (!ParseCommand(cmd_stream)) {
+        auto result = ParseCommand(cmd_stream);
+        
+        // Проверяем специальное значение для выхода
+        if (!result.empty() && result[0] == "EXIT") {
             break;
+        }
+        
+        // Выводим результат команды
+        for (const auto& line : result) {
+            output_ << line << std::endl;
         }
     }
 }
@@ -62,26 +70,23 @@ void Menu::ShowInstructions() const {
     restore_flags();
 }
 
-bool Menu::ParseCommand(std::istream& input) {
+std::vector<std::string> Menu::ParseCommand(std::istream& input) {
     using namespace std::literals;
 
     try {
         std::string cmd;
         if (input >> cmd) {
             if (const auto it = actions_.find(cmd); it != actions_.cend()) {
-                if (!it->second.handler(input)) {
-                    return false;
-                }
+                return it->second.handler(input);
             } else {
-                output_ << "Command '"sv << cmd << "' has not been found."sv << std::endl;
+                return {"Command '"s + cmd + "' has not been found."s};
             }
         } else {
-            output_ << "Invalid command"sv << std::endl;
+            return {"Invalid command"s};
         }
     } catch (const std::exception& e) {
-        output_ << e.what() << std::endl;
+        return {e.what()};
     }
-    return true;
 }
 
 }  // namespace menu

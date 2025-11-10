@@ -3,34 +3,35 @@
 #include <iosfwd>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace menu {
 
-class Menu {
-public:
-    using Handler = std::function<bool(std::istream&)>;
+    class Menu {
+    public:
+        using Handler = std::function<std::vector<std::string>(std::istream&)>;
 
-    Menu(std::istream& input, std::ostream& output);
+        struct ActionInfo {
+            Handler handler;
+            std::string args;
+            std::string description;
+        };
 
-    void AddAction(std::string action_name, std::string args, std::string description,
-                   Handler handler);
+        Menu(std::istream& input, std::ostream& output);
 
-    void Run();
+        void AddAction(std::string action_name, std::string args, std::string description,
+            Handler handler);
 
-    void ShowInstructions() const;
+        void Run();
 
-private:
-    struct ActionInfo {
-        Handler handler;
-        std::string args;
-        std::string description;
+        void ShowInstructions() const;
+
+    private:
+        [[nodiscard]] std::vector<std::string> ParseCommand(std::istream& input);
+
+        std::istream& input_;
+        std::ostream& output_;
+        std::map<std::string, ActionInfo> actions_;
     };
-
-    [[nodiscard]] bool ParseCommand(std::istream& input);
-
-    std::istream& input_;
-    std::ostream& output_;
-    std::map<std::string, ActionInfo> actions_;
-};
 
 }  // namespace menu

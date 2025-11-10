@@ -1,4 +1,3 @@
-
 #include "bookypedia.h"
 
 #include <iostream>
@@ -19,13 +18,17 @@ Application::Application(const AppConfig& config)
 
 void Application::Run() {
     menu::Menu menu{std::cin, std::cout};
+    
+   
     menu.AddAction("Help"s, {}, "Show instructions"s, [&menu](std::istream&) {
         menu.ShowInstructions();
-        return true;
+        return std::vector<std::string>{}; 
     });
+    
     menu.AddAction("Exit"s, {}, "Exit program"s, [&menu](std::istream&) {
-        return false;
+        return std::vector<std::string>{"EXIT"}; 
     });
+    
     ui::View view{menu, use_cases_, std::cin, std::cout};
     menu.Run();
 }
