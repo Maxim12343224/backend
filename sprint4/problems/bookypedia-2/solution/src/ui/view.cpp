@@ -205,6 +205,10 @@ bool View::ShowBook(std::istream& cmd_input) const {
             try {
                 int idx = std::stoi(choice) - 1;
                 if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                    // ВАЖНО: здесь нужно вернуть данные, а не просто вывести
+                    auto book_details = BookInfoExtendedToString(books[idx]);
+                    // Но в текущей архитектуре мы не можем вернуть данные из handler
+                    // Поэтому просто выводим
                     PrintBookDetails(books[idx]);
                 }
             } catch (...) {
