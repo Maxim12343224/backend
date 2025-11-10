@@ -178,15 +178,6 @@ bool View::ShowBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
-        // ВАЖНО: читаем ВСЕ дополнительные данные ДО любого вывода
-        std::vector<std::string> additional_inputs;
-        while (input_.peek() != EOF) {
-            std::string line;
-            std::getline(input_, line);
-            boost::algorithm::trim(line);
-            additional_inputs.push_back(line);
-        }
-
         if (title.empty()) {
             // Показываем все книги для выбора
             auto books = use_cases_.GetBooksExtended();
@@ -203,12 +194,8 @@ bool View::ShowBook(std::istream& cmd_input) const {
             output_ << "Enter the book # or empty line to cancel: ";
             
             std::string choice;
-            if (!additional_inputs.empty()) {
-                choice = additional_inputs[0];
-            } else {
-                if (!std::getline(input_, choice)) {
-                    return true;
-                }
+            if (!std::getline(input_, choice)) {
+                return true;
             }
             boost::algorithm::trim(choice);
             
@@ -235,30 +222,39 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 // Найдена одна книга - показываем её
                 PrintBookDetails(books[0]);
             } else {
-                // Найдено несколько книг - используем предварительный ввод если есть
-                if (!additional_inputs.empty()) {
-                    std::string choice = additional_inputs[0];
+                // Найдено несколько книг - пытаемся прочитать предварительный выбор
+                std::string pre_selected_choice;
+                
+                // Пытаемся прочитать строку из входного потока
+                if (std::getline(input_, pre_selected_choice)) {
+                    boost::algorithm::trim(pre_selected_choice);
                     
-                    // Пытаемся найти книгу по автору
-                    for (const auto& book : books) {
-                        if (book.author_name == choice) {
-                            PrintBookDetails(book);
-                            return true;
+                    // Если получили не пустую строку - пытаемся использовать для выбора
+                    if (!pre_selected_choice.empty()) {
+                        // Пытаемся найти книгу по автору
+                        for (const auto& book : books) {
+                            if (book.author_name == pre_selected_choice) {
+                                PrintBookDetails(book);
+                                return true;
+                            }
                         }
-                    }
-                    // Пытаемся найти по номеру
-                    try {
-                        int idx = std::stoi(choice) - 1;
-                        if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                            PrintBookDetails(books[idx]);
-                            return true;
+                        // Пытаемся найти по номеру
+                        try {
+                            int idx = std::stoi(pre_selected_choice) - 1;
+                            if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                                PrintBookDetails(books[idx]);
+                                return true;
+                            }
+                        } catch (...) {
+                            // Не число - продолжаем показывать список
                         }
-                    } catch (...) {
-                        // Не число - показываем список
+                    } else {
+                        // Пустая строка - отмена
+                        return true;
                     }
                 }
                 
-                // Показываем список для выбора
+                // Если предварительного выбора нет или он не подошел - показываем список
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 int i = 1;
                 for (const auto& book : books) {
