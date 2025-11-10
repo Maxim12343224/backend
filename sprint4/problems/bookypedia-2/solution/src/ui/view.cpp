@@ -172,12 +172,21 @@ bool View::EditAuthor(std::istream& cmd_input) const {
 
 
 
-/*bool View::ShowBook(std::istream& cmd_input) const {
+bool View::ShowBook(std::istream& cmd_input) const {
     try {
         std::string title;
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
+        // ВАЖНО: читаем ВСЕ дополнительные данные ДО любого вывода
+        std::vector<std::string> additional_inputs;
+        while (input_.peek() != EOF) {
+            std::string line;
+            std::getline(input_, line);
+            boost::algorithm::trim(line);
+            additional_inputs.push_back(line);
+        }
+
         if (title.empty()) {
             // Показываем все книги для выбора
             auto books = use_cases_.GetBooksExtended();
@@ -194,8 +203,12 @@ bool View::EditAuthor(std::istream& cmd_input) const {
             output_ << "Enter the book # or empty line to cancel: ";
             
             std::string choice;
-            if (!std::getline(input_, choice)) {
-                return true;
+            if (!additional_inputs.empty()) {
+                choice = additional_inputs[0];
+            } else {
+                if (!std::getline(input_, choice)) {
+                    return true;
+                }
             }
             boost::algorithm::trim(choice);
             
@@ -222,24 +235,20 @@ bool View::EditAuthor(std::istream& cmd_input) const {
                 // Найдена одна книга - показываем её
                 PrintBookDetails(books[0]);
             } else {
-                // Найдено несколько книг - проверяем, есть ли предварительный выбор
-                std::string pre_selected_choice;
-                if (input_.peek() != EOF) {
-                    std::getline(input_, pre_selected_choice);
-                    boost::algorithm::trim(pre_selected_choice);
-                }
-                
-                if (!pre_selected_choice.empty()) {
+                // Найдено несколько книг - используем предварительный ввод если есть
+                if (!additional_inputs.empty()) {
+                    std::string choice = additional_inputs[0];
+                    
                     // Пытаемся найти книгу по автору
                     for (const auto& book : books) {
-                        if (book.author_name == pre_selected_choice) {
+                        if (book.author_name == choice) {
                             PrintBookDetails(book);
                             return true;
                         }
                     }
                     // Пытаемся найти по номеру
                     try {
-                        int idx = std::stoi(pre_selected_choice) - 1;
+                        int idx = std::stoi(choice) - 1;
                         if (idx >= 0 && idx < static_cast<int>(books.size())) {
                             PrintBookDetails(books[idx]);
                             return true;
@@ -581,483 +590,12 @@ bool View::EditBook(std::istream& cmd_input) const {
         output_ << "Failed to edit book" << std::endl;
     }
     return true;
-}*/
-
-
-
-
-
-bool View::ShowBook(std::istream& cmd_input) const {
-    try {
-        std::string title;
-        std::getline(cmd_input, title);
-        boost::algorithm::trim(title);
-        
-        // Сначала читаем ВСЕ доступные данные из входного потока
-        std::vector<std::string> additional_inputs;
-        while (input_.peek() != EOF) {
-            std::string line;
-            std::getline(input_, line);
-            boost::algorithm::trim(line);
-            if (!line.empty()) {
-                additional_inputs.push_back(line);
-            }
-        }
-
-        if (title.empty()) {
-            // Показываем все книги для выбора
-            auto books = use_cases_.GetBooksExtended();
-            if (books.empty()) {
-                return true;
-            }
-            
-            output_ << "Select book:" << std::endl;
-            int i = 1;
-            for (const auto& book : books) {
-                output_ << i++ << " " << book.title << " by " << book.author_name 
-                       << ", " << book.publication_year << std::endl;
-            }
-            output_ << "Enter the book # or empty line to cancel: ";
-            
-            // Используем предварительный ввод если есть
-            std::string choice;
-            if (!additional_inputs.empty()) {
-                choice = additional_inputs[0];
-            } else {
-                if (!std::getline(input_, choice)) {
-                    return true;
-                }
-            }
-            boost::algorithm::trim(choice);
-            
-            if (choice.empty()) {
-                return true;
-            }
-            
-            try {
-                int idx = std::stoi(choice) - 1;
-                if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                    PrintBookDetails(books[idx]);
-                }
-            } catch (...) {
-                // Неверный ввод - игнорируем
-            }
-            
-        } else {
-            // Ищем книги по названию
-            auto books = use_cases_.GetBooksByTitle(title);
-            if (books.empty()) {
-                // Книга не найдена - ничего не выводим
-                return true;
-            } else if (books.size() == 1) {
-                // Найдена одна книга - показываем её
-                PrintBookDetails(books[0]);
-            } else {
-                // Найдено несколько книг - используем предварительный ввод если есть
-                if (!additional_inputs.empty()) {
-                    std::string choice = additional_inputs[0];
-                    
-                    // Пытаемся найти книгу по автору
-                    for (const auto& book : books) {
-                        if (book.author_name == choice) {
-                            PrintBookDetails(book);
-                            return true;
-                        }
-                    }
-                    // Пытаемся найти по номеру
-                    try {
-                        int idx = std::stoi(choice) - 1;
-                        if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                            PrintBookDetails(books[idx]);
-                            return true;
-                        }
-                    } catch (...) {
-                        // Не число - показываем список
-                    }
-                }
-                
-                // Показываем список для выбора
-                output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
-                int i = 1;
-                for (const auto& book : books) {
-                    output_ << i++ << " " << book.title << " by " << book.author_name 
-                           << ", " << book.publication_year << std::endl;
-                }
-                output_ << "Enter the book # or empty line to cancel: ";
-                
-                std::string choice;
-                if (!std::getline(input_, choice)) {
-                    return true;
-                }
-                boost::algorithm::trim(choice);
-                
-                if (choice.empty()) {
-                    return true;
-                }
-                
-                try {
-                    int idx = std::stoi(choice) - 1;
-                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                        PrintBookDetails(books[idx]);
-                    }
-                } catch (...) {
-                    // Неверный ввод - игнорируем
-                }
-            }
-        }
-    } catch (const std::exception& e) {
-        // В случае ошибки просто возвращаемся, не выводя сообщение
-    }
-    return true;
 }
 
-bool View::DeleteBook(std::istream& cmd_input) const {
-    try {
-        std::string title;
-        std::getline(cmd_input, title);
-        boost::algorithm::trim(title);
-        
-        // Сначала читаем ВСЕ доступные данные из входного потока
-        std::vector<std::string> additional_inputs;
-        while (input_.peek() != EOF) {
-            std::string line;
-            std::getline(input_, line);
-            boost::algorithm::trim(line);
-            if (!line.empty()) {
-                additional_inputs.push_back(line);
-            }
-        }
 
-        std::string book_id;
-        
-        if (title.empty()) {
-            // Удаление без указания названия - показываем список
-            auto books = use_cases_.GetBooksExtended();
-            if (books.empty()) {
-                return true;
-            }
-            
-            // Используем предварительный ввод если есть
-            if (!additional_inputs.empty()) {
-                std::string choice = additional_inputs[0];
-                try {
-                    int idx = std::stoi(choice) - 1;
-                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                        book_id = books[idx].id;
-                    }
-                } catch (...) {
-                    // Не число - показываем список
-                }
-            }
-            
-            if (book_id.empty()) {
-                output_ << "Select book:" << std::endl;
-                int i = 1;
-                for (const auto& book : books) {
-                    output_ << i++ << " " << book.title << " by " << book.author_name 
-                           << ", " << book.publication_year << std::endl;
-                }
-                output_ << "Enter the book # or empty line to cancel: ";
-                
-                std::string choice;
-                if (!std::getline(input_, choice)) {
-                    return true;
-                }
-                boost::algorithm::trim(choice);
-                
-                if (choice.empty()) {
-                    return true;
-                }
-                
-                try {
-                    int idx = std::stoi(choice) - 1;
-                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                        book_id = books[idx].id;
-                    }
-                } catch (...) {
-                    return true;
-                }
-            }
-            
-        } else {
-            // Удаление по названию
-            auto books = use_cases_.GetBooksByTitle(title);
-            if (books.empty()) {
-                // Книга не найдена - ничего не делаем
-                return true;
-            } else if (books.size() == 1) {
-                // Найдена одна книга - удаляем её
-                book_id = books[0].id;
-            } else {
-                // Найдено несколько книг - используем предварительный ввод
-                if (!additional_inputs.empty()) {
-                    std::string choice = additional_inputs[0];
-                    
-                    // Пытаемся найти по автору
-                    for (const auto& book : books) {
-                        if (book.author_name == choice) {
-                            book_id = book.id;
-                            break;
-                        }
-                    }
-                    // Пытаемся найти по номеру
-                    if (book_id.empty()) {
-                        try {
-                            int idx = std::stoi(choice) - 1;
-                            if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                book_id = books[idx].id;
-                            }
-                        } catch (...) {
-                            // Не число - показываем список
-                        }
-                    }
-                }
-                
-                // Если не нашли по предварительному вводу, показываем список
-                if (book_id.empty()) {
-                    output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
-                    int i = 1;
-                    for (const auto& book : books) {
-                        output_ << i++ << " " << book.title << " by " << book.author_name 
-                               << ", " << book.publication_year << std::endl;
-                    }
-                    output_ << "Enter the book # or empty line to cancel: ";
-                    
-                    std::string choice;
-                    if (!std::getline(input_, choice)) {
-                        return true;
-                    }
-                    boost::algorithm::trim(choice);
-                    
-                    if (choice.empty()) {
-                        return true;
-                    }
-                    
-                    try {
-                        int idx = std::stoi(choice) - 1;
-                        if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                            book_id = books[idx].id;
-                        }
-                    } catch (...) {
-                        return true;
-                    }
-                }
-            }
-        }
-        
-        if (!book_id.empty()) {
-            use_cases_.DeleteBook(book_id);
-        }
-        
-    } catch (const std::exception&) {
-        // Не выводим сообщение об ошибке - тесты ожидают тишину при успехе
-    }
-    return true;
-}
 
-bool View::EditBook(std::istream& cmd_input) const {
-    try {
-        std::string title;
-        std::getline(cmd_input, title);
-        boost::algorithm::trim(title);
-        
-        // Сначала читаем ВСЕ доступные данные из входного потока
-        std::vector<std::string> additional_inputs;
-        while (input_.peek() != EOF) {
-            std::string line;
-            std::getline(input_, line);
-            boost::algorithm::trim(line);
-            if (!line.empty()) {
-                additional_inputs.push_back(line);
-            }
-        }
 
-        std::string book_id;
-        
-        if (title.empty()) {
-            // Редактирование без указания названия - показываем список
-            auto books = use_cases_.GetBooksExtended();
-            if (books.empty()) {
-                output_ << "Book not found" << std::endl;
-                return true;
-            }
-            
-            // Используем предварительный ввод если есть
-            if (!additional_inputs.empty()) {
-                std::string choice = additional_inputs[0];
-                try {
-                    int idx = std::stoi(choice) - 1;
-                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                        book_id = books[idx].id;
-                    }
-                } catch (...) {
-                    // Не число - показываем список
-                }
-            }
-            
-            if (book_id.empty()) {
-                output_ << "Select book:" << std::endl;
-                int i = 1;
-                for (const auto& book : books) {
-                    output_ << i++ << " " << book.title << " by " << book.author_name 
-                           << ", " << book.publication_year << std::endl;
-                }
-                output_ << "Enter the book # or empty line to cancel: ";
-                
-                std::string choice;
-                if (!std::getline(input_, choice)) {
-                    return true;
-                }
-                boost::algorithm::trim(choice);
-                
-                if (choice.empty()) {
-                    return true;
-                }
-                
-                try {
-                    int idx = std::stoi(choice) - 1;
-                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                        book_id = books[idx].id;
-                    } else {
-                        output_ << "Book not found" << std::endl;
-                        return true;
-                    }
-                } catch (...) {
-                    output_ << "Book not found" << std::endl;
-                    return true;
-                }
-            }
-            
-        } else {
-            // Редактирование по названию
-            auto books = use_cases_.GetBooksByTitle(title);
-            if (books.empty()) {
-                output_ << "Book not found" << std::endl;
-                return true;
-            } else if (books.size() == 1) {
-                // Найдена одна книга - редактируем её
-                book_id = books[0].id;
-            } else {
-                // Найдено несколько книг - используем предварительный ввод
-                if (!additional_inputs.empty()) {
-                    std::string choice = additional_inputs[0];
-                    
-                    // Пытаемся найти по автору
-                    for (const auto& book : books) {
-                        if (book.author_name == choice) {
-                            book_id = book.id;
-                            break;
-                        }
-                    }
-                    // Пытаемся найти по номеру
-                    if (book_id.empty()) {
-                        try {
-                            int idx = std::stoi(choice) - 1;
-                            if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                book_id = books[idx].id;
-                            }
-                        } catch (...) {
-                            // Не число - показываем список
-                        }
-                    }
-                }
-                
-                // Если не нашли по предварительному вводу, показываем список
-                if (book_id.empty()) {
-                    output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
-                    int i = 1;
-                    for (const auto& book : books) {
-                        output_ << i++ << " " << book.title << " by " << book.author_name 
-                               << ", " << book.publication_year << std::endl;
-                    }
-                    output_ << "Enter the book # or empty line to cancel: ";
-                    
-                    std::string choice;
-                    if (!std::getline(input_, choice)) {
-                        return true;
-                    }
-                    boost::algorithm::trim(choice);
-                    
-                    if (choice.empty()) {
-                        return true;
-                    }
-                    
-                    try {
-                        int idx = std::stoi(choice) - 1;
-                        if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                            book_id = books[idx].id;
-                        } else {
-                            output_ << "Book not found" << std::endl;
-                            return true;
-                        }
-                    } catch (...) {
-                        output_ << "Book not found" << std::endl;
-                        return true;
-                    }
-                }
-            }
-        }
-        
-        if (book_id.empty()) {
-            output_ << "Book not found" << std::endl;
-            return true;
-        }
-        
-        auto book = use_cases_.GetBookById(book_id);
-        if (!book) {
-            output_ << "Book not found" << std::endl;
-            return true;
-        }
-        
-        // Для теста edit_book_canceling - если additional_inputs содержит только пустые строки или отмену
-        if (!additional_inputs.empty() && additional_inputs[0].empty()) {
-            return true; // Отмена редактирования
-        }
-        
-        output_ << "Enter new title or empty line to use the current one (" << book->title << "): ";
-        std::string new_title;
-        std::getline(input_, new_title);
-        boost::algorithm::trim(new_title);
-        if (new_title.empty()) {
-            new_title = book->title;
-        }
-        
-        output_ << "Enter publication year or empty line to use the current one (" << book->publication_year << "): ";
-        std::string year_str;
-        std::getline(input_, year_str);
-        boost::algorithm::trim(year_str);
-        int new_year = book->publication_year;
-        if (!year_str.empty()) {
-            try {
-                new_year = std::stoi(year_str);
-            } catch (...) {
-                output_ << "Invalid year" << std::endl;
-                return true;
-            }
-        }
-        
-        output_ << "Enter tags (current tags: ";
-        if (book->tags.empty()) {
-            output_ << "none";
-        } else {
-            for (size_t i = 0; i < book->tags.size(); ++i) {
-                if (i > 0) output_ << ", ";
-                output_ << book->tags[i];
-            }
-        }
-        output_ << "): ";
-        
-        std::string tags_input;
-        std::getline(input_, tags_input);
-        auto tags = ParseAndNormalizeTags(tags_input);
-        
-        use_cases_.EditBook(book_id, new_title, new_year, tags);
-        
-    } catch (const std::exception& e) {
-        output_ << "Failed to edit book" << std::endl;
-    }
-    return true;
-}
+
 
 
 
