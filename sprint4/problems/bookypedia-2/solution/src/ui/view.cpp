@@ -209,39 +209,41 @@ std::vector<std::string> View::ShowBook(std::istream& cmd_input) const {
             }
             
         } else {
-            // Ищем книги по названию
+            
             auto books = use_cases_.GetBooksByTitle(title);
             if (books.empty()) {
                 return {};
             } else if (books.size() == 1) {
+                
                 return BookInfoExtendedToResult(books[0]);
             } else {
-                // Найдено несколько книг - проверяем предварительный выбор
+                
                 std::string pre_selected_choice;
                 if (input_.peek() != EOF) {
                     std::getline(input_, pre_selected_choice);
                     boost::algorithm::trim(pre_selected_choice);
                 }
                 
+                
                 if (!pre_selected_choice.empty()) {
-                    // Пытаемся найти книгу по автору
+                    
                     for (const auto& book : books) {
                         if (book.author_name == pre_selected_choice) {
                             return BookInfoExtendedToResult(book);
                         }
                     }
-                    // Пытаемся найти по номеру
+                    
                     try {
                         int idx = std::stoi(pre_selected_choice) - 1;
                         if (idx >= 0 && idx < static_cast<int>(books.size())) {
                             return BookInfoExtendedToResult(books[idx]);
                         }
                     } catch (...) {
-                        // Не число - показываем список
+                        
                     }
                 }
                 
-                // Показываем список для выбора
+                
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 std::vector<std::string> book_list;
                 int i = 1;
@@ -336,15 +338,16 @@ std::vector<std::string> View::DeleteBook(std::istream& cmd_input) const {
                     boost::algorithm::trim(pre_selected_choice);
                 }
                 
+                // Пытаемся найти по предварительному выбору БЕЗ показа списка
                 if (!pre_selected_choice.empty()) {
-                    // Пытаемся найти по автору
+                    // По автору
                     for (const auto& book : books) {
                         if (book.author_name == pre_selected_choice) {
                             book_id = book.id;
                             break;
                         }
                     }
-                    // Пытаемся найти по номеру
+                    // По номеру
                     if (book_id.empty()) {
                         try {
                             int idx = std::stoi(pre_selected_choice) - 1;
@@ -357,7 +360,7 @@ std::vector<std::string> View::DeleteBook(std::istream& cmd_input) const {
                     }
                 }
                 
-                // Если не нашли по предварительному выбору, показываем список
+                // ТОЛЬКО если не нашли по предварительному выбору - показываем список
                 if (book_id.empty()) {
                     output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                     std::vector<std::string> book_list;
@@ -400,6 +403,7 @@ std::vector<std::string> View::DeleteBook(std::istream& cmd_input) const {
     } catch (const std::exception&) {
         return {"Failed to delete book"};
     }
+    // ВАЖНО: возвращаем пустой вектор при успешном удалении
     return {};
 }
 
