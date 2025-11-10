@@ -35,25 +35,26 @@ namespace ui {
         View(menu::Menu& menu, app::UseCases& use_cases, std::istream& input, std::ostream& output);
 
     private:
-        std::vector<std::string> AddAuthor(std::istream& cmd_input) const;
-        std::vector<std::string> AddBook(std::istream& cmd_input) const;
-        std::vector<std::string> ShowAuthors() const;
-        std::vector<std::string> ShowBooks() const;
-        std::vector<std::string> ShowAuthorBooks() const;
-        std::vector<std::string> DeleteAuthor(std::istream& cmd_input) const;
-        std::vector<std::string> EditAuthor(std::istream& cmd_input) const;
-        std::vector<std::string> DeleteBook(std::istream& cmd_input) const;
-        std::vector<std::string> EditBook(std::istream& cmd_input) const;
-        std::vector<std::string> ShowBook(std::istream& cmd_input) const;
+        bool AddAuthor(std::istream& cmd_input) const;
+        bool AddBook(std::istream& cmd_input) const;
+        bool ShowAuthors() const;
+        bool ShowBooks() const;
+        bool ShowAuthorBooks() const;
+        bool DeleteAuthor(std::istream& cmd_input) const;
+        bool EditAuthor(std::istream& cmd_input) const;
+        bool DeleteBook(std::istream& cmd_input) const;
+        bool EditBook(std::istream& cmd_input) const;
+        bool ShowBook(std::istream& cmd_input) const;
 
         std::optional<detail::AddBookParams> GetBookParams(std::istream& cmd_input) const;
         std::optional<std::string> SelectAuthor() const;
-        std::optional<std::string> SelectBook(const std::string& title = "") const;
         std::vector<detail::AuthorInfo> GetAuthors() const;
         std::vector<detail::BookInfo> GetBooks() const;
         std::vector<detail::BookInfo> GetAuthorBooks(const std::string& author_id) const;
         std::vector<std::string> ParseAndNormalizeTags(const std::string& tags_input) const;
-        std::vector<std::string> BookInfoExtendedToResult(const app::BookInfoExtended& book) const;
+        void PrintBookDetails(const app::BookInfoExtended& book) const;
+        void PrintAuthors(const std::vector<detail::AuthorInfo>& authors) const;
+        void PrintBooks(const std::vector<detail::BookInfo>& books) const;
 
         menu::Menu& menu_;
         app::UseCases& use_cases_;

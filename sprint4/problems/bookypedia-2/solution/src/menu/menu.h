@@ -3,13 +3,12 @@
 #include <iosfwd>
 #include <map>
 #include <string>
-#include <vector>
 
 namespace menu {
 
     class Menu {
     public:
-        using Handler = std::function<std::vector<std::string>(std::istream&)>;
+        using Handler = std::function<bool(std::istream&)>;
 
         struct ActionInfo {
             Handler handler;
@@ -27,7 +26,7 @@ namespace menu {
         void ShowInstructions() const;
 
     private:
-        [[nodiscard]] std::vector<std::string> ParseCommand(std::istream& input);
+        [[nodiscard]] bool ParseCommand(std::istream& input);
 
         std::istream& input_;
         std::ostream& output_;
