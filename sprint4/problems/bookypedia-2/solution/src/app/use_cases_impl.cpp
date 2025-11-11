@@ -167,11 +167,32 @@ void UseCasesImpl::DeleteAuthor(const std::string& author_id) {
 }
 
 void UseCasesImpl::EditAuthor(const std::string& author_id, const std::string& new_name) {
-    if (!connection_) return;
+    if (!connection_) {
+        std::cerr << "DEBUG: No connection in EditAuthor" << std::endl;
+        throw std::runtime_error("Database connection not available");
+    }
     
     try {
         pqxx::work work{*connection_};
         std::cerr << "DEBUG: Editing author " << author_id << " to name: " << new_name << std::endl;
+        
+        // Сначала проверим, существует ли автор
+        auto author_result = work.exec("SELECT name FROM authors WHERE id = " + work.quote(author_id));
+        if (author_result.empty()) {
+            std::cerr << "DEBUG: Author not found for editing: " << author_id << std::endl;
+            throw std::runtime_error("Author not found");
+        }
+        
+        std::string old_name = author_result[0][0].as<std::string>();
+        std::cerr << "DEBUG: Changing author name from '" << old_name << "' to '" << new_name << "'" << std::endl;
+        
+        // Проверим, не существует ли уже автор с таким именем
+        auto existing_author = work.exec("SELECT id FROM authors WHERE name = " + work.quote(new_name) + " AND id != " + work.quote(author_id));
+        if (!existing_author.empty()) {
+            std::cerr << "DEBUG: Author with name '" << new_name << "' already exists" << std::endl;
+            throw std::runtime_error("Author with this name already exists");
+        }
+        
         work.exec("UPDATE authors SET name = " + work.quote(new_name) + 
                   " WHERE id = " + work.quote(author_id));
         work.commit();

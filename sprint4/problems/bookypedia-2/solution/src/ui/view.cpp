@@ -539,6 +539,9 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
         return std::nullopt;
     }
 
+    // Пропускаем пробел после года
+    cmd_input.get();
+
     // Читаем оставшуюся часть строки как название книги
     std::string title;
     std::getline(cmd_input, title);
