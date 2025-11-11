@@ -28,7 +28,7 @@ namespace ui {
         using AuthorInfo = app::AuthorInfo;
         using BookInfo = app::BookInfo;
 
-    }  // namespace detail
+    }
 
     class View {
     public:
@@ -62,4 +62,4 @@ namespace ui {
         std::ostream& output_;
     };
 
-}  // namespace ui
+}

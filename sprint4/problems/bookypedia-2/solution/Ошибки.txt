@@ -1,0 +1,782 @@
+Run cd cpp-backend-tests-practicum/scripts/sprint4
+/__w/backend/backend/cpp-backend-tests-practicum/scripts/sprint4/bookypedia-2/build.sh: line 13: /__w/backend/backend/cpp-backend-tests-practicum/scripts/sprint4/bookypedia-2/../../../..//.venv/bin/activate: No such file or directory
+Configuration:
+[settings]
+arch=x86_64
+arch_build=x86_64
+build_type=Release
+compiler=gcc
+compiler.libcxx=libstdc++11
+compiler.version=11
+os=Linux
+os_build=Linux
+[options]
+[build_requires]
+[env]
+conanfile.txt: Installing package
+Requirements
+    boost/1.78.0 from 'conancenter' - Cache
+    bzip2/1.0.8 from 'conancenter' - Cache
+    catch2/3.2.0 from 'conancenter' - Cache
+    gtest/1.12.1 from 'conancenter' - Cache
+    libbacktrace/cci.20210118 from 'conancenter' - Cache
+    libpq/14.5 from 'conancenter' - Cache
+    libpqxx/7.7.4 from 'conancenter' - Cache
+    zlib/1.2.13 from 'conancenter' - Cache
+Packages
+    boost/1.78.0:dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978 - Cache
+    bzip2/1.0.8:c32092bf4d4bb47cf962af898e02823f499b017e - Cache
+    catch2/3.2.0:25c9ba754cb107c25053d39ff36e4eb0233c185e - Cache
+    gtest/1.12.1:4fefe176018d6564b5e2144163a209c027be31c5 - Cache
+    libbacktrace/cci.20210118:dfbe50feef7f3c6223a476cd5aeadb687084a646 - Cache
+    libpq/14.5:dfbe50feef7f3c6223a476cd5aeadb687084a646 - Cache
+    libpqxx/7.7.4:04cbdfff4f57b797b6cf60c443f251cb70622a37 - Cache
+    zlib/1.2.13:dfbe50feef7f3c6223a476cd5aeadb687084a646 - Cache
+Installing (downloading, building) binaries...
+bzip2/1.0.8: Already installed!
+catch2/3.2.0: Already installed!
+gtest/1.12.1: Already installed!
+libbacktrace/cci.20210118: Already installed!
+libpq/14.5: Already installed!
+zlib/1.2.13: Already installed!
+boost/1.78.0: Already installed!
+libpqxx/7.7.4: Already installed!
+conanfile.txt: Generator cmake_multi created conanbuildinfo_release.cmake
+conanfile.txt: Generator cmake_multi created conanbuildinfo_multi.cmake
+conanfile.txt: Generator txt created conanbuildinfo.txt
+conanfile.txt: Aggregating env generators
+conanfile.txt: Generated conaninfo.txt
+conanfile.txt: Generated graphinfo
+-- The CXX compiler identification is GNU 11.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Conan: Using cmake targets configuration
+-- Library pqxx found /github/home/.conan/data/libpqxx/7.7.4/_/_/package/04cbdfff4f57b797b6cf60c443f251cb70622a37/lib/libpqxx.a
+-- Library boost_contract found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_contract.a
+-- Library boost_coroutine found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_coroutine.a
+-- Library boost_fiber_numa found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_fiber_numa.a
+-- Library boost_fiber found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_fiber.a
+-- Library boost_context found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_context.a
+-- Library boost_graph found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_graph.a
+-- Library boost_iostreams found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_iostreams.a
+-- Library boost_json found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_json.a
+-- Library boost_locale found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_locale.a
+-- Library boost_log_setup found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_log_setup.a
+-- Library boost_log found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_log.a
+-- Library boost_math_c99 found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_c99.a
+-- Library boost_math_c99f found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_c99f.a
+-- Library boost_math_c99l found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_c99l.a
+-- Library boost_math_tr1 found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_tr1.a
+-- Library boost_math_tr1f found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_tr1f.a
+-- Library boost_math_tr1l found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_math_tr1l.a
+-- Library boost_nowide found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_nowide.a
+-- Library boost_program_options found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_program_options.a
+-- Library boost_random found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_random.a
+-- Library boost_regex found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_regex.a
+-- Library boost_stacktrace_addr2line found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_addr2line.a
+-- Library boost_stacktrace_backtrace found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_backtrace.a
+-- Library boost_stacktrace_basic found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_basic.a
+-- Library boost_stacktrace_noop found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_stacktrace_noop.a
+-- Library boost_timer found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_timer.a
+-- Library boost_type_erasure found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_type_erasure.a
+-- Library boost_thread found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_thread.a
+-- Library boost_chrono found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_chrono.a
+-- Library boost_container found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_container.a
+-- Library boost_date_time found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_date_time.a
+-- Library boost_unit_test_framework found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_unit_test_framework.a
+-- Library boost_prg_exec_monitor found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_prg_exec_monitor.a
+-- Library boost_test_exec_monitor found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_test_exec_monitor.a
+-- Library boost_exception found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_exception.a
+-- Library boost_wave found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_wave.a
+-- Library boost_filesystem found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_filesystem.a
+-- Library boost_atomic found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_atomic.a
+-- Library boost_wserialization found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_wserialization.a
+-- Library boost_serialization found /github/home/.conan/data/boost/1.78.0/_/_/package/dc8aedd23a0f0a773a5fcdcfe1ae3e89c4205978/lib/libboost_serialization.a
+-- Library Catch2Main found /github/home/.conan/data/catch2/3.2.0/_/_/package/25c9ba754cb107c25053d39ff36e4eb0233c185e/lib/libCatch2Main.a
+-- Library Catch2 found /github/home/.conan/data/catch2/3.2.0/_/_/package/25c9ba754cb107c25053d39ff36e4eb0233c185e/lib/libCatch2.a
+-- Library gtest_main found /github/home/.conan/data/gtest/1.12.1/_/_/package/4fefe176018d6564b5e2144163a209c027be31c5/lib/libgtest_main.a
+-- Library gmock_main found /github/home/.conan/data/gtest/1.12.1/_/_/package/4fefe176018d6564b5e2144163a209c027be31c5/lib/libgmock_main.a
+-- Library gmock found /github/home/.conan/data/gtest/1.12.1/_/_/package/4fefe176018d6564b5e2144163a209c027be31c5/lib/libgmock.a
+-- Library gtest found /github/home/.conan/data/gtest/1.12.1/_/_/package/4fefe176018d6564b5e2144163a209c027be31c5/lib/libgtest.a
+-- Library pq found /github/home/.conan/data/libpq/14.5/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libpq.a
+-- Library pgcommon found /github/home/.conan/data/libpq/14.5/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libpgcommon.a
+-- Library pgcommon_shlib found /github/home/.conan/data/libpq/14.5/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libpgcommon_shlib.a
+-- Library pgport found /github/home/.conan/data/libpq/14.5/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libpgport.a
+-- Library pgport_shlib found /github/home/.conan/data/libpq/14.5/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libpgport_shlib.a
+-- Library z found /github/home/.conan/data/zlib/1.2.13/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libz.a
+-- Library bz2 found /github/home/.conan/data/bzip2/1.0.8/_/_/package/c32092bf4d4bb47cf962af898e02823f499b017e/lib/libbz2.a
+-- Library backtrace found /github/home/.conan/data/libbacktrace/cci.20210118/_/_/package/dfbe50feef7f3c6223a476cd5aeadb687084a646/lib/libbacktrace.a
+-- Conan: Adjusting default RPATHs Conan policies
+-- Conan: Adjusting language standard
+-- Current conanbuildinfo.cmake directory: /__w/backend/backend/sprint4/problems/bookypedia-2/solution/build
+-- Conan: Compiler GCC>=5, checking major version 11
+-- Conan: Checking correct version: 11
+BUILD TYPE: Release
+-- Looking for C++ include pthread.h
+-- Looking for C++ include pthread.h - found
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE  
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /__w/backend/backend/sprint4/problems/bookypedia-2/solution/build
+[  7%] Building CXX object CMakeFiles/libbookypedia.dir/src/menu/menu.cpp.o
+[ 15%] Building CXX object CMakeFiles/libbookypedia.dir/src/ui/view.cpp.o
+[ 23%] Building CXX object CMakeFiles/libbookypedia.dir/src/app/use_cases_impl.cpp.o
+[ 30%] Building CXX object CMakeFiles/libbookypedia.dir/src/domain/author.cpp.o
+[ 38%] Building CXX object CMakeFiles/libbookypedia.dir/src/util/tagged_uuid.cpp.o
+[ 46%] Building CXX object CMakeFiles/libbookypedia.dir/src/postgres/postgres.cpp.o
+[ 53%] Linking CXX static library liblibbookypedia.a
+[ 53%] Built target libbookypedia
+[ 76%] Building CXX object CMakeFiles/bookypedia.dir/src/bookypedia.cpp.o
+[ 76%] Building CXX object CMakeFiles/bookypedia.dir/src/main.cpp.o
+[ 76%] Building CXX object CMakeFiles/tests.dir/tests/use_case_tests.cpp.o
+[ 84%] Building CXX object CMakeFiles/tests.dir/tests/tagged_uuid_tests.cpp.o
+[ 92%] Linking CXX executable bookypedia
+[100%] Linking CXX executable tests
+[100%] Built target bookypedia
+[100%] Built target tests
+============================= test session starts ==============================
+platform linux -- Python 3.10.6, pytest-7.1.2, pluggy-1.0.0
+rootdir: /__w/backend/backend/cpp-backend-tests-practicum
+plugins: quickcheck-0.9.0, parallel-0.1.1, xprocess-0.20.0
+collected 111 items
+../../tests/test_s04_bookypedia-2.py ..............................FFF.. [ 31%]
+....FFF............FFF............FFF..............................FFF.. [ 96%]
+....                                                                     [100%]
+=================================== FAILURES ===================================
+___________________________ test_add_book[empty_db] ____________________________
+db_name = 'empty_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_add_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            titles = [
+                'How to cook an egg', 'Great man cannot do great things!', 'Strange ancient book!'
+            ]
+    
+            # New author, with tags
+            year = random.randint(1, 2054)
+            author = create_new_name(db_name)
+            tags = create_messy_tags(15)
+            book = [
+                titles[0],
+                author,
+                year,
+                clear_tags(tags)
+                ]
+    
+            result = bookypedia.add_book(year, titles[0], author, tags, 'y')
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[0])[0]
+            assert db_book[1:] == book
+    
+            # Old author, with tags
+    
+            authors = [pair[1] for pair in get_authors(db_name)]
+            author = random.choice(authors)
+            year = random.randint(1, 2054)
+            tags = create_messy_tags(15)
+            book = [
+                titles[1],
+                author,
+                year,
+                clear_tags(tags)
+                ]
+    
+            result = bookypedia.add_book(year, titles[1], bookypedia.author_chooser(author), tags)
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[1])[0]
+            assert db_book[1:] == book
+    
+            # New author, without tags
+    
+            author = create_new_name(db_name)
+            year = random.randint(1, 2054)
+            book = [
+                titles[2],
+                author,
+                year,
+                ]
+    
+            result = bookypedia.add_book(year, titles[2], author, tags='')
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[2])[0]
+            assert db_book[1:] == book
+    
+            # Empty author to cancel
+    
+            year = random.randint(1, 2054)
+            tags = create_messy_tags(15)
+    
+            result = bookypedia.add_book(year, titles[1], bookypedia.empty_chooser, tags)
+>           assert result is None or result.startswith('Failed to add book')
+E           assert ("Command 'for' has not been found." is None or False)
+E            +  where False = <built-in method startswith of str object at 0x7fb4270edb90>('Failed to add book')
+E            +    where <built-in method startswith of str object at 0x7fb4270edb90> = "Command 'for' has not been found.".startswith
+../../tests/test_s04_bookypedia-2.py:749: AssertionError
+___________________________ test_add_book[table_db] ____________________________
+db_name = 'table_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_add_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            titles = [
+                'How to cook an egg', 'Great man cannot do great things!', 'Strange ancient book!'
+            ]
+    
+            # New author, with tags
+            year = random.randint(1, 2054)
+            author = create_new_name(db_name)
+            tags = create_messy_tags(15)
+            book = [
+                titles[0],
+                author,
+                year,
+                clear_tags(tags)
+                ]
+    
+            result = bookypedia.add_book(year, titles[0], author, tags, 'y')
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[0])[0]
+            assert db_book[1:] == book
+    
+            # Old author, with tags
+    
+            authors = [pair[1] for pair in get_authors(db_name)]
+            author = random.choice(authors)
+            year = random.randint(1, 2054)
+            tags = create_messy_tags(15)
+            book = [
+                titles[1],
+                author,
+                year,
+                clear_tags(tags)
+                ]
+    
+            result = bookypedia.add_book(year, titles[1], bookypedia.author_chooser(author), tags)
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[1])[0]
+            assert db_book[1:] == book
+    
+            # New author, without tags
+    
+            author = create_new_name(db_name)
+            year = random.randint(1, 2054)
+            book = [
+                titles[2],
+                author,
+                year,
+                ]
+    
+            result = bookypedia.add_book(year, titles[2], author, tags='')
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[2])[0]
+            assert db_book[1:] == book
+    
+            # Empty author to cancel
+    
+            year = random.randint(1, 2054)
+            tags = create_messy_tags(15)
+    
+            result = bookypedia.add_book(year, titles[1], bookypedia.empty_chooser, tags)
+>           assert result is None or result.startswith('Failed to add book')
+E           assert ("Command 'pedantic,' has not been found." is None or False)
+E            +  where False = <built-in method startswith of str object at 0x7fb4272ab7b0>('Failed to add book')
+E            +    where <built-in method startswith of str object at 0x7fb4272ab7b0> = "Command 'pedantic,' has not been found.".startswith
+../../tests/test_s04_bookypedia-2.py:749: AssertionError
+____________________________ test_add_book[full_db] ____________________________
+db_name = 'full_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_add_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            titles = [
+                'How to cook an egg', 'Great man cannot do great things!', 'Strange ancient book!'
+            ]
+    
+            # New author, with tags
+            year = random.randint(1, 2054)
+            author = create_new_name(db_name)
+            tags = create_messy_tags(15)
+            book = [
+                titles[0],
+                author,
+                year,
+                clear_tags(tags)
+                ]
+    
+            result = bookypedia.add_book(year, titles[0], author, tags, 'y')
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[0])[0]
+            assert db_book[1:] == book
+    
+            # Old author, with tags
+    
+            authors = [pair[1] for pair in get_authors(db_name)]
+            author = random.choice(authors)
+            year = random.randint(1, 2054)
+            tags = create_messy_tags(15)
+            book = [
+                titles[1],
+                author,
+                year,
+                clear_tags(tags)
+                ]
+    
+            result = bookypedia.add_book(year, titles[1], bookypedia.author_chooser(author), tags)
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[1])[0]
+            assert db_book[1:] == book
+    
+            # New author, without tags
+    
+            author = create_new_name(db_name)
+            year = random.randint(1, 2054)
+            book = [
+                titles[2],
+                author,
+                year,
+                ]
+    
+            result = bookypedia.add_book(year, titles[2], author, tags='')
+    
+            assert result is None
+            assert bookypedia.show_books() == books_to_str(get_books(db_name))
+            db_book: list = get_book(db_name, titles[2])[0]
+            assert db_book[1:] == book
+    
+            # Empty author to cancel
+    
+            year = random.randint(1, 2054)
+            tags = create_messy_tags(15)
+    
+            result = bookypedia.add_book(year, titles[1], bookypedia.empty_chooser, tags)
+>           assert result is None or result.startswith('Failed to add book')
+E           assert ("Command 'horror,' has not been found." is None or False)
+E            +  where False = <built-in method startswith of str object at 0x7fb4272ab810>('Failed to add book')
+E            +    where <built-in method startswith of str object at 0x7fb4272ab810> = "Command 'horror,' has not been found.".startswith
+../../tests/test_s04_bookypedia-2.py:749: AssertionError
+_____________________ test_show_book_choose_book[empty_db] _____________________
+db_name = 'empty_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_show_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            for author in authors:
+    
+                db_books = get_book(db_name, book_title)
+                for book in db_books:
+                    if book[2] == author:
+                        break
+                else:
+                    book = None
+                book = book_to_str(book)
+                bookypedia_book = bookypedia.show_book(book_title, bookypedia.book_chooser(author))
+>               assert bookypedia_book == book
+E               AssertionError: assert [] == ['Title: A ne...c, spaaaaces']
+E                 Right contains 4 more items, first extra item: 'Title: A new way to cook eggs!'
+E                 Full diff:
+E                   [
+E                 +  ,
+E                 -  'Title: A new way to cook eggs!',
+E                 -  'Author: Bob Spalletti',
+E                 -  'Publication year: 1339',
+E                 -  'Tags: #, horror, romantic, spaaaaces',
+E                   ]
+../../tests/test_s04_bookypedia-2.py:819: AssertionError
+_____________________ test_show_book_choose_book[table_db] _____________________
+db_name = 'table_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_show_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            for author in authors:
+    
+                db_books = get_book(db_name, book_title)
+                for book in db_books:
+                    if book[2] == author:
+                        break
+                else:
+                    book = None
+                book = book_to_str(book)
+                bookypedia_book = bookypedia.show_book(book_title, bookypedia.book_chooser(author))
+>               assert bookypedia_book == book
+E               AssertionError: assert [] == ['Title: A ne...ic, romantic']
+E                 Right contains 4 more items, first extra item: 'Title: A new way to cook eggs!'
+E                 Full diff:
+E                   [
+E                 +  ,
+E                 -  'Title: A new way to cook eggs!',
+E                 -  'Author: Superpowered Zelda Gallagher',
+E                 -  'Publication year: 399',
+E                 -  'Tags: for adults, for children, horror, pedantic, romantic',
+E                   ]
+../../tests/test_s04_bookypedia-2.py:819: AssertionError
+_____________________ test_show_book_choose_book[full_db] ______________________
+db_name = 'full_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_show_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            for author in authors:
+    
+                db_books = get_book(db_name, book_title)
+                for book in db_books:
+                    if book[2] == author:
+                        break
+                else:
+                    book = None
+                book = book_to_str(book)
+                bookypedia_book = bookypedia.show_book(book_title, bookypedia.book_chooser(author))
+>               assert bookypedia_book == book
+E               AssertionError: assert [] == ['Title: A ne...aaces, tag 1']
+E                 Right contains 4 more items, first extra item: 'Title: A new way to cook eggs!'
+E                 Full diff:
+E                   [
+E                 +  ,
+E                 -  'Title: A new way to cook eggs!',
+E                 -  'Author: Great Bob Spalletti',
+E                 -  'Publication year: 443',
+E                 -  'Tags: #, for adults, for children, horror, pedantic, romantic, spaaaaces, '
+E                 -  'tag 1',
+E                   ]
+../../tests/test_s04_bookypedia-2.py:819: AssertionError
+____________________ test_delete_book_choose_book[empty_db] ____________________
+db_name = 'empty_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_delete_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            books = get_books(db_name)
+            for book in books:
+                title = book[1]
+                author = book[3]
+>               assert bookypedia.delete_book(title, bookypedia.book_chooser(author)) == []
+E               assert ['Multiple bo...e to cancel:'] == []
+E                 Left contains 5 more items, first extra item: 'Multiple books found with title "A new way to cook eggs!":'
+E                 Full diff:
+E                   [
+E                 -  ,
+E                 +  'Multiple books found with title "A new way to cook eggs!":',
+E                 +  '1 A new way to cook eggs! by Egocentric Luciano The third, 1928',
+E                 +  '2 A new way to cook eggs! by Great Patricia, 1485',
+E                 +  '3 A new way to cook eggs! by Great Roberto Brown, 2043',
+E                 +  'Enter the book # or empty line to cancel:',
+E                   ]
+../../tests/test_s04_bookypedia-2.py:912: AssertionError
+____________________ test_delete_book_choose_book[table_db] ____________________
+db_name = 'table_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_delete_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            books = get_books(db_name)
+            for book in books:
+                title = book[1]
+                author = book[3]
+>               assert bookypedia.delete_book(title, bookypedia.book_chooser(author)) == []
+E               assert ['Multiple bo...e to cancel:'] == []
+E                 Left contains 5 more items, first extra item: 'Multiple books found with title "A new way to cook eggs!":'
+E                 Full diff:
+E                   [
+E                 -  ,
+E                 +  'Multiple books found with title "A new way to cook eggs!":',
+E                 +  '1 A new way to cook eggs! by Egocentric Bob Fox, 110',
+E                 +  '2 A new way to cook eggs! by Egocentric Sara The greatest, 1226',
+E                 +  '3 A new way to cook eggs! by Superpowered Roberto The third, 160',
+E                 +  'Enter the book # or empty line to cancel:',
+E                   ]
+../../tests/test_s04_bookypedia-2.py:912: AssertionError
+____________________ test_delete_book_choose_book[full_db] _____________________
+db_name = 'full_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_delete_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            books = get_books(db_name)
+            for book in books:
+                title = book[1]
+                author = book[3]
+>               assert bookypedia.delete_book(title, bookypedia.book_chooser(author)) == []
+E               assert ['Multiple bo...e to cancel:'] == []
+E                 Left contains 5 more items, first extra item: 'Multiple books found with title "A new way to cook eggs!":'
+E                 Full diff:
+E                   [
+E                 -  ,
+E                 +  'Multiple books found with title "A new way to cook eggs!":',
+E                 +  '1 A new way to cook eggs! by Egocentric Patrick Spalletti, 1935',
+E                 +  '2 A new way to cook eggs! by Superpowered Patricia Brown, 1111',
+E                 +  '3 A new way to cook eggs! by Superpowered Quill, 500',
+E                 +  'Enter the book # or empty line to cancel:',
+E                   ]
+../../tests/test_s04_bookypedia-2.py:912: AssertionError
+_____________________ test_edit_book_choose_book[empty_db] _____________________
+db_name = 'empty_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_edit_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            chosen_author = random.choice(authors)
+    
+            db_books = get_book(db_name, book_title)
+            for db_book in db_books:
+                if db_book[2] == chosen_author:
+                    break
+            else:
+                db_book = None  # Something went wrong and an exceptions will be raised soon
+    
+            bookypedia_book = bookypedia.show_book(book_title, bookypedia.book_chooser(chosen_author))
+>           assert bookypedia_book == book_to_str(db_book)
+E           AssertionError: assert [] == ['Title: A ne...c, spaaaaces']
+E             Right contains 4 more items, first extra item: 'Title: A new way to cook eggs!'
+E             Full diff:
+E               [
+E             +  ,
+E             -  'Title: A new way to cook eggs!',
+E             -  'Author: Fictional Kevin Brown',
+E             -  'Publication year: 1300',
+E             -  'Tags: for adults, for children, horror, pedantic, romantic, spaaaaces',
+E               ]
+../../tests/test_s04_bookypedia-2.py:1023: AssertionError
+_____________________ test_edit_book_choose_book[table_db] _____________________
+db_name = 'table_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_edit_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            chosen_author = random.choice(authors)
+    
+            db_books = get_book(db_name, book_title)
+            for db_book in db_books:
+                if db_book[2] == chosen_author:
+                    break
+            else:
+                db_book = None  # Something went wrong and an exceptions will be raised soon
+    
+            bookypedia_book = bookypedia.show_book(book_title, bookypedia.book_chooser(chosen_author))
+>           assert bookypedia_book == book_to_str(db_book)
+E           AssertionError: assert [] == ['Title: A ne...aaces, tag 1']
+E             Right contains 4 more items, first extra item: 'Title: A new way to cook eggs!'
+E             Full diff:
+E               [
+E             +  ,
+E             -  'Title: A new way to cook eggs!',
+E             -  'Author: Bob The greatest',
+E             -  'Publication year: 1439',
+E             -  'Tags: for adults, for children, horror, romantic, spaaaaces, tag 1',
+E               ]
+../../tests/test_s04_bookypedia-2.py:1023: AssertionError
+_____________________ test_edit_book_choose_book[full_db] ______________________
+db_name = 'full_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_edit_book_choose_book(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+            chosen_author = random.choice(authors)
+    
+            db_books = get_book(db_name, book_title)
+            for db_book in db_books:
+                if db_book[2] == chosen_author:
+                    break
+            else:
+                db_book = None  # Something went wrong and an exceptions will be raised soon
+    
+            bookypedia_book = bookypedia.show_book(book_title, bookypedia.book_chooser(chosen_author))
+>           assert bookypedia_book == book_to_str(db_book)
+E           AssertionError: assert [] == ['Title: A ne...c, spaaaaces']
+E             Right contains 4 more items, first extra item: 'Title: A new way to cook eggs!'
+E             Full diff:
+E               [
+E             +  ,
+E             -  'Title: A new way to cook eggs!',
+E             -  'Author: Fictional Patrick The third',
+E             -  'Publication year: 1696',
+E             -  'Tags: #, for adults, romantic, spaaaaces',
+E               ]
+../../tests/test_s04_bookypedia-2.py:1023: AssertionError
+______________________ test_edit_book_canceling[empty_db] ______________________
+db_name = 'empty_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_edit_book_canceling(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+>           result = bookypedia.edit_book(callback=bookypedia.empty_chooser, new_info=None)
+../../tests/test_s04_bookypedia-2.py:1163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+self = Bookypedia(process=<Popen: returncode: -15 args: ['/__w/backend/backend/cpp-backend-tests-pract...>, db_name='empty_db', chose='')
+book = None, callback = <function Bookypedia.empty_chooser at 0x7fb4270675b0>
+new_info = None
+    def edit_book(self, book: Optional[str] = None, callback: Optional[Callable] = None, new_info: Dict[str, str] = None) -> List[str]:
+        mb_title = self._book('EditBook', book, callback)  # Enter new title
+        if mb_title:
+            if not mb_title[0].startswith('Enter new title'):
+                return mb_title[0]
+>       self.process.write(new_info['title'])
+E       TypeError: 'NoneType' object is not subscriptable
+../../tests/test_s04_bookypedia-2.py:402: TypeError
+______________________ test_edit_book_canceling[table_db] ______________________
+db_name = 'table_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_edit_book_canceling(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+>           result = bookypedia.edit_book(callback=bookypedia.empty_chooser, new_info=None)
+../../tests/test_s04_bookypedia-2.py:1163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+self = Bookypedia(process=<Popen: returncode: -15 args: ['/__w/backend/backend/cpp-backend-tests-pract...>, db_name='table_db', chose='')
+book = None, callback = <function Bookypedia.empty_chooser at 0x7fb4270675b0>
+new_info = None
+    def edit_book(self, book: Optional[str] = None, callback: Optional[Callable] = None, new_info: Dict[str, str] = None) -> List[str]:
+        mb_title = self._book('EditBook', book, callback)  # Enter new title
+        if mb_title:
+            if not mb_title[0].startswith('Enter new title'):
+                return mb_title[0]
+>       self.process.write(new_info['title'])
+E       TypeError: 'NoneType' object is not subscriptable
+../../tests/test_s04_bookypedia-2.py:402: TypeError
+______________________ test_edit_book_canceling[full_db] _______________________
+db_name = 'full_db'
+    @pytest.mark.parametrize('db_name', ['empty_db', 'table_db', 'full_db'])
+    def test_edit_book_canceling(db_name):
+        with run_bookypedia(db_name) as bookypedia:
+            bookypedia: Bookypedia
+    
+            book_title = 'A new way to cook eggs!'
+            authors = [create_new_name(db_name) for _ in range(3)]
+    
+            for author in authors:
+                bookypedia.add_book(random.randint(1, 2054), book_title, author, create_messy_tags(15))
+    
+>           result = bookypedia.edit_book(callback=bookypedia.empty_chooser, new_info=None)
+../../tests/test_s04_bookypedia-2.py:1163: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+self = Bookypedia(process=<Popen: returncode: -15 args: ['/__w/backend/backend/cpp-backend-tests-pract...>, db_name='full_db', chose='')
+book = None, callback = <function Bookypedia.empty_chooser at 0x7fb4270675b0>
+new_info = None
+    def edit_book(self, book: Optional[str] = None, callback: Optional[Callable] = None, new_info: Dict[str, str] = None) -> List[str]:
+        mb_title = self._book('EditBook', book, callback)  # Enter new title
+        if mb_title:
+            if not mb_title[0].startswith('Enter new title'):
+                return mb_title[0]
+>       self.process.write(new_info['title'])
+E       TypeError: 'NoneType' object is not subscriptable
+../../tests/test_s04_bookypedia-2.py:402: TypeError
+---------- generated xml file: /__w/backend/backend/bookypedia-2.xml -----------
+=========================== short test summary info ============================
+FAILED ../../tests/test_s04_bookypedia-2.py::test_add_book[empty_db] - assert...
+FAILED ../../tests/test_s04_bookypedia-2.py::test_add_book[table_db] - assert...
+FAILED ../../tests/test_s04_bookypedia-2.py::test_add_book[full_db] - assert ...
+FAILED ../../tests/test_s04_bookypedia-2.py::test_show_book_choose_book[empty_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_show_book_choose_book[table_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_show_book_choose_book[full_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_delete_book_choose_book[empty_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_delete_book_choose_book[table_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_delete_book_choose_book[full_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_edit_book_choose_book[empty_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_edit_book_choose_book[table_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_edit_book_choose_book[full_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_edit_book_canceling[empty_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_edit_book_canceling[table_db]
+FAILED ../../tests/test_s04_bookypedia-2.py::test_edit_book_canceling[full_db]
+================== 15 failed, 96 passed in 258.46s (0:04:18) ===================
+Error: Process completed with exit code 1.

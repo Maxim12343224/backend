@@ -20,7 +20,7 @@ bookypedia::AppConfig GetConfigFromEnv() {
     return config;
 }
 
-}  // namespace
+}  
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] const char* argv[]) {
     try {
