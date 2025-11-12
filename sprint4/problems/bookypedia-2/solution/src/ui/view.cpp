@@ -573,8 +573,11 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
             std::cerr << "DEBUG: No author selected - cancellation" << std::endl;
             output_ << "Failed to add book" << std::endl;
             
-            // ВАЖНО: НЕ поглощаем ввод после отмены
-            // Тесты сами управляют потоком команд
+            // ВАЖНО: Всегда поглощаем одну строку после отмены (это будут теги от тестов)
+            std::string next_line;
+            if (std::getline(input_, next_line)) {
+                std::cerr << "DEBUG: Discarding tags input after cancellation: '" << next_line << "'" << std::endl;
+            }
             return std::nullopt;
         }
         
@@ -623,8 +626,11 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
                 output_ << "Failed to add book" << std::endl;
                 std::cerr << "DEBUG: User declined to add author" << std::endl;
                 
-                // ВАЖНО: НЕ поглощаем ввод после отказа
-                // Тесты сами управляют потоком команд
+                // ВАЖНО: Всегда поглощаем одну строку после отказа (это будут теги от тестов)
+                std::string next_line;
+                if (std::getline(input_, next_line)) {
+                    std::cerr << "DEBUG: Discarding tags input after decline: '" << next_line << "'" << std::endl;
+                }
                 return std::nullopt;
             }
         } else {
