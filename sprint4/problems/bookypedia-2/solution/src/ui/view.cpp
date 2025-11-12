@@ -566,31 +566,6 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
 
     std::cerr << "DEBUG: Author input: '" << author_name << "'" << std::endl;
 
-    // Функция для определения, является ли строка тегами
-    auto isLikelyTags = [](const std::string& str) -> bool {
-        if (str.empty()) return true;  // Пустая строка - это теги (нет тегов)
-        
-        // Если содержит запятые - скорее всего теги
-        if (str.find(',') != std::string::npos) return true;
-        
-        // Если это одно слово и не похоже на команду - может быть тегом
-        static const std::vector<std::string> commands = {
-            "AddAuthor", "AddBook", "ShowAuthors", "ShowBooks", 
-            "ShowAuthorBooks", "DeleteAuthor", "EditAuthor", 
-            "DeleteBook", "EditBook", "ShowBook", "Help", "Exit"
-        };
-        
-        std::string first_word = str.substr(0, str.find(' '));
-        for (const auto& cmd : commands) {
-            if (first_word == cmd) {
-                return false;  // Это команда
-            }
-        }
-        
-        // Если не команда и без запятых, считаем что это один тег
-        return true;
-    };
-
     if (author_name.empty()) {
         std::cerr << "DEBUG: Empty author name, selecting from list" << std::endl;
         auto author_id = SelectAuthor();
@@ -598,26 +573,8 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
             std::cerr << "DEBUG: No author selected - cancellation" << std::endl;
             output_ << "Failed to add book" << std::endl;
             
-            // УМНОЕ ПОГЛОЩЕНИЕ: смотрим следующую строку, но не читаем её
-            // Просто проверяем, является ли она тегами
-            std::streampos original_pos = input_.tellg();
-            std::string next_line;
-            if (std::getline(input_, next_line)) {
-                boost::algorithm::trim(next_line);
-                std::cerr << "DEBUG: Next line after cancellation: '" << next_line << "'" << std::endl;
-                
-                if (isLikelyTags(next_line)) {
-                    std::cerr << "DEBUG: Detected tags, discarding: '" << next_line << "'" << std::endl;
-                    // Теги поглощаем - ничего не делаем, строка уже прочитана
-                } else {
-                    std::cerr << "DEBUG: Detected command, seeking back: '" << next_line << "'" << std::endl;
-                    // Это команда - пытаемся вернуться назад
-                    input_.seekg(original_pos);
-                    if (input_.fail()) {
-                        std::cerr << "DEBUG: WARNING - cannot seek back, command will be lost" << std::endl;
-                    }
-                }
-            }
+            // ВАЖНО: НЕ поглощаем ввод после отмены
+            // Тесты сами управляют потоком команд
             return std::nullopt;
         }
         
@@ -666,25 +623,8 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
                 output_ << "Failed to add book" << std::endl;
                 std::cerr << "DEBUG: User declined to add author" << std::endl;
                 
-                // УМНОЕ ПОГЛОЩЕНИЕ для случая отказа от добавления автора
-                std::streampos original_pos = input_.tellg();
-                std::string next_line;
-                if (std::getline(input_, next_line)) {
-                    boost::algorithm::trim(next_line);
-                    std::cerr << "DEBUG: Next line after decline: '" << next_line << "'" << std::endl;
-                    
-                    if (isLikelyTags(next_line)) {
-                        std::cerr << "DEBUG: Detected tags, discarding: '" << next_line << "'" << std::endl;
-                        // Теги поглощаем
-                    } else {
-                        std::cerr << "DEBUG: Detected command, seeking back: '" << next_line << "'" << std::endl;
-                        // Это команда - пытаемся вернуться назад
-                        input_.seekg(original_pos);
-                        if (input_.fail()) {
-                            std::cerr << "DEBUG: WARNING - cannot seek back, command will be lost" << std::endl;
-                        }
-                    }
-                }
+                // ВАЖНО: НЕ поглощаем ввод после отказа
+                // Тесты сами управляют потоком команд
                 return std::nullopt;
             }
         } else {
