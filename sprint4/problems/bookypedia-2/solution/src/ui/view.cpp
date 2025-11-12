@@ -65,7 +65,7 @@ bool View::AddBook(std::istream& cmd_input) const {
                                                params->publication_year, params->tags);
             std::cerr << "DEBUG: Book added successfully" << std::endl;
         } else {
-            output_ << "Failed to add book"sv << std::endl;
+            // GetBookParams уже вывел сообщение об ошибке
             std::cerr << "DEBUG: Failed to get book parameters" << std::endl;
         }
     } catch (const std::exception& e) {
@@ -569,7 +569,8 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
         std::cerr << "DEBUG: Empty author name, selecting from list" << std::endl;
         auto author_id = SelectAuthor();
         if (!author_id) {
-            std::cerr << "DEBUG: No author selected" << std::endl;
+            std::cerr << "DEBUG: No author selected - cancellation" << std::endl;
+            output_ << "Failed to add book" << std::endl;  // <-- ДОБАВИТЬ ЭТУ СТРОКУ
             return std::nullopt;
         }
         auto authors = GetAuthors();
@@ -604,7 +605,7 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
                     return std::nullopt;
                 }
             } else {
-                output_ << "Failed to add book" << std::endl;
+                output_ << "Failed to add book" << std::endl;  // <-- И ЭТУ СТРОКУ
                 std::cerr << "DEBUG: User declined to add author" << std::endl;
                 return std::nullopt;
             }
