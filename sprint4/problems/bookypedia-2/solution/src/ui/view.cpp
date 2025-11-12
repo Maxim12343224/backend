@@ -66,23 +66,11 @@ bool View::AddBook(std::istream& cmd_input) const {
             std::cerr << "DEBUG: Book added successfully" << std::endl;
         } else {
             // GetBookParams уже вывел сообщение об ошибке
-            std::cerr << "DEBUG: Failed to get book parameters" << std::endl;
-            
-            // ДОБАВИТЬ: Поглотить оставшийся ввод (теги), чтобы они не интерпретировались как команды
-            std::string remaining_input;
-            if (std::getline(input_, remaining_input)) {
-                std::cerr << "DEBUG: Discarding remaining input: '" << remaining_input << "'" << std::endl;
-            }
+            std::cerr << "DEBUG: Failed to get book parameters - book not added" << std::endl;
         }
     } catch (const std::exception& e) {
         output_ << "Failed to add book"sv << std::endl;
         std::cerr << "DEBUG: Exception in AddBook: " << e.what() << std::endl;
-        
-        // ДОБАВИТЬ: Поглотить оставшийся ввод и здесь
-        std::string remaining_input;
-        if (std::getline(input_, remaining_input)) {
-            std::cerr << "DEBUG: Discarding remaining input after exception: '" << remaining_input << "'" << std::endl;
-        }
     }
     return true;
 }
@@ -571,6 +559,7 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
     output_ << "Enter author name or empty line to select from list:" << std::endl;
     std::string author_name;
     if (!std::getline(input_, author_name)) {
+        std::cerr << "DEBUG: Failed to read author name" << std::endl;
         return std::nullopt;
     }
     boost::algorithm::trim(author_name);
@@ -582,31 +571,42 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
         auto author_id = SelectAuthor();
         if (!author_id) {
             std::cerr << "DEBUG: No author selected - cancellation" << std::endl;
-            output_ << "Failed to add book" << std::endl;  // <-- ДОБАВИТЬ ЭТУ СТРОКУ
+            output_ << "Failed to add book" << std::endl;
+            // НЕ поглощаем ввод - тест сам управляет потоком
             return std::nullopt;
         }
+        
+        // Находим имя выбранного автора
         auto authors = GetAuthors();
+        bool author_found = false;
         for (const auto& author : authors) {
             if (author.id == *author_id) {
                 params.author_name = author.name;
+                author_found = true;
+                std::cerr << "DEBUG: Selected author from list: " << author.name << std::endl;
                 break;
             }
         }
-        if (params.author_name.empty()) {
+        
+        if (!author_found) {
             output_ << "Author not found" << std::endl;
-            std::cerr << "DEBUG: Author not found in list" << std::endl;
+            std::cerr << "DEBUG: Author not found in list after selection" << std::endl;
             return std::nullopt;
         }
     } else {
+        // Пользователь ввел имя автора напрямую
         auto author = use_cases_.GetAuthorByName(author_name);
         if (!author) {
+            // Автор не найден - предлагаем добавить
             output_ << "No author found. Do you want to add " << author_name << " (y/n)?" << std::endl;
             std::string answer;
             if (!std::getline(input_, answer)) {
+                std::cerr << "DEBUG: Failed to read answer for adding author" << std::endl;
                 return std::nullopt;
             }
             boost::algorithm::trim(answer);
             std::cerr << "DEBUG: User answer for adding author: '" << answer << "'" << std::endl;
+            
             if (answer == "y" || answer == "Y") {
                 try {
                     use_cases_.AddAuthor(author_name);
@@ -614,26 +614,32 @@ std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input
                     std::cerr << "DEBUG: Author added: " << author_name << std::endl;
                 } catch (const std::exception& e) {
                     output_ << "Failed to add author" << std::endl;
+                    std::cerr << "DEBUG: Exception when adding author: " << e.what() << std::endl;
                     return std::nullopt;
                 }
             } else {
-                output_ << "Failed to add book" << std::endl;  // <-- И ЭТУ СТРОКУ
+                output_ << "Failed to add book" << std::endl;
                 std::cerr << "DEBUG: User declined to add author" << std::endl;
+                // НЕ поглощаем ввод - тест сам управляет потоком
                 return std::nullopt;
             }
         } else {
+            // Автор существует
             params.author_name = author->name;
             std::cerr << "DEBUG: Existing author found: " << author->name << std::endl;
         }
     }
 
+    // Если мы дошли до этого места, значит автор выбран/добавлен
+    // Теперь запрашиваем теги
     output_ << "Enter tags (comma separated):" << std::endl;
     std::string tags_input;
     if (!std::getline(input_, tags_input)) {
+        std::cerr << "DEBUG: Failed to read tags input" << std::endl;
         return std::nullopt;
     }
+    
     params.tags = ParseAndNormalizeTags(tags_input);
-
     std::cerr << "DEBUG: Tags input: '" << tags_input << "', normalized count: " << params.tags.size() << std::endl;
 
     return params;
@@ -646,7 +652,16 @@ std::optional<std::string> View::SelectAuthor() const {
     output_ << "Enter author # or empty line to cancel" << std::endl;
 
     std::string str;
-    if (!std::getline(input_, str) || str.empty()) {
+    if (!std::getline(input_, str)) {
+        std::cerr << "DEBUG: SelectAuthor - failed to read input" << std::endl;
+        return std::nullopt;
+    }
+    boost::algorithm::trim(str);
+
+    std::cerr << "DEBUG: SelectAuthor - user input: '" << str << "'" << std::endl;
+
+    if (str.empty()) {
+        std::cerr << "DEBUG: SelectAuthor - user cancelled" << std::endl;
         return std::nullopt;
     }
 
@@ -654,14 +669,17 @@ std::optional<std::string> View::SelectAuthor() const {
     try {
         author_idx = std::stoi(str);
     } catch (std::exception const&) {
+        std::cerr << "DEBUG: SelectAuthor - invalid number: '" << str << "'" << std::endl;
         throw std::runtime_error("Invalid author num");
     }
 
     --author_idx;
     if (author_idx < 0 or author_idx >= static_cast<int>(authors.size())) {
+        std::cerr << "DEBUG: SelectAuthor - index out of range: " << author_idx << std::endl;
         throw std::runtime_error("Invalid author num");
     }
 
+    std::cerr << "DEBUG: SelectAuthor - selected author: " << authors[author_idx].name << std::endl;
     return authors[author_idx].id;
 }
 
