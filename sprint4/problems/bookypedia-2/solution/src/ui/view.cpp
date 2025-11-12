@@ -67,10 +67,22 @@ bool View::AddBook(std::istream& cmd_input) const {
         } else {
             // GetBookParams уже вывел сообщение об ошибке
             std::cerr << "DEBUG: Failed to get book parameters" << std::endl;
+            
+            // ДОБАВИТЬ: Поглотить оставшийся ввод (теги), чтобы они не интерпретировались как команды
+            std::string remaining_input;
+            if (std::getline(input_, remaining_input)) {
+                std::cerr << "DEBUG: Discarding remaining input: '" << remaining_input << "'" << std::endl;
+            }
         }
     } catch (const std::exception& e) {
         output_ << "Failed to add book"sv << std::endl;
         std::cerr << "DEBUG: Exception in AddBook: " << e.what() << std::endl;
+        
+        // ДОБАВИТЬ: Поглотить оставшийся ввод и здесь
+        std::string remaining_input;
+        if (std::getline(input_, remaining_input)) {
+            std::cerr << "DEBUG: Discarding remaining input after exception: '" << remaining_input << "'" << std::endl;
+        }
     }
     return true;
 }
