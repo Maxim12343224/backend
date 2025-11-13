@@ -19,7 +19,7 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
-    // Добавляем вспомогательную функцию для сериализации чисел
+    
     json::value serialize_number(double value) {
         if (value == std::floor(value)) {
             return json::value(static_cast<int64_t>(value));
@@ -210,7 +210,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     for (const auto& p : session->GetPlayers()) {
         const auto& dog = p->GetDog();
         
-        // Создаем JSON для рюкзака
+        
         json::array bag_json;
         for (const auto& item : p->GetBag()) {
             bag_json.push_back({
@@ -224,11 +224,11 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
             {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
             {"dir", model::DirectionToString(dog.GetDirection())},
             {"bag", std::move(bag_json)},
-            {"score", p->GetScore()}  // Добавляем поле с очками
+            {"score", p->GetScore()}
         };
     }
 
-    // Добавляем информацию о потерянных предметах
+    
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (const auto& obj : lost_objects) {
@@ -414,7 +414,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Загружаем оригинальный JSON для получения lootTypes и bagCapacity
+            
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -426,7 +426,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // Ищем карту в конфиге
+            
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -441,7 +441,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // Создаем ответ с lootTypes и bagCapacity
+            
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},
@@ -453,7 +453,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                     : json::array()}
             };
 
-            // Добавляем bagCapacity если оно есть в конфиге
+            
             if (map_json.as_object().contains("bagCapacity")) {
                 response_json.as_object()["bagCapacity"] = 
                     map_json.as_object().at("bagCapacity");
@@ -615,4 +615,4 @@ bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
         return false;
     }
 }
-}  // namespace http_handler
+}

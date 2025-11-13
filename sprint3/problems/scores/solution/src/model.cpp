@@ -227,7 +227,7 @@ void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
                 next_lost_object_id_++,
                 type,
                 {x, y},
-                value  // Устанавливаем стоимость предмета
+                value 
             });
         }
     }
@@ -278,7 +278,7 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Сохраняем начальные позиции и вычисляем конечные
+   
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
@@ -295,52 +295,52 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    // Обновляем позиции собак
+    
     for (size_t i = 0; i < players_.size(); ++i) {
         auto& dog = players_[i]->GetDog();
         dog.SetPosition(end_positions[i]);
     }
     
-    // Создаем провайдер для предметов и сборщиков
+    
     ItemGathererProviderImpl provider;
     
-    // Добавляем предметы
+    
     for (const auto& obj : lost_objects_) {
         provider.items.push_back({
             {obj.position.x, obj.position.y},
-            0.0,  // ширина предмета
+            0.0,  
             obj.id
         });
     }
     
-    // Добавляем игроков как сборщиков
+    
     for (size_t i = 0; i < players_.size(); ++i) {
         provider.gatherers.push_back({
             {start_positions[i].x, start_positions[i].y},
             {end_positions[i].x, end_positions[i].y},
-            0.3,  // половина ширины игрока (0.6 / 2)
+            0.3,  
             i,
             players_[i]
         });
     }
     
-    // Добавляем офисы как "предметы" для возврата
+    
     const auto& offices = map_.GetOffices();
     for (const auto& office : offices) {
         provider.items.push_back({
             {office.GetPosition().x, office.GetPosition().y},
-            0.25,  // половина ширины базы (0.5 / 2)
-            std::numeric_limits<size_t>::max()  // специальный ID для офиса
+            0.25,  
+            std::numeric_limits<size_t>::max() 
         });
     }
     
-    // Находим события сбора
+   
     auto gather_events = collision_detector::FindGatherEvents(provider);
     
-    // Сортируем события по времени
+    
     std::vector<Event> events;
     for (const auto& e : gather_events) {
-        // Определяем тип события: сбор предмета или возврат на базу
+        
         bool is_office = provider.items[e.item_id].id == std::numeric_limits<size_t>::max();
         
         events.push_back({
@@ -356,7 +356,7 @@ void GameSession::Tick(double delta_time) {
         return a.time < b.time;
     });
     
-    // Обрабатываем события в хронологическом порядке
+    
     std::vector<LostObject> collected_items;
     std::vector<bool> item_processed(lost_objects_.size(), false);
     
@@ -365,19 +365,19 @@ void GameSession::Tick(double delta_time) {
         auto& player = gatherer.player;
         
         if (event.type == Event::GATHER) {
-            // Сбор предмета
+           
             size_t item_idx = event.item_id;
             if (item_idx >= lost_objects_.size()) continue;
             
             if (!item_processed[item_idx] && !player->IsBagFull()) {
-                // Добавляем предмет в рюкзак
+                
                 if (player->AddItemToBag(lost_objects_[item_idx])) {
                     item_processed[item_idx] = true;
                     collected_items.push_back(lost_objects_[item_idx]);
                 }
             }
         } else if (event.type == Event::RETURN) {
-            // Возврат на базу - начисляем очки за все предметы в рюкзаке
+            
             for (const auto& item : player->GetBag()) {
                 player->AddScore(item.value);
             }
@@ -385,7 +385,7 @@ void GameSession::Tick(double delta_time) {
         }
     }
     
-    // Удаляем собранные предметы
+   
     auto new_end = std::remove_if(lost_objects_.begin(), lost_objects_.end(),
         [&](const LostObject& obj) {
             auto it = std::find_if(collected_items.begin(), collected_items.end(),

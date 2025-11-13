@@ -179,7 +179,7 @@ namespace model {
         size_t id;
         size_t type;
         Point position;
-        int value;  // Добавляем поле стоимости предмета
+        int value;
     };
 
     class GameSession;
@@ -201,7 +201,7 @@ namespace model {
         const std::vector<LostObject>& GetBag() const noexcept { return bag_; }
         size_t GetBagCapacity() const noexcept { return bag_capacity_; }
         bool IsBagFull() const noexcept { return bag_.size() >= bag_capacity_; }
-        int GetScore() const noexcept { return score_; }  // Добавляем метод для получения очков
+        int GetScore() const noexcept { return score_; }
 
         bool AddItemToBag(const LostObject& item) {
             if (IsBagFull()) return false;
@@ -210,7 +210,7 @@ namespace model {
         }
 
         void ClearBag() { bag_.clear(); }
-        void AddScore(int points) { score_ += points; }  // Добавляем метод для добавления очков
+        void AddScore(int points) { score_ += points; }
 
     private:
         Id id_;
@@ -219,7 +219,7 @@ namespace model {
         std::shared_ptr<GameSession> session_;
         std::vector<LostObject> bag_;
         size_t bag_capacity_;
-        int score_ = 0;  // Добавляем поле для хранения очков
+        int score_ = 0;
     };
 
     class GameSession : public std::enable_shared_from_this<GameSession> {
@@ -241,7 +241,7 @@ namespace model {
 
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
-        void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }  // Добавляем метод для установки стоимостей
+        void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
 
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
@@ -261,7 +261,7 @@ namespace model {
         std::atomic<size_t> next_lost_object_id_{ 0 };
         mutable std::recursive_mutex mutex_;
         size_t bag_capacity_;
-        std::vector<int> loot_values_;  // Добавляем поле для хранения стоимостей предметов
+        std::vector<int> loot_values_;
     };
 
     class Game {
@@ -388,7 +388,7 @@ namespace model {
         std::unordered_map<Player::Token, std::shared_ptr<Player>, util::TaggedHasher<Player::Token>> token_to_player_;
         std::unordered_map<Map::Id, size_t, MapIdHasher> map_loot_types_count_;
         std::unordered_map<Map::Id, size_t, MapIdHasher> map_bag_capacity_;
-        std::unordered_map<Map::Id, std::vector<int>, MapIdHasher> map_loot_values_;  // Добавляем поле для хранения стоимостей
+        std::unordered_map<Map::Id, std::vector<int>, MapIdHasher> map_loot_values_;
         std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
         double default_dog_speed_ = 1.0;
         size_t default_bag_capacity_ = 3;

@@ -76,14 +76,14 @@ namespace json_loader {
             auto& loot_types = map_obj.at("lootTypes").as_array();
             game.SetMapLootTypesCount(map_id, loot_types.size());
             
-            // Извлекаем значения предметов
+            
             std::vector<int> loot_values;
             for (const auto& loot_type : loot_types) {
                 auto& loot_obj = loot_type.as_object();
                 if (loot_obj.contains("value")) {
                     loot_values.push_back(static_cast<int>(loot_obj.at("value").as_int64()));
                 } else {
-                    loot_values.push_back(0);  // Значение по умолчанию
+                    loot_values.push_back(0);
                 }
             }
             
