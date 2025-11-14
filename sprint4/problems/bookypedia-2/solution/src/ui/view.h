@@ -28,7 +28,7 @@ namespace ui {
         using AuthorInfo = app::AuthorInfo;
         using BookInfo = app::BookInfo;
 
-    }
+    }  // namespace detail
 
     class View {
     public:
@@ -48,13 +48,12 @@ namespace ui {
 
         std::optional<detail::AddBookParams> GetBookParams(std::istream& cmd_input) const;
         std::optional<std::string> SelectAuthor() const;
+        std::optional<std::string> SelectBook(const std::string& title = "") const;
         std::vector<detail::AuthorInfo> GetAuthors() const;
         std::vector<detail::BookInfo> GetBooks() const;
         std::vector<detail::BookInfo> GetAuthorBooks(const std::string& author_id) const;
         std::vector<std::string> ParseAndNormalizeTags(const std::string& tags_input) const;
         void PrintBookDetails(const app::BookInfoExtended& book) const;
-        void PrintAuthors(const std::vector<detail::AuthorInfo>& authors) const;
-        void PrintBooks(const std::vector<detail::BookInfo>& books) const;
 
         menu::Menu& menu_;
         app::UseCases& use_cases_;
@@ -62,4 +61,4 @@ namespace ui {
         std::ostream& output_;
     };
 
-}
+}  // namespace ui
