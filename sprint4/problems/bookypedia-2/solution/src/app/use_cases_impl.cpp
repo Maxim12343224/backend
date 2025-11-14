@@ -222,6 +222,7 @@ std::vector<BookInfoExtended> UseCasesImpl::GetBooksExtended() {
         for (const auto& row : result) {
             auto book_id = row[0].as<std::string>();
             
+            // Получаем теги для книги
             auto tags_result = work.exec(
                 "SELECT tag FROM book_tags WHERE book_id = " + work.quote(book_id) + " ORDER BY tag"
             );
