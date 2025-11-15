@@ -247,7 +247,6 @@ bool View::ShowBook(std::istream& cmd_input) const {
         boost::algorithm::trim(title);
         
         if (title.empty()) {
-            // РџРѕРєР°Р·С‹РІР°РµРј РІСЃРµ РєРЅРёРіРё РґР»СЏ РІС‹Р±РѕСЂР°
             auto books = use_cases_.GetBooksExtended();
             if (books.empty()) {
                 return true;
@@ -277,48 +276,40 @@ bool View::ShowBook(std::istream& cmd_input) const {
                     PrintBookDetails(books[idx]);
                 }
             } catch (...) {
-                // РќРµРІРµСЂРЅС‹Р№ РІРІРѕРґ - РёРіРЅРѕСЂРёСЂСѓРµРј
             }
             
         } else {
-            // РС‰РµРј РєРЅРёРіРё РїРѕ РЅР°Р·РІР°РЅРёСЋ
             auto books = use_cases_.GetBooksByTitle(title);
             if (books.empty()) {
-                // РљРЅРёРіР° РЅРµ РЅР°Р№РґРµРЅР° - РЅРёС‡РµРіРѕ РЅРµ РІС‹РІРѕРґРёРј
                 return true;
             } else if (books.size() == 1) {
-                // РќР°Р№РґРµРЅР° РѕРґРЅР° РєРЅРёРіР° - РїРѕРєР°Р·С‹РІР°РµРј РµС‘
                 PrintBookDetails(books[0]);
             } else {
-                // РќР°Р№РґРµРЅРѕ РЅРµСЃРєРѕР»СЊРєРѕ РєРЅРёРі - РїСЂРѕРІРµСЂСЏРµРј, РµСЃС‚СЊ Р»Рё РіРѕС‚РѕРІС‹Р№ РІС‹Р±РѕСЂ РІ РїРѕС‚РѕРєРµ
-                std::string author_choice;
-                if (input_.peek() != EOF) {
-                    // Р•СЃС‚СЊ РґР°РЅРЅС‹Рµ РґР»СЏ С‡С‚РµРЅРёСЏ - С‡РёС‚Р°РµРј РІС‹Р±РѕСЂ Р°РІС‚РѕСЂР°
-                    std::getline(input_, author_choice);
-                    boost::algorithm::trim(author_choice);
+                std::string pre_selected_choice;
+                
+                if (cmd_input.peek() != EOF) {
+                    std::getline(cmd_input, pre_selected_choice);
+                    boost::algorithm::trim(pre_selected_choice);
                 }
                 
-                if (!author_choice.empty()) {
-                    // РџС‹С‚Р°РµРјСЃСЏ РЅР°Р№С‚Рё РєРЅРёРіСѓ РїРѕ Р°РІС‚РѕСЂСѓ
+                if (!pre_selected_choice.empty()) {
                     for (const auto& book : books) {
-                        if (book.author_name == author_choice) {
+                        if (book.author_name == pre_selected_choice) {
                             PrintBookDetails(book);
                             return true;
                         }
                     }
-                    // Р•СЃР»Рё РЅРµ РЅР°С€Р»Рё РїРѕ РёРјРµРЅРё Р°РІС‚РѕСЂР°, РїСЂРѕР±СѓРµРј РїРѕ РЅРѕРјРµСЂСѓ
+                    
                     try {
-                        int idx = std::stoi(author_choice) - 1;
+                        int idx = std::stoi(pre_selected_choice) - 1;
                         if (idx >= 0 && idx < static_cast<int>(books.size())) {
                             PrintBookDetails(books[idx]);
                             return true;
                         }
                     } catch (...) {
-                        // РќРµ С‡РёСЃР»Рѕ - РёРіРЅРѕСЂРёСЂСѓРµРј
                     }
                 }
                 
-                // Р•СЃР»Рё Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРёР№ РІС‹Р±РѕСЂ РЅРµ СЃСЂР°Р±РѕС‚Р°Р», РїРѕРєР°Р·С‹РІР°РµРј СЃРїРёСЃРѕРє
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 int i = 1;
                 for (const auto& book : books) {
@@ -343,12 +334,10 @@ bool View::ShowBook(std::istream& cmd_input) const {
                         PrintBookDetails(books[idx]);
                     }
                 } catch (...) {
-                    // РќРµРІРµСЂРЅС‹Р№ РІРІРѕРґ - РёРіРЅРѕСЂРёСЂСѓРµРј
                 }
             }
         }
     } catch (const std::exception& e) {
-        // Р’ СЃР»СѓС‡Р°Рµ РѕС€РёР±РєРё РїСЂРѕСЃС‚Рѕ РІРѕР·РІСЂР°С‰Р°РµРјСЃСЏ, РЅРµ РІС‹РІРѕРґСЏ СЃРѕРѕР±С‰РµРЅРёРµ
     }
     return true;
 }
