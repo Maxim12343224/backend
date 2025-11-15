@@ -285,31 +285,33 @@ bool View::ShowBook(std::istream& cmd_input) const {
             } else if (books.size() == 1) {
                 PrintBookDetails(books[0]);
             } else {
-                std::string pre_selected_choice;
-                
-                if (cmd_input.peek() != EOF) {
-                    std::getline(cmd_input, pre_selected_choice);
-                    boost::algorithm::trim(pre_selected_choice);
-                }
-                
-                if (!pre_selected_choice.empty()) {
-                    for (const auto& book : books) {
-                        if (book.author_name == pre_selected_choice) {
-                            PrintBookDetails(book);
-                            return true;
-                        }
-                    }
+                // Пробуем прочитать выбор автора из cmd_input
+                std::string author_choice;
+                if (std::getline(cmd_input, author_choice)) {
+                    boost::algorithm::trim(author_choice);
                     
-                    try {
-                        int idx = std::stoi(pre_selected_choice) - 1;
-                        if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                            PrintBookDetails(books[idx]);
-                            return true;
+                    if (!author_choice.empty()) {
+                        // Пробуем найти по имени автора
+                        for (const auto& book : books) {
+                            if (book.author_name == author_choice) {
+                                PrintBookDetails(book);
+                                return true;
+                            }
                         }
-                    } catch (...) {
+                        
+                        // Пробуем найти по номеру
+                        try {
+                            int idx = std::stoi(author_choice) - 1;
+                            if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                                PrintBookDetails(books[idx]);
+                                return true;
+                            }
+                        } catch (...) {
+                        }
                     }
                 }
                 
+                // Если автоматический выбор не сработал, переходим к интерактивному
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 int i = 1;
                 for (const auto& book : books) {
