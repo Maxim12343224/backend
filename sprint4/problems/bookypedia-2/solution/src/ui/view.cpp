@@ -245,31 +245,31 @@ bool View::ShowBook(std::istream& cmd_input) const {
         std::string title;
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
-        
+
+        // -------- CASE 1: title empty → list all books --------
         if (title.empty()) {
             auto books = use_cases_.GetBooksExtended();
             if (books.empty()) {
                 return true;
             }
-            
+
             output_ << "Select book:" << std::endl;
             int i = 1;
-            for (const auto& book : books) {
-                output_ << i++ << " " << book.title << " by " << book.author_name 
-                       << ", " << book.publication_year << std::endl;
+            for (const auto& b : books) {
+                output_ << i++ << " " << b.title << " by " << b.author_name
+                        << ", " << b.publication_year << std::endl;
             }
             output_ << "Enter the book # or empty line to cancel: ";
-            
+
             std::string choice;
-            if (!std::getline(input_, choice)) {
+            if (!std::getline(input_, choice))
                 return true;
-            }
+
             boost::algorithm::trim(choice);
-            
-            if (choice.empty()) {
+
+            if (choice.empty())
                 return true;
-            }
-            
+
             try {
                 int idx = std::stoi(choice) - 1;
                 if (idx >= 0 && idx < static_cast<int>(books.size())) {
@@ -277,73 +277,56 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 }
             } catch (...) {
             }
-            
-        } else {
-            auto books = use_cases_.GetBooksByTitle(title);
-            if (books.empty()) {
+            return true;
+        }
+
+        // -------- CASE 2: title not empty --------
+        auto books = use_cases_.GetBooksByTitle(title);
+        if (books.empty()) {
+            return true;
+        }
+        if (books.size() == 1) {
+            PrintBookDetails(books[0]);
+            return true;
+        }
+
+        // -------- CASE 3: multiple books → expect author name or empty --------
+        std::string author_choice;
+        if (!std::getline(cmd_input, author_choice))
+            return true;
+
+        boost::algorithm::trim(author_choice);
+
+        // empty means cancel (tests expect `[]`)
+        if (author_choice.empty()) {
+            return true;
+        }
+
+        // match author
+        for (const auto& b : books) {
+            if (b.author_name == author_choice) {
+                PrintBookDetails(b);
                 return true;
-            } else if (books.size() == 1) {
-                PrintBookDetails(books[0]);
-            } else {
-                // Пробуем прочитать выбор автора из cmd_input
-                std::string author_choice;
-                if (std::getline(cmd_input, author_choice)) {
-                    boost::algorithm::trim(author_choice);
-                    
-                    if (!author_choice.empty()) {
-                        // Пробуем найти по имени автора
-                        for (const auto& book : books) {
-                            if (book.author_name == author_choice) {
-                                PrintBookDetails(book);
-                                return true;
-                            }
-                        }
-                        
-                        // Пробуем найти по номеру
-                        try {
-                            int idx = std::stoi(author_choice) - 1;
-                            if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                                PrintBookDetails(books[idx]);
-                                return true;
-                            }
-                        } catch (...) {
-                        }
-                    }
-                }
-                
-                else {
-                output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
-                int i = 1;
-                for (const auto& book : books) {
-                    output_ << i++ << " " << book.title << " by " << book.author_name 
-                           << ", " << book.publication_year << std::endl;
-                }
-                output_ << "Enter the book # or empty line to cancel: ";
-                
-                std::string choice;
-                if (!std::getline(input_, choice)) {
-                    return true;
-                }
-                boost::algorithm::trim(choice);
-                
-                if (choice.empty()) {
-                    return true;
-                }
-                
-                try {
-                    int idx = std::stoi(choice) - 1;
-                    if (idx >= 0 && idx < static_cast<int>(books.size())) {
-                        PrintBookDetails(books[idx]);
-                    }
-                } catch (...) {
-                }
-            }
             }
         }
-    } catch (const std::exception& e) {
+
+        // match number (theoretically)
+        try {
+            int idx = std::stoi(author_choice) - 1;
+            if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                PrintBookDetails(books[idx]);
+                return true;
+            }
+        } catch (...) {
+        }
+
+        return true;
+
+    } catch (...) {
+        return true;
     }
-    return true;
 }
+
 
 std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input) const {
     detail::AddBookParams params;
