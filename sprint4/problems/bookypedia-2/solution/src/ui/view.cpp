@@ -311,7 +311,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
                     }
                 }
                 
-                // Если автоматический выбор не сработал, переходим к интерактивному
+                else {
                 output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                 int i = 1;
                 for (const auto& book : books) {
@@ -337,6 +337,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
                     }
                 } catch (...) {
                 }
+            }
             }
         }
     } catch (const std::exception& e) {
