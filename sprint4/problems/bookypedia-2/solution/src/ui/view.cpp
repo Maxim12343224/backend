@@ -246,7 +246,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
 
-        // ---------- CASE 1: title empty (print list + select) ----------
+        // ---- CASE 1: title empty → list all books ----
         if (title.empty()) {
             auto books = use_cases_.GetBooksExtended();
             if (books.empty()) {
@@ -262,6 +262,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
             output_ << "Enter the book # or empty line to cancel: ";
 
             std::string choice;
+            // ВНИМАНИЕ: тут действительно используется input_
             if (!std::getline(input_, choice))
                 return true;
 
@@ -271,7 +272,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
 
             try {
                 int idx = std::stoi(choice) - 1;
-                if (idx >= 0 && idx < static_cast<int>(books.size())) {
+                if (idx >= 0 && idx < (int)books.size()) {
                     PrintBookDetails(books[idx]);
                 }
             } catch (...) {}
@@ -279,7 +280,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
             return true;
         }
 
-        // ---------- CASE 2: title not empty ----------
+        // ---- CASE 2: title not empty ----
         auto books = use_cases_.GetBooksByTitle(title);
         if (books.empty()) {
             return true;
@@ -290,8 +291,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
             return true;
         }
 
-        // ---------- CASE 3: multiple books ----------
-        // Read user's choice from cmd_input (author or cancel)
+        // ---- CASE 3: multiple books → must choose author (cmd_input!) ----
         std::string author_choice;
         if (!std::getline(cmd_input, author_choice)) {
             return true;
@@ -299,7 +299,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
 
         boost::algorithm::trim(author_choice);
 
-        // cancel → NO OUTPUT → tests expect []
+        // пустой ввод → cancel → НИЧЕГО НЕ ВЫВОДИТСЯ → []
         if (author_choice.empty()) {
             return true;
         }
@@ -312,22 +312,23 @@ bool View::ShowBook(std::istream& cmd_input) const {
             }
         }
 
-        // match by number (optional)
+        // match by number (just in case)
         try {
             int idx = std::stoi(author_choice) - 1;
-            if (idx >= 0 && idx < static_cast<int>(books.size())) {
+            if (idx >= 0 && idx < (int)books.size()) {
                 PrintBookDetails(books[idx]);
                 return true;
             }
         } catch (...) {}
 
-        // No match → NO OUTPUT
+        // no match → cancel
         return true;
 
     } catch (...) {
         return true;
     }
 }
+
 
 
 
