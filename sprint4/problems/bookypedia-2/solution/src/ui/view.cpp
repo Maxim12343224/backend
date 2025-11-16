@@ -179,7 +179,6 @@ bool View::DeleteBook(std::istream& cmd_input) const {
                 return true;
             }
             
-            output_ << "Select book:" << std::endl;
             int i = 1;
             for (const auto& book : books) {
                 output_ << i++ << " " << book.title << " by " << book.author_name 
@@ -210,15 +209,16 @@ bool View::DeleteBook(std::istream& cmd_input) const {
             if (books.size() == 1) {
                 book_id = books[0].id;
             } else {
-                // Множественные книги - проверяем дополнительный параметр из cmd_input
-                std::string additional_param;
-                if (std::getline(cmd_input, additional_param)) {
-                    boost::algorithm::trim(additional_param);
+                // Множественные книги - проверяем автора из stdin
+                std::string author_from_stdin;
+                if (input_.peek() != EOF) {
+                    std::getline(input_, author_from_stdin);
+                    boost::algorithm::trim(author_from_stdin);
                     
-                    if (!additional_param.empty()) {
+                    if (!author_from_stdin.empty()) {
                         // Поиск по автору
                         for (const auto& book : books) {
-                            if (book.author_name == additional_param) {
+                            if (book.author_name == author_from_stdin) {
                                 book_id = book.id;
                                 break;
                             }
@@ -227,7 +227,7 @@ bool View::DeleteBook(std::istream& cmd_input) const {
                         // Пробуем как номер
                         if (!book_id) {
                             try {
-                                int idx = std::stoi(additional_param) - 1;
+                                int idx = std::stoi(author_from_stdin) - 1;
                                 if (idx >= 0 && idx < static_cast<int>(books.size())) {
                                     book_id = books[idx].id;
                                 }
@@ -238,9 +238,8 @@ bool View::DeleteBook(std::istream& cmd_input) const {
                     }
                 }
                 
-                // Если не нашли по дополнительному параметру - показываем список
+                // Если не нашли по автору - показываем список
                 if (!book_id) {
-                    output_ << "Multiple books found with title \"" << title << "\":" << std::endl;
                     int i = 1;
                     for (const auto& book : books) {
                         output_ << i++ << " " << book.title << " by " << book.author_name 
@@ -292,7 +291,6 @@ bool View::EditBook(std::istream& cmd_input) const {
                 return true;
             }
             
-            output_ << "Select book:" << std::endl;
             int i = 1;
             for (const auto& book : books) {
                 output_ << i++ << " " << book.title << " by " << book.author_name 
@@ -303,13 +301,19 @@ bool View::EditBook(std::istream& cmd_input) const {
             std::string choice;
             if (!std::getline(input_, choice)) return true;
             boost::algorithm::trim(choice);
-            if (choice.empty()) return true;
+            if (choice.empty()) {
+                output_ << "Book not found" << std::endl;
+                return true;
+            }
             
             try {
                 int idx = std::stoi(choice) - 1;
                 if (idx >= 0 && idx < static_cast<int>(books.size())) {
                     book_id = books[idx].id;
                     current_book = books[idx];
+                } else {
+                    output_ << "Book not found" << std::endl;
+                    return true;
                 }
             } catch (...) {
                 output_ << "Book not found" << std::endl;
@@ -326,15 +330,16 @@ bool View::EditBook(std::istream& cmd_input) const {
                 book_id = books[0].id;
                 current_book = books[0];
             } else {
-                // Множественные книги
-                std::string additional_param;
-                if (std::getline(cmd_input, additional_param)) {
-                    boost::algorithm::trim(additional_param);
+                // Множественные книги - проверяем автора из stdin
+                std::string author_from_stdin;
+                if (input_.peek() != EOF) {
+                    std::getline(input_, author_from_stdin);
+                    boost::algorithm::trim(author_from_stdin);
                     
-                    if (!additional_param.empty()) {
+                    if (!author_from_stdin.empty()) {
                         // Поиск по автору
                         for (const auto& book : books) {
-                            if (book.author_name == additional_param) {
+                            if (book.author_name == author_from_stdin) {
                                 book_id = book.id;
                                 current_book = book;
                                 break;
@@ -344,7 +349,7 @@ bool View::EditBook(std::istream& cmd_input) const {
                         // Пробуем как номер
                         if (!book_id) {
                             try {
-                                int idx = std::stoi(additional_param) - 1;
+                                int idx = std::stoi(author_from_stdin) - 1;
                                 if (idx >= 0 && idx < static_cast<int>(books.size())) {
                                     book_id = books[idx].id;
                                     current_book = books[idx];
@@ -358,7 +363,6 @@ bool View::EditBook(std::istream& cmd_input) const {
                 
                 // Если не нашли - показываем список
                 if (!book_id) {
-                    output_ << "Multiple books found:" << std::endl;
                     int i = 1;
                     for (const auto& book : books) {
                         output_ << i++ << " " << book.title << " by " << book.author_name 
@@ -455,7 +459,6 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 return true;
             }
 
-            output_ << "Select book:" << std::endl;
             int i = 1;
             for (const auto& b : books) {
                 output_ << i++ << " " << b.title << " by " << b.author_name
@@ -495,15 +498,17 @@ bool View::ShowBook(std::istream& cmd_input) const {
             return true;
         }
 
-        // Если найдено несколько книг - проверяем, есть ли дополнительный параметр в cmd_input
-        std::string additional_param;
-        if (std::getline(cmd_input, additional_param)) {
-            boost::algorithm::trim(additional_param);
+        // Если найдено несколько книг - проверяем, есть ли автор в stdin
+        // Тесты передают автора сразу после команды
+        std::string author_from_stdin;
+        if (input_.peek() != EOF) {
+            std::getline(input_, author_from_stdin);
+            boost::algorithm::trim(author_from_stdin);
             
-            if (!additional_param.empty()) {
-                // Пробуем найти по автору
+            if (!author_from_stdin.empty()) {
+                // Ищем книгу по автору
                 for (const auto& book : books) {
-                    if (book.author_name == additional_param) {
+                    if (book.author_name == author_from_stdin) {
                         PrintBookDetails(book);
                         return true;
                     }
@@ -511,19 +516,18 @@ bool View::ShowBook(std::istream& cmd_input) const {
                 
                 // Пробуем как номер
                 try {
-                    int idx = std::stoi(additional_param) - 1;
+                    int idx = std::stoi(author_from_stdin) - 1;
                     if (idx >= 0 && idx < (int)books.size()) {
                         PrintBookDetails(books[idx]);
                         return true;
                     }
                 } catch (...) {
-                    // Не число - показываем список
+                    // Не число - продолжаем
                 }
             }
         }
 
-        // Если дополнительный параметр не помог - показываем список для выбора
-        output_ << "Multiple books found:" << std::endl;
+        // Если автор не найден или не передан - показываем список для выбора
         int i = 1;
         for (const auto& book : books) {
             output_ << i++ << " " << book.title << " by " << book.author_name 
