@@ -459,7 +459,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
         }
 
         // Ищем книги по названию
-        auto books = use_cases_.GetBooksByTitle(title);
+       /* auto books = use_cases_.GetBooksByTitle(title);
         if (books.empty()) {
             return true; // Ничего не выводим, если книга не найдена
         }
@@ -468,7 +468,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
         if (books.size() == 1) {
             PrintBookDetails(books[0]);
             return true;
-        }
+        }*/
 
         // ВАЖНО: ВСЕГДА читаем из stdin при наличии нескольких книг
         std::string input_line;
