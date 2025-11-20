@@ -63,23 +63,26 @@ void Menu::ShowInstructions() const {
 }
 
 bool Menu::ParseCommand(std::istream& input) {
-    using namespace std::literals;
-
-    try {
+    std::string line;
+    if (std::getline(input, line)) {
+        std::cout << "DEBUG Menu: full line='" << line << "'" << std::endl;
+        
+        std::istringstream line_stream{std::move(line)};
         std::string cmd;
-        if (input >> cmd) {
+        if (line_stream >> cmd) {
+            std::cout << "DEBUG Menu: command='" << cmd << "'" << std::endl;
+            
             if (const auto it = actions_.find(cmd); it != actions_.cend()) {
-                if (!it->second.handler(input)) {
-                    return false;
-                }
+                std::string remaining;
+                std::getline(line_stream, remaining);
+                std::cout << "DEBUG Menu: remaining='" << remaining << "'" << std::endl;
+                
+                std::istringstream remaining_stream{remaining};
+                return it->second.handler(remaining_stream);
             } else {
-                output_ << "Command '"sv << cmd << "' has not been found."sv << std::endl;
+                output_ << "Command '" << cmd << "' has not been found." << std::endl;
             }
-        } else {
-            output_ << "Invalid command"sv << std::endl;
         }
-    } catch (const std::exception& e) {
-        output_ << e.what() << std::endl;
     }
     return true;
 }

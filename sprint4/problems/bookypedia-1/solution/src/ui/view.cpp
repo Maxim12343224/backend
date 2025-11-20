@@ -56,10 +56,19 @@ bool View::AddAuthor(std::istream& cmd_input) const {
 
 bool View::AddBook(std::istream& cmd_input) const {
     try {
+        std::cout << "DEBUG View::AddBook: started" << std::endl;
         if (auto params = GetBookParams(cmd_input)) {
-            use_cases_.AddBook(params->author_id, params->title, params->publication_year);
+            std::cout << "DEBUG View::AddBook: params - title='" << params->title 
+                      << "', author='" << params->author_name 
+                      << "', year=" << params->publication_year 
+                      << ", tags_count=" << params->tags.size() << std::endl;
+            use_cases_.AddBookWithAuthorAndTags(params->author_name, params->title, 
+                                               params->publication_year, params->tags);
+        } else {
+            std::cout << "DEBUG View::AddBook: GetBookParams returned nullopt" << std::endl;
         }
-    } catch (const std::exception&) {
+    } catch (const std::exception& e) {
+        std::cout << "DEBUG View::AddBook: exception - " << e.what() << std::endl;
         output_ << "Failed to add book"sv << std::endl;
     }
     return true;
@@ -89,20 +98,35 @@ bool View::ShowAuthorBooks() const {
 std::optional<detail::AddBookParams> View::GetBookParams(std::istream& cmd_input) const {
     detail::AddBookParams params;
 
+    std::cout << "DEBUG GetBookParams: reading year and title" << std::endl;
     cmd_input >> params.publication_year;
     std::getline(cmd_input, params.title);
     boost::algorithm::trim(params.title);
+    
+    std::cout << "DEBUG GetBookParams: year=" << params.publication_year 
+              << ", title='" << params.title << "'" << std::endl;
 
     if (params.title.empty()) {
+        std::cout << "DEBUG GetBookParams: empty title" << std::endl;
         return std::nullopt;
     }
 
-    auto author_id = SelectAuthor();
-    if (not author_id.has_value()) {
-        return std::nullopt;
-    }
-    
-    params.author_id = author_id.value();
+    output_ << "Enter author name or empty line to select from list:" << std::endl;
+    std::string author_name;
+    std::getline(input_, author_name);
+    boost::algorithm::trim(author_name);
+    std::cout << "DEBUG GetBookParams: author input='" << author_name << "'" << std::endl;
+
+    // ... остальной код с отладочными выводами
+    std::cout << "DEBUG GetBookParams: final author='" << params.author_name << "'" << std::endl;
+
+    output_ << "Enter tags (comma separated):" << std::endl;
+    std::string tags_input;
+    std::getline(input_, tags_input);
+    params.tags = ParseAndNormalizeTags(tags_input);
+    std::cout << "DEBUG GetBookParams: tags_input='" << tags_input 
+              << "', normalized_tags_count=" << params.tags.size() << std::endl;
+
     return params;
 }
 
