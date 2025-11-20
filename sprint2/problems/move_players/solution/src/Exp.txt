@@ -18,6 +18,7 @@ namespace http_server {
             beast::bind_front_handler(&Session::Read, shared_from_this()));
     }
 
+    
     void Session::Read() {
         request_ = {};
         stream_.expires_after(std::chrono::seconds(30));
@@ -180,9 +181,9 @@ namespace http_server {
 #include <fstream>
 #include <sstream>
 #include <boost/json.hpp>
-#include <string>  // Добавлен заголовок для std::string
+#include <string>  //                        std::string
 
-using namespace std::literals;  // Для использования суффикса "s"
+using namespace std::literals;  //                            "s"
 
 namespace json_loader {
     namespace json = boost::json;
@@ -238,6 +239,10 @@ namespace json_loader {
             std::string name = std::string(map_obj.at("name").as_string().c_str());
             model::Map map(std::move(id), std::move(name));
 
+            if (map_obj.contains("dogSpeed")) {
+                map.SetDogSpeed(map_obj.at("dogSpeed").as_double());
+            }
+
             for (const auto& road_val : map_obj.at("roads").as_array()) {
                 map.AddRoad(ParseRoad(road_val.as_object()));
             }
@@ -268,8 +273,13 @@ namespace json_loader {
         model::Game game;
         try {
             auto value = json::parse(json_str);
-            auto& maps = value.as_object().at("maps").as_array();
+            auto& root = value.as_object();
+            
+            if (root.contains("defaultDogSpeed")) {
+                game.SetDefaultDogSpeed(root.at("defaultDogSpeed").as_double());
+            }
 
+            auto& maps = root.at("maps").as_array();
             for (const auto& map_val : maps) {
                 game.AddMap(ParseMap(map_val.as_object()));
             }
@@ -296,12 +306,11 @@ namespace json_loader {
 
 	model::Game LoadGame(const std::filesystem::path& json_path);
 
-}  
+}
 
 
 ===== logger.h =====
 #pragma once
-
 
 #define BOOST_LOG_NO_WCHAR_T
 #define BOOST_LOG_WITHOUT_WCHAR_T
@@ -334,19 +343,19 @@ namespace logger {
             void operator()(logging::record_view const& rec, logging::formatting_ostream& strm) const {
                 json::object obj;
 
-                
+
                 auto ts = logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
                 if (ts) {
                     obj["timestamp"] = boost::posix_time::to_iso_extended_string(ts.get());
                 }
 
-                
+
                 auto msg = logging::extract<std::string>("Message", rec);
                 if (msg) {
                     obj["message"] = msg.get();
                 }
 
-                
+
                 if (auto data = rec[additional_data]; data) {
                     obj["data"] = data.get();
                 }
@@ -356,12 +365,12 @@ namespace logger {
     };
 
     inline void InitLogging() {
-        logging::add_common_attributes(); 
+        logging::add_common_attributes();
 
         auto core = logging::core::get();
         core->remove_all_sinks();
 
-        
+
         auto sink = boost::make_shared<sinks::synchronous_sink<sinks::text_ostream_backend>>();
 
         boost::shared_ptr<std::ostream> stream(&std::clog, boost::null_deleter());
@@ -552,6 +561,33 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
     return player;
 }
 
+void GameSession::SetPlayerAction(const Player::Token& token, const std::string& move) {
+    std::lock_guard lock(mutex_);
+    for (auto& player : players_) {
+        if (player->GetToken() != token) continue;
+        
+        auto& dog = player->GetDog();
+        Point new_speed{0.0, 0.0};
+        if (move == "L") {
+            new_speed = {-dog_speed_, 0.0};
+            dog.SetDirection(Direction::West);
+        } else if (move == "R") {
+            new_speed = {dog_speed_, 0.0};
+            dog.SetDirection(Direction::East);
+        } else if (move == "U") {
+            new_speed = {0.0, -dog_speed_};
+            dog.SetDirection(Direction::North);
+        } else if (move == "D") {
+            new_speed = {0.0, dog_speed_};
+            dog.SetDirection(Direction::South);
+        } else if (move == "") {
+            new_speed = {0.0, 0.0};
+        }
+        dog.SetSpeed(new_speed);
+        break;
+    }
+}
+
 std::string DirectionToString(Direction dir) {
     switch (dir) {
         case Direction::North: return "U";
@@ -574,13 +610,15 @@ std::string DirectionToString(Direction dir) {
 #include <random>
 #include <atomic>
 #include <cmath>
+#include <mutex>
+#include <optional>
 
 #include "tagged.h"
 
 namespace model {
 
     using Dimension = int;
-    using Coord = double;  // Changed from int to double
+    using Coord = double;
 
     struct Point {
         Coord x, y;
@@ -679,10 +717,12 @@ namespace model {
         const Buildings& GetBuildings() const noexcept { return buildings_; }
         const Roads& GetRoads() const noexcept { return roads_; }
         const Offices& GetOffices() const noexcept { return offices_; }
+        const std::optional<double>& GetDogSpeed() const noexcept { return dog_speed_; }
 
         void AddRoad(const Road& road) { roads_.emplace_back(road); }
         void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
         void AddOffice(Office office);
+        void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
 
     private:
         using OfficeIdToIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
@@ -693,6 +733,7 @@ namespace model {
         Buildings buildings_;
         OfficeIdToIndex warehouse_id_to_index_;
         Offices offices_;
+        std::optional<double> dog_speed_;
     };
 
     class Dog {
@@ -708,6 +749,8 @@ namespace model {
         Point GetPosition() const noexcept { return position_; }
         Point GetSpeed() const noexcept { return speed_; }
         Direction GetDirection() const noexcept { return direction_; }
+        void SetSpeed(Point speed) noexcept { speed_ = speed; }
+        void SetDirection(Direction dir) noexcept { direction_ = dir; }
 
     private:
         std::string name_;
@@ -730,6 +773,7 @@ namespace model {
         const Id& GetId() const noexcept { return id_; }
         const Token& GetToken() const noexcept { return token_; }
         const Dog& GetDog() const noexcept { return dog_; }
+        Dog& GetDog() noexcept { return dog_; }
         const std::shared_ptr<GameSession>& GetSession() const noexcept { return session_; }
 
     private:
@@ -743,28 +787,37 @@ namespace model {
     public:
         using Id = util::Tagged<uint32_t, GameSession>;
 
-        explicit GameSession(Map map, uint32_t id)
-            : id_(Id{ id }), map_(std::move(map)) {
+        explicit GameSession(Map map, uint32_t id, double dog_speed)
+            : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed) {
         }
 
         const Id& GetId() const noexcept { return id_; }
         const Map& GetMap() const noexcept { return map_; }
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
+        double GetDogSpeed() const noexcept { return dog_speed_; }
 
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
+        void SetPlayerAction(const Player::Token& token, const std::string& move);
 
     private:
         Id id_;
         Map map_;
         std::vector<std::shared_ptr<Player>> players_;
+        double dog_speed_;
+        mutable std::mutex mutex_;
     };
 
     class Game {
     public:
         using Maps = std::vector<Map>;
 
+        Game() = default;
+        explicit Game(double default_dog_speed) : default_dog_speed_(default_dog_speed) {}
+
         void AddMap(Map map);
+        void SetDefaultDogSpeed(double speed) noexcept { default_dog_speed_ = speed; }
+        double GetDefaultDogSpeed() const noexcept { return default_dog_speed_; }
 
         const Maps& GetMaps() const noexcept { return maps_; }
         const Map* FindMap(const Map::Id& id) const noexcept {
@@ -784,7 +837,8 @@ namespace model {
         std::shared_ptr<GameSession> CreateSession(const Map::Id& map_id) {
             if (const auto* map = FindMap(map_id)) {
                 static std::atomic<uint32_t> next_session_id_{ 0 };
-                auto session = std::make_shared<GameSession>(*map, next_session_id_++);
+                double dog_speed = map->GetDogSpeed().value_or(default_dog_speed_);
+                auto session = std::make_shared<GameSession>(*map, next_session_id_++, dog_speed);
                 map_id_to_session_[map_id] = session;
                 return session;
             }
@@ -798,7 +852,7 @@ namespace model {
                 if (!session) return nullptr;
             }
             auto player = session->AddPlayer(std::move(dog_name));
-            token_to_player_[player->GetToken()] = player;  // Добавлено!
+            token_to_player_[player->GetToken()] = player;
             return player;
         }
 
@@ -809,6 +863,15 @@ namespace model {
             return nullptr;
         }
 
+        void SetPlayerAction(const Player::Token& token, const std::string& move) {
+            auto player = FindPlayerByToken(token);
+            if (!player) return;
+            auto session = player->GetSession();
+            if (session) {
+                session->SetPlayerAction(token, move);
+            }
+        }
+
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;
         using MapIdToIndex = std::unordered_map<Map::Id, size_t, MapIdHasher>;
@@ -817,6 +880,7 @@ namespace model {
         MapIdToIndex map_id_to_index_;
         std::unordered_map<Map::Id, std::shared_ptr<GameSession>, MapIdHasher> map_id_to_session_;
         std::unordered_map<Player::Token, std::shared_ptr<Player>, util::TaggedHasher<Player::Token>> token_to_player_;
+        double default_dog_speed_ = 1.0;
     };
 
     std::string DirectionToString(Direction dir);
@@ -1006,7 +1070,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     auto token = GetTokenFromRequest(req);
     if (!token) {
         return MakeErrorResponse(http::status::unauthorized,
-                               "invalidToken",  // РСЃРїСЂР°РІР»РµРЅРѕ!
+                               "invalidToken",
                                "Authorization header is required", req);
     }
 
@@ -1036,12 +1100,67 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     );
 }
 
+StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Invalid content type", req);
+    }
+
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Authorization header is required", req);
+    }
+
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "unknownToken",
+                               "Player token has not been found", req);
+    }
+
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object() || !json_body.as_object().contains("move")) {
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Failed to parse action", req);
+        }
+
+        auto move = json_body.as_object()["move"].as_string();
+        std::string move_str = std::string(move);
+        if (move_str != "L" && move_str != "R" && move_str != "U" && move_str != "D" && move_str != "") {
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Invalid move value", req);
+        }
+
+        game_.SetPlayerAction(model::Player::Token{*token}, move_str);
+
+        return MakeStringResponse(http::status::ok, "{}", req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Failed to parse action", req);
+    }
+}
+
 std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
     if (auto it = req.find(http::field::authorization); it != req.end()) {
         auto auth_header = it->value();
         if (auth_header.starts_with("Bearer ")) {
             std::string token = std::string(auth_header.substr(7));
-            // РџСЂРѕРІРµСЂРєР° РґР»РёРЅС‹ С‚РѕРєРµРЅР° (РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ 32 СЃРёРјРІРѕР»Р°)
             if (token.length() != 32) {
                 return std::nullopt;
             }
@@ -1312,6 +1431,18 @@ namespace http_handler {
                     auto response = HandleGameState(std::move(string_req));
                     return send(std::move(response));
                 }
+                else if (string_req.target() == "/api/v1/game/player/action") {
+                    if (string_req.method() == http::verb::post) {
+                        auto response = HandlePlayerAction(std::move(string_req));
+                        return send(std::move(response));
+                    }
+                    else {
+                        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                            "invalidMethod", "Only POST method is expected", string_req);
+                        response.set(http::field::allow, "POST");
+                        return send(std::move(response));
+                    }
+                }
                 else {
                     auto response = HandleApiRequest(std::move(string_req));
                     return send(std::move(response));
@@ -1331,6 +1462,7 @@ namespace http_handler {
         StringResponse HandleJoinGame(StringRequest&& req);
         StringResponse HandleGetPlayers(StringRequest&& req);
         StringResponse HandleGameState(StringRequest&& req);
+        StringResponse HandlePlayerAction(StringRequest&& req);
 
         std::optional<std::string> GetTokenFromRequest(const StringRequest& req);
 
@@ -1400,7 +1532,6 @@ namespace http_handler {
 #ifdef WIN32
 #include <sdkddkver.h>
 #endif
-
 
 
 ===== tagged.h =====

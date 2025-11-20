@@ -1,0 +1,342 @@
+===== controller.h =====
+#pragma once
+#include <cassert>
+
+#include "menu.h"
+#include "tv.h"
+
+class Controller {
+public:
+    Controller(TV& tv, Menu& menu)
+        : tv_{tv}
+        , menu_{menu} {
+        using namespace std::literals;
+        menu_.AddAction(std::string{INFO_COMMAND}, {}, "Prints info about the TV"s,
+                        [this](auto& input, auto& output) {
+                            return ShowInfo(input, output);
+                        });
+        menu_.AddAction(std::string{TURN_ON_COMMAND}, {}, "Turns on the TV"s,
+                        [this](auto& input, auto& output) {
+                            return TurnOn(input, output);
+                        });
+        menu_.AddAction(std::string{TURN_OFF_COMMAND}, {}, "Turns off the TV"s,
+                        [this](auto& input, auto& output) {
+                            return TurnOff(input, output);
+                        });
+        menu_.AddAction(std::string{SELECT_CHANNEL_COMMAND}, "CHANNEL"s,
+                        "Selects the specified channel"s, [this](auto& input, auto& output) {
+                            return SelectChannel(input, output);
+                        });
+        menu_.AddAction(std::string{SELECT_PREVIOUS_CHANNEL_COMMAND}, {},
+                        "Selects the previously selected channel"s,
+                        [this](auto& input, auto& output) {
+                            return SelectPreviousChannel(input, output);
+                        });
+    }
+
+private:
+    /*
+     * Обрабатывает команду Info, выводя информацию о состоянии телевизора.
+     * Если телевизор выключен, выводит "TV is turned off"
+     * Если телевизор включен, выводит две строки:
+     * TV is turned on
+     * Channel number is <номер канала>
+     * Если в input содержатся какие-либо параметры, выводит сообщение об ошибке:
+     * Error: the Info command does not require any arguments
+     */
+    [[nodiscard]] bool ShowInfo(std::istream& input, std::ostream& output) const {
+        using namespace std::literals;
+
+        if (EnsureNoArgsInInput(INFO_COMMAND, input, output)) {
+            if (tv_.IsTurnedOn()) {
+                // Эта часть метода не реализована. Реализуйте её самостоятельно
+                assert(!"Controller::ShowInfo is not implemented when TV is turned on");
+                /*
+                Выведите две строки, завершая каждую std::endl:
+
+                TV is turned on
+                Channel number is <номер канала>
+                */
+            } else {
+                output << "TV is turned off"sv << std::endl;
+            }
+        }
+
+        return true;
+    }
+
+    /*
+     * Обрабатывает команду TurnOn, включая телевизор
+     * Если в input содержатся какие-либо параметры, не включает телевизор и выводит сообщение
+     * об ошибке:
+     * Error: the TurnOff command does not require any arguments
+     */
+    [[nodiscard]] bool TurnOn(std::istream& input, std::ostream& output) const {
+        using namespace std::literals;
+
+        if (EnsureNoArgsInInput(TURN_ON_COMMAND, input, output)) {
+            tv_.TurnOn();
+        }
+        return true;
+    }
+
+    /*
+     * Обрабатывает команду TurnOff, выключая телевизор
+     * Если в input содержатся какие-либо параметры, не выключает телевизор и выводит сообщение
+     * об ошибке:
+     * Error: the TurnOff command does not require any arguments
+     */
+    [[nodiscard]] bool TurnOff(std::istream& input, std::ostream& output) const {
+        using namespace std::literals;
+
+        if (EnsureNoArgsInInput(TURN_OFF_COMMAND, input, output)) {
+            tv_.TurnOff();
+        }
+        return true;
+    }
+
+    /*
+     * Обрабатывает команду SelectChannel <номер канала>
+     * Выбирает заданный номер канала на tv_.
+     * Если номер канала - не целое число, выводит в output ошибку "Invalid channel"
+     * Обрабатывает ошибки переключения каналов на телевизор и выводит в output сообщения:
+     * - "Channel is out of range", если TV::SelectChannel выбросил std::out_of_range
+     * - "TV is turned off", если TV::SelectChannel выбросил std::logic_error
+     */
+    [[nodiscard]] bool SelectChannel(std::istream& input, std::ostream& output) const {
+        /* Реализуйте самостоятельно этот метод.*/
+        assert(!"TODO: Implement Controller::SelectChannel");
+        return true;
+    }
+
+    /*
+     * Обрабатывает команду SelectPreviousChannel, выбирая предыдущий канал на tv_.
+     * Если TV::SelectLastViewedChannel выбросил std::logic_error, выводит в output сообщение:
+     * "TV is turned off"
+     */
+    [[nodiscard]] bool SelectPreviousChannel(std::istream& input, std::ostream& output) const {
+        /* Реализуйте самостоятельно этот метод */
+        assert(!"TODO: Implement Controller::SelectPreviousChannel");
+        return true;
+    }
+
+    [[nodiscard]] bool EnsureNoArgsInInput(std::string_view command, std::istream& input,
+                                           std::ostream& output) const {
+        using namespace std::literals;
+        assert(input);
+        if (std::string data; input >> data) {
+            output << "Error: the " << command << " command does not require any arguments"sv
+                   << std::endl;
+            return false;
+        }
+        return true;
+    }
+
+    constexpr static std::string_view INFO_COMMAND = "Info";
+    constexpr static std::string_view TURN_ON_COMMAND = "TurnOn";
+    constexpr static std::string_view TURN_OFF_COMMAND = "TurnOff";
+    constexpr static std::string_view SELECT_CHANNEL_COMMAND = "SelectChannel";
+    constexpr static std::string_view SELECT_PREVIOUS_CHANNEL_COMMAND = "SelectPreviousChannel";
+
+    TV& tv_;
+    Menu& menu_;
+};
+
+
+
+===== main.cpp =====
+#include <iostream>
+
+#include "controller.h"
+
+int main() {
+    using namespace std::literals;
+
+    TV tv;
+    Menu menu{std::cin, std::cout};
+    Controller controller{tv, menu};
+    menu.AddAction("Exit"s, {}, "Exits the program"s, [](auto&&...) {
+        return false;
+    });
+    menu.AddAction("Help", {}, "Shows instructions"s, [&menu](auto&&...) {
+        menu.ShowInstructions();
+        return true;
+    });
+    menu.ShowInstructions();
+    menu.Run();
+}
+
+
+
+===== menu.h =====
+#pragma once
+#include <functional>
+#include <iomanip>
+#include <map>
+#include <sstream>
+
+class Menu {
+public:
+    using Handler = std::function<bool(std::istream&, std::ostream&)>;
+
+    Menu(std::istream& input, std::ostream& output)
+        : input_{input}
+        , output_{output} {
+    }
+
+    void AddAction(std::string action_name, std::string args, std::string description,
+                   Handler handler) {
+        if (!actions_
+                 .try_emplace(std::move(action_name), std::move(handler), std::move(args),
+                              std::move(description))
+                 .second) {
+            throw std::invalid_argument("A command has been added already");
+        }
+    }
+
+    void Run() {
+        std::string line;
+        while (std::getline(input_, line)) {
+            std::istringstream cmd_stream{std::move(line)};
+            if (!ParseCommand(cmd_stream)) {
+                break;
+            }
+        }
+    }
+
+    void ShowInstructions() const {
+        if (actions_.empty()) {
+            return;
+        }
+        size_t actions_width = 0;
+        size_t args_width = 0;
+        for (const auto& [action_name, info] : actions_) {
+            actions_width = std::max(actions_width, action_name.length());
+            args_width = std::max(args_width, info.args.length());
+        }
+
+        const auto old_flags = output_.flags();
+        const auto old_fill = output_.fill();
+        auto restore_flags = [this, old_fill, old_flags] {
+            output_.fill(old_fill);
+            output_.setf(old_flags);
+        };
+
+        try {
+            output_ << std::left << std::setfill(' ');
+            for (const auto& [action_name, info] : actions_) {
+                output_ << std::setw(actions_width + 1) << action_name;
+                output_ << std::setw(args_width + 1) << info.args;
+                output_ << info.description << std::endl;
+            }
+        } catch (...) {
+            restore_flags();
+            throw;
+        }
+        restore_flags();
+    }
+
+private:
+    struct ActionInfo {
+        Handler handler;
+        std::string args;
+        std::string description;
+    };
+
+    [[nodiscard]] bool ParseCommand(std::istream& input) {
+        using namespace std::literals;
+
+        try {
+            std::string cmd;
+            if (input >> cmd) {
+                if (const auto it = actions_.find(cmd); it != actions_.cend()) {
+                    if (!it->second.handler(input, output_)) {
+                        return false;
+                    }
+                } else {
+                    output_ << "Command '"sv << cmd << "' has not been found."sv << std::endl;
+                }
+            } else {
+                output_ << "Invalid command"sv << std::endl;
+            }
+        } catch (const std::exception& e) {
+            output_ << e.what() << std::endl;
+        }
+        return true;
+    }
+
+    std::istream& input_;
+    std::ostream& output_;
+    std::map<std::string, ActionInfo> actions_;
+};
+
+
+
+===== tv.h =====
+#pragma once
+#include <cassert>
+#include <optional>
+
+class TV {
+public:
+    constexpr static int MIN_CHANNEL = 1;
+    constexpr static int MAX_CHANNEL = 99;
+
+    /*
+     * Возвращает информацию о том, включен телевизор или нет.
+     */
+    [[nodiscard]] bool IsTurnedOn() const noexcept {
+        return is_turned_on_;
+    }
+
+    /*
+     * Возвращает номер выбранного канала или std::nullopt, если телевизор выключен.
+     */
+    [[nodiscard]] std::optional<int> GetChannel() const noexcept {
+        return is_turned_on_ ? std::optional{channel_} : std::nullopt;
+    }
+
+    /*
+     * Включает телевизор, если он был выключен. Если телевизор уже включен, ничего не делает.
+     * При включении выбирается тот номер канала, который был выбран перед последним выключением.
+     * При самом первом включении выбирает канал #1.
+     */
+    void TurnOn() noexcept {
+        is_turned_on_ = true;
+    }
+
+    /*
+     * Выключает телевизор, если он был включен. Если телевизор уже выключен, ничего не делает.
+     */
+    void TurnOff() noexcept {
+        is_turned_on_ = false;
+    }
+
+    /*
+     * Выбирает канал channel.
+     * Ранее выбранный канал запоминается и может быть восстановлен методом SelectLastViewedChannel.
+     * Если номер канала совпадает с ранее выбранным каналом, метод ничего не делает.
+     * Если телевизор выключен, выбрасывает исключение std::logic_error.
+     * Если номер канала за пределами диапазона MIN_CHANNEL, MAX_CHANNEL, выбрасывает out_of_range.
+     */
+    void SelectChannel(int channel) {
+        /* Реализуйте самостоятельно этот метод и напишите тесты для него */
+        assert(!"TODO: Implement TV::SelectChannel");
+    }
+
+    /*
+     * Выбирает номер канала, который был выбран перед последним вызовом SelectChannel.
+     * Многократный последовательный вызов SelectLastViewedChannel переключает два последних выбранных канала.
+     * Если телевизор выключен, выбрасывает исключение std::logic_error.
+     */
+    void SelectLastViewedChannel() {
+        /* Реализуйте самостоятельно этот метод и напишите тесты для него */
+        assert(!"TODO: Implement TV::SelectLastViewedChannel");
+    }
+
+private:
+    bool is_turned_on_ = false;
+    int channel_ = 1;
+};
+
+

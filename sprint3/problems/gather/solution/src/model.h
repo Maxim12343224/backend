@@ -239,7 +239,7 @@ namespace model {
         size_t loot_types_count_ = 0;
         std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
         std::atomic<size_t> next_lost_object_id_{ 0 };
-        mutable std::recursive_mutex mutex_;  // ÈÇÌÅÍÅÍÎ: recursive_mutex âìåñòî mutex
+        mutable std::recursive_mutex mutex_;  
     };
 
     class Game {
@@ -265,12 +265,12 @@ namespace model {
         }
 
         void SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);  // ÈÇÌÅÍÅÍÎ
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  
             map_loot_types_count_[map_id] = count;
         }
 
         size_t GetMapLootTypesCount(const Map::Id& map_id) const {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);  // ÈÇÌÅÍÅÍÎ: äîáàâëåíà áëîêèğîâêà
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  
             if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
                 return it->second;
             }
@@ -286,7 +286,7 @@ namespace model {
         }
 
         std::shared_ptr<GameSession> FindSession(const Map::Id& map_id) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);  // ÈÇÌÅÍÅÍÎ
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  
             if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
                 return it->second;
             }
@@ -296,7 +296,7 @@ namespace model {
         std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name);
 
         std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);  // ÈÇÌÅÍÅÍÎ
+            std::lock_guard<std::recursive_mutex> lock(mutex_);  
 
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 return it->second;
@@ -316,7 +316,7 @@ namespace model {
         void Tick(double delta_time) {
             std::vector<std::shared_ptr<GameSession>> sessions;
             {
-                std::lock_guard<std::recursive_mutex> lock(mutex_);  // ÈÇÌÅÍÅÍÎ
+                std::lock_guard<std::recursive_mutex> lock(mutex_);  
                 for (const auto& [map_id, session] : map_id_to_session_) {
                     sessions.push_back(session);
                 }
@@ -339,7 +339,7 @@ namespace model {
         std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
         double default_dog_speed_ = 1.0;
         bool randomize_spawn_points_ = false;
-        mutable std::recursive_mutex mutex_;  // ÈÇÌÅÍÅÍÎ: recursive_mutex âìåñòî mutex
+        mutable std::recursive_mutex mutex_;  
         std::atomic<uint32_t> next_session_id_{ 0 };
     };
 
