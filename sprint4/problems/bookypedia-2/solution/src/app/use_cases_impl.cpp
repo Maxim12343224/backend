@@ -166,11 +166,13 @@ void UseCasesImpl::DeleteBook(const std::string& book_id) {
     try {
         pqxx::work work{*connection_};
         
+        // Проверяем существование книги перед удалением
         auto check_result = work.exec("SELECT id FROM books WHERE id = " + work.quote(book_id));
         if (check_result.empty()) {
             throw std::runtime_error("Book not found");
         }
         
+        // Удаляем книгу (теги удалятся каскадно благодаря FOREIGN KEY)
         auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(book_id));
         work.commit();
         

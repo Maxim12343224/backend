@@ -112,14 +112,15 @@ bool View::DeleteAuthor(std::istream& cmd_input) const {
             auto author_id = SelectAuthor();
             if (author_id) {
                 use_cases_.DeleteAuthor(*author_id);
-                output_ << "Author deleted successfully" << std::endl;
+                // Не выводим сообщение об успехе - тесты ожидают пустой вывод
             }
+            // Если автор не выбран (отмена), ничего не делаем и не выводим
         } else {
             // Удаление по имени
             auto author = use_cases_.GetAuthorByName(name);
             if (author) {
                 use_cases_.DeleteAuthor(author->id);
-                output_ << "Author deleted successfully" << std::endl;
+                // Не выводим сообщение об успехе
             } else {
                 output_ << "Failed to delete author" << std::endl;
             }
@@ -174,16 +175,31 @@ bool View::DeleteBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
+        // Если название пустое - показываем все книги для выбора
         auto book_id = SelectBook(title);
-        if (book_id) {
-            use_cases_.DeleteBook(*book_id);
-            output_ << "Book deleted successfully" << std::endl;
+        
+        if (!book_id) {
+            // Это может быть либо отмена, либо книга не найдена
+            // Различаем эти случаи по наличию title
+            if (!title.empty()) {
+                // Был указан title, но книга не найдена
+                output_ << "Book not found" << std::endl;
+            }
+            // Если title пустой и book_id nullopt - это отмена, ничего не выводим
+            return true;
+        }
+        
+        // Если книга найдена, удаляем ее
+        use_cases_.DeleteBook(*book_id);
+        // Не выводим сообщение об успехе
+        
+    } catch (const std::exception& e) {
+        const std::string error_msg = e.what();
+        if (error_msg.find("not found") != std::string::npos) {
+            output_ << "Book not found" << std::endl;
         } else {
             output_ << "Failed to delete book" << std::endl;
         }
-        
-    } catch (const std::exception& e) {
-        output_ << "Failed to delete book" << std::endl;
     }
     return true;
 }
@@ -385,19 +401,19 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
 
     std::string str;
     if (!std::getline(input_, str) || str.empty()) {
-        return std::nullopt;
+        return std::nullopt;  // Отмена
     }
 
     int book_idx;
     try {
         book_idx = std::stoi(str);
     } catch (std::exception const&) {
-        return std::nullopt;
+        return std::nullopt;  // Неверный ввод - считаем отменой
     }
 
     --book_idx;
     if (book_idx < 0 || book_idx >= static_cast<int>(books.size())) {
-        return std::nullopt;
+        return std::nullopt;  // Неверный индекс - считаем отменой
     }
 
     return books[book_idx].id;
