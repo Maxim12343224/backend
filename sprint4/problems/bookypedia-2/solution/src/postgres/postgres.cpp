@@ -120,7 +120,11 @@ std::optional<domain::Book> BookRepositoryImpl::GetById(const domain::BookId& id
 
 void BookRepositoryImpl::Delete(const domain::BookId& id) {
     pqxx::work work{connection_};
+    
+    
+    work.exec("DELETE FROM book_tags WHERE book_id = " + work.quote(id.ToString()));
     work.exec("DELETE FROM books WHERE id = " + work.quote(id.ToString()));
+    
     work.commit();
 }
 

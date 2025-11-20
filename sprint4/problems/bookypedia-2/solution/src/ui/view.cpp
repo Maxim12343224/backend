@@ -108,14 +108,18 @@ bool View::DeleteAuthor(std::istream& cmd_input) const {
         boost::algorithm::trim(name);
         
         if (name.empty()) {
+            // Выбор автора из списка
             auto author_id = SelectAuthor();
             if (author_id) {
                 use_cases_.DeleteAuthor(*author_id);
+                output_ << "Author deleted successfully" << std::endl;
             }
         } else {
+            // Удаление по имени
             auto author = use_cases_.GetAuthorByName(name);
             if (author) {
                 use_cases_.DeleteAuthor(author->id);
+                output_ << "Author deleted successfully" << std::endl;
             } else {
                 output_ << "Failed to delete author" << std::endl;
             }
@@ -173,6 +177,9 @@ bool View::DeleteBook(std::istream& cmd_input) const {
         auto book_id = SelectBook(title);
         if (book_id) {
             use_cases_.DeleteBook(*book_id);
+            output_ << "Book deleted successfully" << std::endl;
+        } else {
+            output_ << "Failed to delete book" << std::endl;
         }
         
     } catch (const std::exception& e) {

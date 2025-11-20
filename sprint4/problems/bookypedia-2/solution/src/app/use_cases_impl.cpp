@@ -127,13 +127,17 @@ void UseCasesImpl::DeleteAuthor(const std::string& author_id) {
     
     try {
         pqxx::work work{*connection_};
+        
+        
+        auto check_result = work.exec("SELECT id FROM authors WHERE id = " + work.quote(author_id));
+        if (check_result.empty()) {
+            throw std::runtime_error("Author not found");
+        }
+        
+        
         auto result = work.exec("DELETE FROM authors WHERE id = " + work.quote(author_id));
         work.commit();
         
-        // Если ни одна строка не была удалена, бросаем исключение
-        if (result.affected_rows() == 0) {
-            throw std::runtime_error("Author not found");
-        }
     } catch (const std::exception& e) {
         throw std::runtime_error("Failed to delete author");
     }
@@ -161,12 +165,15 @@ void UseCasesImpl::DeleteBook(const std::string& book_id) {
     
     try {
         pqxx::work work{*connection_};
+        
+        auto check_result = work.exec("SELECT id FROM books WHERE id = " + work.quote(book_id));
+        if (check_result.empty()) {
+            throw std::runtime_error("Book not found");
+        }
+        
         auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(book_id));
         work.commit();
         
-        if (result.affected_rows() == 0) {
-            throw std::runtime_error("Book not found");
-        }
     } catch (const std::exception& e) {
         throw std::runtime_error("Failed to delete book");
     }
