@@ -112,9 +112,15 @@ bool View::DeleteAuthor(std::istream& cmd_input) const {
             if (author_id) {
                 use_cases_.DeleteAuthor(*author_id);
             }
+            // Если отменено - ничего не выводим
         } else {
-            // Пробуем удалить по имени - метод DeleteAuthor теперь принимает либо ID, либо имя
-            use_cases_.DeleteAuthor(name);
+            // Пробуем удалить по имени
+            auto author = use_cases_.GetAuthorByName(name);
+            if (author) {
+                use_cases_.DeleteAuthor(author->id);
+            } else {
+                output_ << "Failed to delete author" << std::endl;
+            }
         }
     } catch (const std::exception& e) {
         output_ << "Failed to delete author" << std::endl;
@@ -169,9 +175,8 @@ bool View::DeleteBook(std::istream& cmd_input) const {
         auto book_id = SelectBook(title);
         if (book_id) {
             use_cases_.DeleteBook(*book_id);
-        } else {
-            output_ << "Book not found" << std::endl;
         }
+        // Если книга не найдена или отменено - ничего не выводим (согласно заданию)
         
     } catch (const std::exception& e) {
         output_ << "Failed to delete book" << std::endl;

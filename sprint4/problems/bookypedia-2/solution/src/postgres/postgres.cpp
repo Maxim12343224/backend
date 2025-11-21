@@ -37,29 +37,37 @@ std::optional<domain::Author> AuthorRepositoryImpl::GetById(const domain::Author
     return domain::Author{id, result[0][0].as<std::string>()};
 }
 
-void AuthorRepositoryImpl::Delete(const domain::AuthorId& id) {
-    pqxx::work work{connection_};
-    work.exec("DELETE FROM authors WHERE id = " + work.quote(id.ToString()));
-    work.commit();
-}
-
-void AuthorRepositoryImpl::Update(const domain::Author& author) {
-    pqxx::work work{connection_};
-    work.exec("UPDATE authors SET name = " + work.quote(author.GetName()) +
-              " WHERE id = " + work.quote(author.GetId().ToString()));
-    work.commit();
-}
-
 std::optional<domain::Author> AuthorRepositoryImpl::GetByName(const std::string& name) {
     pqxx::read_transaction work{connection_};
-    auto result = work.exec("SELECT id FROM authors WHERE name = " + work.quote(name));
+    auto result = work.exec("SELECT id, name FROM authors WHERE name = " + work.quote(name));
     if (result.empty()) {
         return std::nullopt;
     }
     return domain::Author{
         domain::AuthorId::FromString(result[0][0].as<std::string>()),
-        name
+        result[0][1].as<std::string>()
     };
+}
+
+void AuthorRepositoryImpl::Delete(const domain::AuthorId& id) {
+    pqxx::work work{connection_};
+    auto result = work.exec("DELETE FROM authors WHERE id = " + work.quote(id.ToString()));
+    work.commit();
+    
+    if (result.affected_rows() == 0) {
+        throw std::runtime_error("Author not found");
+    }
+}
+
+void AuthorRepositoryImpl::Update(const domain::Author& author) {
+    pqxx::work work{connection_};
+    auto result = work.exec("UPDATE authors SET name = " + work.quote(author.GetName()) +
+              " WHERE id = " + work.quote(author.GetId().ToString()));
+    work.commit();
+    
+    if (result.affected_rows() == 0) {
+        throw std::runtime_error("Author not found");
+    }
 }
 
 void BookRepositoryImpl::Save(const domain::Book& book) {
@@ -120,16 +128,24 @@ std::optional<domain::Book> BookRepositoryImpl::GetById(const domain::BookId& id
 
 void BookRepositoryImpl::Delete(const domain::BookId& id) {
     pqxx::work work{connection_};
-    work.exec("DELETE FROM books WHERE id = " + work.quote(id.ToString()));
+    auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(id.ToString()));
     work.commit();
+    
+    if (result.affected_rows() == 0) {
+        throw std::runtime_error("Book not found");
+    }
 }
 
 void BookRepositoryImpl::Update(const domain::Book& book) {
     pqxx::work work{connection_};
-    work.exec("UPDATE books SET title = " + work.quote(book.GetTitle()) +
+    auto result = work.exec("UPDATE books SET title = " + work.quote(book.GetTitle()) +
               ", publication_year = " + work.quote(book.GetPublicationYear()) +
               " WHERE id = " + work.quote(book.GetId().ToString()));
     work.commit();
+    
+    if (result.affected_rows() == 0) {
+        throw std::runtime_error("Book not found");
+    }
 }
 
 std::vector<domain::Book> BookRepositoryImpl::GetByTitle(const std::string& title) {
@@ -167,8 +183,10 @@ void BookRepositoryImpl::SetBookTags(const domain::BookId& id, const std::vector
     
     // Insert new tags
     for (const auto& tag : tags) {
-        work.exec("INSERT INTO book_tags (book_id, tag) VALUES (" +
-                  work.quote(id.ToString()) + ", " + work.quote(tag) + ")");
+        if (!tag.empty()) {
+            work.exec("INSERT INTO book_tags (book_id, tag) VALUES (" +
+                      work.quote(id.ToString()) + ", " + work.quote(tag) + ")");
+        }
     }
     
     work.commit();
