@@ -112,14 +112,9 @@ bool View::DeleteAuthor(std::istream& cmd_input) const {
             if (author_id) {
                 use_cases_.DeleteAuthor(*author_id);
             }
-            // При отмене ничего не выводим
         } else {
-            auto author = use_cases_.GetAuthorByName(name);
-            if (author) {
-                use_cases_.DeleteAuthor(author->id);
-            } else {
-                output_ << "Failed to delete author" << std::endl;
-            }
+            // Пробуем удалить по имени - метод DeleteAuthor теперь принимает либо ID, либо имя
+            use_cases_.DeleteAuthor(name);
         }
     } catch (const std::exception& e) {
         output_ << "Failed to delete author" << std::endl;
@@ -174,62 +169,15 @@ bool View::DeleteBook(std::istream& cmd_input) const {
         auto book_id = SelectBook(title);
         if (book_id) {
             use_cases_.DeleteBook(*book_id);
-        }
-        // При отмене (book_id == std::nullopt) ничего не выводим
-        
-    } catch (const std::exception& e) {
-        const std::string error_msg = e.what();
-        if (error_msg.find("not found") != std::string::npos) {
-            // Для тестов на отмену не выводим "Book not found"
-            // Выводим только при явном поиске несуществующей книги
-            if (!title.empty()) {
-                output_ << "Book not found" << std::endl;
-            }
         } else {
-            output_ << "Failed to delete book" << std::endl;
+            output_ << "Book not found" << std::endl;
         }
-    }
-    return true;
-}
-
-
-
-
-/*bool View::DeleteBook(std::istream& cmd_input) const {
-    try {
-        std::string title;
-        std::getline(cmd_input, title);
-        boost::algorithm::trim(title);
-        
-        auto book_id = SelectBook(title);
-        
-        if (!book_id) {
-            // Это может быть либо отмена, либо книга не найдена
-            // Для тестов на отмену не выводим ничего
-            // Для несуществующих книг выводим "Book not found" только если title был указан
-            if (!title.empty()) {
-                // Проверяем, есть ли вообще книги с таким названием
-                auto books = use_cases_.GetBooksByTitle(title);
-                if (books.empty()) {
-                    output_ << "Book not found" << std::endl;
-                }
-                // Если книги есть, но пользователь отменил выбор - ничего не выводим
-            }
-            return true;
-        }
-        
-        // Если книга найдена, удаляем ее
-        use_cases_.DeleteBook(*book_id);
         
     } catch (const std::exception& e) {
         output_ << "Failed to delete book" << std::endl;
     }
     return true;
-}*/
-
-
-
-
+}
 
 bool View::EditBook(std::istream& cmd_input) const {
     try {
@@ -311,7 +259,7 @@ bool View::ShowBook(std::istream& cmd_input) const {
         }
 
     } catch (const std::exception& e) {
-        // Игнорируем исключения при показе книги
+        // РРіРЅРѕСЂРёСЂСѓРµРј РёСЃРєР»СЋС‡РµРЅРёСЏ РїСЂРё РїРѕРєР°Р·Рµ РєРЅРёРіРё
     }
     return true;
 }
@@ -428,19 +376,19 @@ std::optional<std::string> View::SelectBook(const std::string& title) const {
 
     std::string str;
     if (!std::getline(input_, str) || str.empty()) {
-        return std::nullopt;  // Отмена
+        return std::nullopt;
     }
 
     int book_idx;
     try {
         book_idx = std::stoi(str);
     } catch (std::exception const&) {
-        return std::nullopt;  // Неверный ввод - считаем отменой
+        return std::nullopt;
     }
 
     --book_idx;
     if (book_idx < 0 || book_idx >= static_cast<int>(books.size())) {
-        return std::nullopt;  // Неверный индекс - считаем отменой
+        return std::nullopt;
     }
 
     return books[book_idx].id;
@@ -466,7 +414,7 @@ std::vector<std::string> View::ParseAndNormalizeTags(const std::string& tags_inp
     for (auto& tag : raw_tags) {
         boost::algorithm::trim(tag);
         
-        // Нормализация пробелов внутри тега
+        // РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ РїСЂРѕР±РµР»РѕРІ РІРЅСѓС‚СЂРё С‚РµРіР°
         std::string normalized_tag;
         bool last_was_space = false;
         for (char c : tag) {
@@ -488,7 +436,7 @@ std::vector<std::string> View::ParseAndNormalizeTags(const std::string& tags_inp
         }
     }
     
-    // Удаление дубликатов
+    // РЈРґР°Р»РµРЅРёРµ РґСѓР±Р»РёРєР°С‚РѕРІ
     std::sort(tags.begin(), tags.end());
     tags.erase(std::unique(tags.begin(), tags.end()), tags.end());
     

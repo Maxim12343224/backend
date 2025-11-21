@@ -18,7 +18,6 @@ namespace app {
         int publication_year;
     };
 
-    // Новая структура для расширенного функционала
     struct BookInfoExtended {
         std::string id;
         std::string title;
@@ -37,7 +36,6 @@ namespace app {
         return out;
     }
 
-    // Новый оператор для расширенной информации о книге
     inline std::ostream& operator<<(std::ostream& out, const BookInfoExtended& book) {
         out << book.title << " by " << book.author_name << ", " << book.publication_year;
         return out;
@@ -45,7 +43,6 @@ namespace app {
 
     class UseCases {
     public:
-        // Существующие методы (не меняем!)
         virtual void AddAuthor(const std::string& name) = 0;
         virtual std::vector<AuthorInfo> GetAuthors() = 0;
         virtual void AddBook(const std::string& author_id, const std::string& title, int publication_year) = 0;
@@ -55,7 +52,7 @@ namespace app {
         // Новые методы для расширенного функционала
         virtual void AddBookWithAuthorAndTags(const std::string& author_name, const std::string& title,
             int publication_year, const std::vector<std::string>& tags) = 0;
-        virtual void DeleteAuthor(const std::string& author_id) = 0;
+        virtual void DeleteAuthor(const std::string& author_id_or_name) = 0;  // Изменен параметр
         virtual void EditAuthor(const std::string& author_id, const std::string& new_name) = 0;
         virtual void DeleteBook(const std::string& book_id) = 0;
         virtual void EditBook(const std::string& book_id, const std::string& new_title,

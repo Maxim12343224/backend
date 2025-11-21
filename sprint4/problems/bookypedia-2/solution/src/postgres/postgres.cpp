@@ -118,36 +118,11 @@ std::optional<domain::Book> BookRepositoryImpl::GetById(const domain::BookId& id
     };
 }
 
-/*void BookRepositoryImpl::Delete(const domain::BookId& id) {
-    pqxx::work work{connection_};
-    
-    
-    work.exec("DELETE FROM book_tags WHERE book_id = " + work.quote(id.ToString()));
-    work.exec("DELETE FROM books WHERE id = " + work.quote(id.ToString()));
-    
-    work.commit();
-}*/
-
-
-
 void BookRepositoryImpl::Delete(const domain::BookId& id) {
     pqxx::work work{connection_};
-    
-    // Сначала удаляем теги книги (если они есть)
-    work.exec("DELETE FROM book_tags WHERE book_id = " + work.quote(id.ToString()));
-    
-    // Затем удаляем саму книгу
-    auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(id.ToString()));
+    work.exec("DELETE FROM books WHERE id = " + work.quote(id.ToString()));
     work.commit();
-    
-    if (result.affected_rows() == 0) {
-        throw std::runtime_error("Book not found");
-    }
 }
-
-
-
-
 
 void BookRepositoryImpl::Update(const domain::Book& book) {
     pqxx::work work{connection_};
