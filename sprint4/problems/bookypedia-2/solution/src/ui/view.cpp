@@ -103,45 +103,40 @@ bool View::ShowAuthorBooks() const {
 
 bool View::DeleteAuthor(std::istream& cmd_input) const {
     try {
-        std::string name;
-        std::getline(cmd_input, name);
-        boost::algorithm::trim(name);
+        std::string input;
+        std::getline(cmd_input, input);
+        boost::algorithm::trim(input);
         
-        if (name.empty()) {
+        if (input.empty()) {
             // Выбор автора из списка
             auto author_id = SelectAuthor();
             if (author_id) {
                 use_cases_.DeleteAuthor(*author_id);
             }
         } else {
-            // Удаление по имени - полная логика обработки
-            auto author = use_cases_.GetAuthorByName(name);
-            if (author) {
-                // Если нашли автора по имени, удаляем по ID
-                use_cases_.DeleteAuthor(author->id);
+            // Расширенная логика: работаем и с ID, и с именами
+            // Сначала пытаемся найти автора по имени
+            auto author_by_name = use_cases_.GetAuthorByName(input);
+            if (author_by_name) {
+                // Если нашли по имени, удаляем по ID
+                use_cases_.DeleteAuthor(author_by_name->id);
             } else {
-                // Если автор не найден по имени, проверяем, не является ли ввод ID
-                // Сначала пытаемся найти автора по ID
-                try {
-                    // Проверяем, существует ли автор с таким ID
-                    auto authors = use_cases_.GetAuthors();
-                    bool author_found_by_id = false;
-                    for (const auto& auth : authors) {
-                        if (auth.id == name) {
-                            author_found_by_id = true;
-                            break;
-                        }
+                // Если не нашли по имени, проверяем существует ли автор с таким ID
+                // Получаем всех авторов и ищем по ID
+                auto all_authors = use_cases_.GetAuthors();
+                bool author_exists_by_id = false;
+                for (const auto& author : all_authors) {
+                    if (author.id == input) {
+                        author_exists_by_id = true;
+                        break;
                     }
-                    
-                    if (author_found_by_id) {
-                        // Если нашли по ID, удаляем
-                        use_cases_.DeleteAuthor(name);
-                    } else {
-                        // Если не нашли ни по имени, ни по ID - выводим ошибку
-                        output_ << "Failed to delete author" << std::endl;
-                    }
-                } catch (const std::exception&) {
-                    // Если произошла ошибка при проверке - выводим ошибку
+                }
+                
+                if (author_exists_by_id) {
+                    // Если автор существует с таким ID, удаляем
+                    use_cases_.DeleteAuthor(input);
+                } else {
+                    // Если не нашли ни по имени, ни по ID - выводим ошибку
                     output_ << "Failed to delete author" << std::endl;
                 }
             }
@@ -192,50 +187,47 @@ bool View::EditAuthor(std::istream& cmd_input) const {
 
 bool View::DeleteBook(std::istream& cmd_input) const {
     try {
-        std::string title;
-        std::getline(cmd_input, title);
-        boost::algorithm::trim(title);
+        std::string input;
+        std::getline(cmd_input, input);
+        boost::algorithm::trim(input);
         
-        if (title.empty()) {
+        if (input.empty()) {
             // Выбор книги из списка
             auto book_id = SelectBook();
             if (book_id) {
                 use_cases_.DeleteBook(*book_id);
             }
         } else {
-            // Удаление по названию - полная логика обработки
-            auto books = use_cases_.GetBooksByTitle(title);
-            
-            if (books.empty()) {
-                // Если книги не найдены по названию, проверяем, не является ли ввод ID
-                try {
-                    // Проверяем, существует ли книга с таким ID
-                    auto all_books = use_cases_.GetBooksExtended();
-                    bool book_found_by_id = false;
-                    for (const auto& book : all_books) {
-                        if (book.id == title) {
-                            book_found_by_id = true;
-                            break;
-                        }
+            // Расширенная логика: работаем и с ID, и с названиями
+            auto books_by_title = use_cases_.GetBooksByTitle(input);
+            if (!books_by_title.empty()) {
+                if (books_by_title.size() == 1) {
+                    // Если найдена одна книга по названию - удаляем по ID
+                    use_cases_.DeleteBook(books_by_title[0].id);
+                } else {
+                    // Если найдено несколько книг - предлагаем выбрать
+                    auto book_id = SelectBook(input);
+                    if (book_id) {
+                        use_cases_.DeleteBook(*book_id);
                     }
-                    
-                    if (book_found_by_id) {
-                        // Если нашли по ID, удаляем
-                        use_cases_.DeleteBook(title);
-                    }
-                    // Если не нашли ни по названию, ни по ID - не выводим ошибку (согласно заданию)
-                } catch (const std::exception&) {
-                    // Если произошла ошибка при проверке - не выводим ошибку (согласно заданию)
                 }
-            } else if (books.size() == 1) {
-                // Если найдена одна книга - удаляем ее по ID
-                use_cases_.DeleteBook(books[0].id);
             } else {
-                // Если найдено несколько книг - предлагаем выбрать
-                auto book_id = SelectBook(title);
-                if (book_id) {
-                    use_cases_.DeleteBook(*book_id);
+                // Если не нашли по названию, проверяем существует ли книга с таким ID
+                // Получаем все книги и ищем по ID
+                auto all_books = use_cases_.GetBooksExtended();
+                bool book_exists_by_id = false;
+                for (const auto& book : all_books) {
+                    if (book.id == input) {
+                        book_exists_by_id = true;
+                        break;
+                    }
                 }
+                
+                if (book_exists_by_id) {
+                    // Если книга существует с таким ID, удаляем
+                    use_cases_.DeleteBook(input);
+                }
+                // Если не нашли ни по названию, ни по ID - не выводим ошибку (согласно заданию)
             }
         }
         

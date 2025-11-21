@@ -136,27 +136,31 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
     }
 }
 
-void UseCasesImpl::DeleteAuthor(const std::string& author_id) {
+void UseCasesImpl::DeleteAuthor(const std::string& author_id_or_name) {
     if (!connection_) return;
     
     try {
         pqxx::work work{*connection_};
         
-        std::string actual_author_id = author_id;
+        std::string author_id;
         
-        // Если переданное значение не похоже на UUID, ищем автора по имени
-        if (!IsUUID(author_id)) {
-            auto author_result = work.exec("SELECT id FROM authors WHERE name = " + work.quote(author_id));
-            if (author_result.empty()) {
+        // Сначала проверяем, является ли ввод ID автора
+        auto author_by_id = work.exec("SELECT id FROM authors WHERE id = " + work.quote(author_id_or_name));
+        if (!author_by_id.empty()) {
+            author_id = author_by_id[0][0].as<std::string>();
+        } else {
+            // Если не нашли по ID, ищем по имени
+            auto author_by_name = work.exec("SELECT id FROM authors WHERE name = " + work.quote(author_id_or_name));
+            if (author_by_name.empty()) {
                 throw std::runtime_error("Author not found");
             }
-            actual_author_id = author_result[0][0].as<std::string>();
+            author_id = author_by_name[0][0].as<std::string>();
         }
         
-        auto result = work.exec("DELETE FROM authors WHERE id = " + work.quote(actual_author_id));
+        // Удаляем автора по найденному ID
+        auto result = work.exec("DELETE FROM authors WHERE id = " + work.quote(author_id));
         work.commit();
         
-        // Если ни одна строка не была удалена, бросаем исключение
         if (result.affected_rows() == 0) {
             throw std::runtime_error("Author not found");
         }
@@ -182,25 +186,29 @@ void UseCasesImpl::EditAuthor(const std::string& author_id, const std::string& n
     }
 }
 
-void UseCasesImpl::DeleteBook(const std::string& book_id) {
+void UseCasesImpl::DeleteBook(const std::string& book_id_or_title) {
     if (!connection_) return;
     
     try {
         pqxx::work work{*connection_};
         
-        std::string actual_book_id = book_id;
+        std::string book_id;
         
-        // Если переданное значение не похоже на UUID, ищем книгу по названию
-        if (!IsUUID(book_id)) {
-            auto book_result = work.exec("SELECT id FROM books WHERE title = " + work.quote(book_id));
-            if (book_result.empty()) {
+        // Сначала проверяем, является ли ввод ID книги
+        auto book_by_id = work.exec("SELECT id FROM books WHERE id = " + work.quote(book_id_or_title));
+        if (!book_by_id.empty()) {
+            book_id = book_by_id[0][0].as<std::string>();
+        } else {
+            // Если не нашли по ID, ищем по названию
+            auto book_by_title = work.exec("SELECT id FROM books WHERE title = " + work.quote(book_id_or_title));
+            if (book_by_title.empty()) {
                 throw std::runtime_error("Book not found");
             }
-            // Если найдено несколько книг с одинаковым названием, используем первую
-            actual_book_id = book_result[0][0].as<std::string>();
+            // Если найдено несколько книг с одинаковым названием, берем первую
+            book_id = book_by_title[0][0].as<std::string>();
         }
         
-        auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(actual_book_id));
+        auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(book_id));
         work.commit();
         
         if (result.affected_rows() == 0) {
