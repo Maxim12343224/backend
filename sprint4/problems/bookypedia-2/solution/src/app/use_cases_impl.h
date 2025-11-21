@@ -7,10 +7,8 @@ namespace app {
 
     class UseCasesImpl : public UseCases {
     public:
-        explicit UseCasesImpl(domain::AuthorRepository& authors, domain::BookRepository& books, pqxx::connection& connection)
-            : authors_{ authors }
-            , books_{ books }
-            , connection_{ connection } {
+        explicit UseCasesImpl(domain::AuthorRepository& authors)
+            : authors_{ authors } {
         }
 
         void AddAuthor(const std::string& name) override;
@@ -19,11 +17,12 @@ namespace app {
         std::vector<BookInfo> GetBooks() override;
         std::vector<BookInfo> GetAuthorBooks(const std::string& author_id) override;
 
+        // Новые методы
         void AddBookWithAuthorAndTags(const std::string& author_name, const std::string& title,
             int publication_year, const std::vector<std::string>& tags) override;
-        void DeleteAuthor(const std::string& author_id_or_name) override;
+        void DeleteAuthor(const std::string& author_id_or_name) override;  // Изменен параметр
         void EditAuthor(const std::string& author_id, const std::string& new_name) override;
-        void DeleteBook(const std::string& book_id) override;
+        void DeleteBook(const std::string& book_id_or_title) override;  // Изменен параметр
         void EditBook(const std::string& book_id, const std::string& new_title,
             int new_publication_year, const std::vector<std::string>& tags) override;
         std::vector<BookInfoExtended> GetBooksExtended() override;
@@ -31,10 +30,13 @@ namespace app {
         std::optional<BookInfoExtended> GetBookById(const std::string& book_id) override;
         std::optional<AuthorInfo> GetAuthorByName(const std::string& name) override;
 
+        static void SetBookRepository(domain::BookRepository* book_repo);
+        static void SetConnection(pqxx::connection* connection);
+
     private:
         domain::AuthorRepository& authors_;
-        domain::BookRepository& books_;
-        pqxx::connection& connection_;
+        static domain::BookRepository* books_;
+        static pqxx::connection* connection_;
     };
 
 }  // namespace app

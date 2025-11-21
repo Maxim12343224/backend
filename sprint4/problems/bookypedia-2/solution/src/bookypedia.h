@@ -13,16 +13,13 @@ namespace bookypedia {
 
     class Application {
     public:
-        explicit Application(const AppConfig& config)
-            : db_{ pqxx::connection{config.db_url} }
-            , use_cases_{ db_.GetAuthors(), db_.GetBooks(), db_.GetConnection() } {
-        }
+        explicit Application(const AppConfig& config);
 
         void Run();
 
     private:
         postgres::Database db_;
-        app::UseCasesImpl use_cases_;
+        app::UseCasesImpl use_cases_{ db_.GetAuthors() };
     };
 
 }  // namespace bookypedia
