@@ -2,10 +2,24 @@
 
 #include "../domain/author.h"
 #include <pqxx/pqxx>
+#include <regex>
 
 namespace app {
 
 using namespace domain;
+
+namespace {
+
+bool IsUUID(const std::string& str) {
+    // Проверяем, является ли строка UUID (формат: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    static const std::regex uuid_regex(
+        "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", 
+        std::regex::icase
+    );
+    return std::regex_match(str, uuid_regex);
+}
+
+} // namespace
 
 domain::BookRepository* UseCasesImpl::books_ = nullptr;
 pqxx::connection* UseCasesImpl::connection_ = nullptr;
@@ -85,10 +99,12 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
     try {
         pqxx::work work{*connection_};
         
+        // Поиск автора по имени
         auto author_result = work.exec("SELECT id FROM authors WHERE name = " + work.quote(author_name));
         domain::AuthorId author_id;
         
         if (author_result.empty()) {
+            // Автор не найден - создаем нового
             author_id = AuthorId::New();
             work.exec("INSERT INTO authors (id, name) VALUES (" +
                       work.quote(author_id.ToString()) + ", " +
@@ -97,6 +113,7 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
             author_id = domain::AuthorId::FromString(author_result[0][0].as<std::string>());
         }
         
+        // Создание книги
         auto book_id = BookId::New();
         work.exec("INSERT INTO books (id, author_id, title, publication_year) VALUES (" +
                   work.quote(book_id.ToString()) + ", " +
@@ -104,6 +121,7 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
                   work.quote(title) + ", " +
                   work.quote(publication_year) + ")");
         
+        // Добавление тегов
         for (const auto& tag : tags) {
             if (!tag.empty()) {
                 work.exec("INSERT INTO book_tags (book_id, tag) VALUES (" +
@@ -123,9 +141,22 @@ void UseCasesImpl::DeleteAuthor(const std::string& author_id) {
     
     try {
         pqxx::work work{*connection_};
-        auto result = work.exec("DELETE FROM authors WHERE id = " + work.quote(author_id));
+        
+        std::string actual_author_id = author_id;
+        
+        // Если переданное значение не похоже на UUID, ищем автора по имени
+        if (!IsUUID(author_id)) {
+            auto author_result = work.exec("SELECT id FROM authors WHERE name = " + work.quote(author_id));
+            if (author_result.empty()) {
+                throw std::runtime_error("Author not found");
+            }
+            actual_author_id = author_result[0][0].as<std::string>();
+        }
+        
+        auto result = work.exec("DELETE FROM authors WHERE id = " + work.quote(actual_author_id));
         work.commit();
         
+        // Если ни одна строка не была удалена, бросаем исключение
         if (result.affected_rows() == 0) {
             throw std::runtime_error("Author not found");
         }
@@ -156,7 +187,20 @@ void UseCasesImpl::DeleteBook(const std::string& book_id) {
     
     try {
         pqxx::work work{*connection_};
-        auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(book_id));
+        
+        std::string actual_book_id = book_id;
+        
+        // Если переданное значение не похоже на UUID, ищем книгу по названию
+        if (!IsUUID(book_id)) {
+            auto book_result = work.exec("SELECT id FROM books WHERE title = " + work.quote(book_id));
+            if (book_result.empty()) {
+                throw std::runtime_error("Book not found");
+            }
+            // Если найдено несколько книг с одинаковым названием, используем первую
+            actual_book_id = book_result[0][0].as<std::string>();
+        }
+        
+        auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(actual_book_id));
         work.commit();
         
         if (result.affected_rows() == 0) {
@@ -174,14 +218,22 @@ void UseCasesImpl::EditBook(const std::string& book_id, const std::string& new_t
     try {
         pqxx::work work{*connection_};
         
-        work.exec("UPDATE books SET title = " + work.quote(new_title) + 
+        // Обновление информации о книге
+        auto result = work.exec("UPDATE books SET title = " + work.quote(new_title) + 
                   ", publication_year = " + work.quote(new_publication_year) +
                   " WHERE id = " + work.quote(book_id));
         
+        if (result.affected_rows() == 0) {
+            throw std::runtime_error("Book not found");
+        }
+        
+        // Обновление тегов
         work.exec("DELETE FROM book_tags WHERE book_id = " + work.quote(book_id));
         for (const auto& tag : tags) {
-            work.exec("INSERT INTO book_tags (book_id, tag) VALUES (" +
-                      work.quote(book_id) + ", " + work.quote(tag) + ")");
+            if (!tag.empty()) {
+                work.exec("INSERT INTO book_tags (book_id, tag) VALUES (" +
+                          work.quote(book_id) + ", " + work.quote(tag) + ")");
+            }
         }
         
         work.commit();
@@ -234,7 +286,7 @@ std::vector<BookInfoExtended> UseCasesImpl::GetBooksByTitle(const std::string& t
     try {
         pqxx::read_transaction work{*connection_};
         auto result = work.exec(
-            "SELECT b.id, a.name, b.publication_year "
+            "SELECT b.id, b.title, a.name, b.publication_year "
             "FROM books b "
             "JOIN authors a ON b.author_id = a.id "
             "WHERE b.title = " + work.quote(title) + 
@@ -255,9 +307,9 @@ std::vector<BookInfoExtended> UseCasesImpl::GetBooksByTitle(const std::string& t
             
             books.push_back(BookInfoExtended{
                 book_id,
-                title,
                 row[1].as<std::string>(),
-                row[2].as<int>(),
+                row[2].as<std::string>(),
+                row[3].as<int>(),
                 tags
             });
         }
@@ -283,6 +335,7 @@ std::optional<BookInfoExtended> UseCasesImpl::GetBookById(const std::string& boo
             return std::nullopt;
         }
         
+        // Получение тегов для книги
         auto tags_result = work.exec(
             "SELECT tag FROM book_tags WHERE book_id = " + work.quote(book_id) + " ORDER BY tag"
         );

@@ -114,15 +114,34 @@ bool View::DeleteAuthor(std::istream& cmd_input) const {
                 use_cases_.DeleteAuthor(*author_id);
             }
         } else {
-            // Попытка найти автора по имени и удалить по ID
+            // Удаление по имени - полная логика обработки
             auto author = use_cases_.GetAuthorByName(name);
             if (author) {
+                // Если нашли автора по имени, удаляем по ID
                 use_cases_.DeleteAuthor(author->id);
             } else {
-                // Если автор не найден по имени, возможно это ID
+                // Если автор не найден по имени, проверяем, не является ли ввод ID
+                // Сначала пытаемся найти автора по ID
                 try {
-                    use_cases_.DeleteAuthor(name);
+                    // Проверяем, существует ли автор с таким ID
+                    auto authors = use_cases_.GetAuthors();
+                    bool author_found_by_id = false;
+                    for (const auto& auth : authors) {
+                        if (auth.id == name) {
+                            author_found_by_id = true;
+                            break;
+                        }
+                    }
+                    
+                    if (author_found_by_id) {
+                        // Если нашли по ID, удаляем
+                        use_cases_.DeleteAuthor(name);
+                    } else {
+                        // Если не нашли ни по имени, ни по ID - выводим ошибку
+                        output_ << "Failed to delete author" << std::endl;
+                    }
                 } catch (const std::exception&) {
+                    // Если произошла ошибка при проверке - выводим ошибку
                     output_ << "Failed to delete author" << std::endl;
                 }
             }
@@ -184,17 +203,32 @@ bool View::DeleteBook(std::istream& cmd_input) const {
                 use_cases_.DeleteBook(*book_id);
             }
         } else {
-            // Поиск книги по названию
+            // Удаление по названию - полная логика обработки
             auto books = use_cases_.GetBooksByTitle(title);
+            
             if (books.empty()) {
-                // Если книги не найдены по названию, возможно это ID
+                // Если книги не найдены по названию, проверяем, не является ли ввод ID
                 try {
-                    use_cases_.DeleteBook(title);
+                    // Проверяем, существует ли книга с таким ID
+                    auto all_books = use_cases_.GetBooksExtended();
+                    bool book_found_by_id = false;
+                    for (const auto& book : all_books) {
+                        if (book.id == title) {
+                            book_found_by_id = true;
+                            break;
+                        }
+                    }
+                    
+                    if (book_found_by_id) {
+                        // Если нашли по ID, удаляем
+                        use_cases_.DeleteBook(title);
+                    }
+                    // Если не нашли ни по названию, ни по ID - не выводим ошибку (согласно заданию)
                 } catch (const std::exception&) {
-                    // Не выводим ошибку, если книга не найдена (согласно заданию)
+                    // Если произошла ошибка при проверке - не выводим ошибку (согласно заданию)
                 }
             } else if (books.size() == 1) {
-                // Если найдена одна книга - удаляем ее
+                // Если найдена одна книга - удаляем ее по ID
                 use_cases_.DeleteBook(books[0].id);
             } else {
                 // Если найдено несколько книг - предлагаем выбрать
