@@ -107,8 +107,26 @@ bool View::DeleteAuthor(std::istream& cmd_input) const {
         std::getline(cmd_input, name);
         boost::algorithm::trim(name);
         
-        use_cases_.DeleteAuthor(name);  // Просто передаем то, что ввел пользователь
-        
+        if (name.empty()) {
+            // Выбор автора из списка
+            auto author_id = SelectAuthor();
+            if (author_id) {
+                use_cases_.DeleteAuthor(*author_id);
+            }
+        } else {
+            // Попытка найти автора по имени и удалить по ID
+            auto author = use_cases_.GetAuthorByName(name);
+            if (author) {
+                use_cases_.DeleteAuthor(author->id);
+            } else {
+                // Если автор не найден по имени, возможно это ID
+                try {
+                    use_cases_.DeleteAuthor(name);
+                } catch (const std::exception&) {
+                    output_ << "Failed to delete author" << std::endl;
+                }
+            }
+        }
     } catch (const std::exception& e) {
         output_ << "Failed to delete author" << std::endl;
     }
@@ -159,7 +177,33 @@ bool View::DeleteBook(std::istream& cmd_input) const {
         std::getline(cmd_input, title);
         boost::algorithm::trim(title);
         
-        use_cases_.DeleteBook(title);  // Просто передаем то, что ввел пользователь
+        if (title.empty()) {
+            // Выбор книги из списка
+            auto book_id = SelectBook();
+            if (book_id) {
+                use_cases_.DeleteBook(*book_id);
+            }
+        } else {
+            // Поиск книги по названию
+            auto books = use_cases_.GetBooksByTitle(title);
+            if (books.empty()) {
+                // Если книги не найдены по названию, возможно это ID
+                try {
+                    use_cases_.DeleteBook(title);
+                } catch (const std::exception&) {
+                    // Не выводим ошибку, если книга не найдена (согласно заданию)
+                }
+            } else if (books.size() == 1) {
+                // Если найдена одна книга - удаляем ее
+                use_cases_.DeleteBook(books[0].id);
+            } else {
+                // Если найдено несколько книг - предлагаем выбрать
+                auto book_id = SelectBook(title);
+                if (book_id) {
+                    use_cases_.DeleteBook(*book_id);
+                }
+            }
+        }
         
     } catch (const std::exception& e) {
         output_ << "Failed to delete book" << std::endl;

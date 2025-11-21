@@ -17,12 +17,11 @@ namespace app {
         std::vector<BookInfo> GetBooks() override;
         std::vector<BookInfo> GetAuthorBooks(const std::string& author_id) override;
 
-        // Новые методы
         void AddBookWithAuthorAndTags(const std::string& author_name, const std::string& title,
             int publication_year, const std::vector<std::string>& tags) override;
-        void DeleteAuthor(const std::string& author_id_or_name) override;  // Изменен параметр
+        void DeleteAuthor(const std::string& author_id) override;
         void EditAuthor(const std::string& author_id, const std::string& new_name) override;
-        void DeleteBook(const std::string& book_id_or_title) override;  // Изменен параметр
+        void DeleteBook(const std::string& book_id) override;
         void EditBook(const std::string& book_id, const std::string& new_title,
             int new_publication_year, const std::vector<std::string>& tags) override;
         std::vector<BookInfoExtended> GetBooksExtended() override;
