@@ -136,38 +136,39 @@ void UseCasesImpl::AddBookWithAuthorAndTags(const std::string& author_name, cons
     }
 }
 
-void UseCasesImpl::DeleteAuthor(const std::string& author_id_or_name) {
+
+
+
+
+void UseCasesImpl::DeleteAuthor(const std::string& author_id) {
     if (!connection_) return;
     
     try {
         pqxx::work work{*connection_};
         
-        std::string author_id;
+        // Явно удаляем все связанные данные
+        work.exec("DELETE FROM book_tags WHERE book_id IN "
+                 "(SELECT id FROM books WHERE author_id = " + work.quote(author_id) + ")");
+        work.exec("DELETE FROM books WHERE author_id = " + work.quote(author_id));
         
-        // Сначала проверяем, является ли ввод ID автора
-        auto author_by_id = work.exec("SELECT id FROM authors WHERE id = " + work.quote(author_id_or_name));
-        if (!author_by_id.empty()) {
-            author_id = author_by_id[0][0].as<std::string>();
-        } else {
-            // Если не нашли по ID, ищем по имени
-            auto author_by_name = work.exec("SELECT id FROM authors WHERE name = " + work.quote(author_id_or_name));
-            if (author_by_name.empty()) {
-                throw std::runtime_error("Author not found");
-            }
-            author_id = author_by_name[0][0].as<std::string>();
-        }
-        
-        // Удаляем автора по найденному ID
+        // Затем удаляем автора
         auto result = work.exec("DELETE FROM authors WHERE id = " + work.quote(author_id));
         work.commit();
         
         if (result.affected_rows() == 0) {
             throw std::runtime_error("Author not found");
         }
+        
     } catch (const std::exception& e) {
         throw std::runtime_error("Failed to delete author");
     }
 }
+
+
+
+
+
+
 
 void UseCasesImpl::EditAuthor(const std::string& author_id, const std::string& new_name) {
     if (!connection_) return;
@@ -186,7 +187,14 @@ void UseCasesImpl::EditAuthor(const std::string& author_id, const std::string& n
     }
 }
 
-void UseCasesImpl::DeleteBook(const std::string& book_id_or_title) {
+
+
+
+
+
+
+//Базовое решение
+/*void UseCasesImpl::DeleteBook(const std::string& book_id_or_title) {
     if (!connection_) return;
     
     try {
@@ -217,7 +225,64 @@ void UseCasesImpl::DeleteBook(const std::string& book_id_or_title) {
     } catch (const std::exception& e) {
         throw std::runtime_error("Failed to delete book");
     }
+}*/
+
+
+
+
+void UseCasesImpl::DeleteBook(const std::string& identifier) {
+    if (!connection_) return;
+    
+    try {
+        pqxx::work work{*connection_};
+        
+        std::string book_id;
+        
+        // Проверяем, является ли identifier UUID
+        bool is_uuid = false;
+        try {
+            domain::BookId::FromString(identifier);
+            is_uuid = true;
+        } catch (...) {
+            is_uuid = false;
+        }
+        
+        if (is_uuid) {
+            book_id = identifier;
+        } else {
+            // Это название - находим ID
+            auto book_result = work.exec(
+                "SELECT id FROM books WHERE title = " + work.quote(identifier)
+            );
+            
+            if (book_result.empty()) {
+                throw std::runtime_error("Book not found");
+            }
+            
+            // Если несколько книг с одинаковым названием - берем первую
+            book_id = book_result[0][0].as<std::string>();
+        }
+        
+        // Явно удаляем теги
+        work.exec("DELETE FROM book_tags WHERE book_id = " + work.quote(book_id));
+        
+        // Удаляем книгу
+        auto result = work.exec("DELETE FROM books WHERE id = " + work.quote(book_id));
+        work.commit();
+        
+        if (result.affected_rows() == 0) {
+            throw std::runtime_error("Book not found");
+        }
+        
+    } catch (const std::exception& e) {
+        throw std::runtime_error("Failed to delete book");
+    }
 }
+
+
+
+
+
 
 void UseCasesImpl::EditBook(const std::string& book_id, const std::string& new_title, 
                            int new_publication_year, const std::vector<std::string>& tags) {
