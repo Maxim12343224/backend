@@ -175,6 +175,8 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
+        // ВАЖНО: Обновляем время последнего движения при любой команде
+        dog.UpdateLastMoveTime();
         break;
     }
 }
@@ -315,13 +317,13 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Убираем ушедших игроков из активных
-    auto active_players = GetActivePlayers();
-    
+    // Обновляем позиции всех игроков (включая ушедших, чтобы не ломать логику)
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
-    for (const auto& player : active_players) {
+    for (const auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
         const auto& dog = player->GetDog();
         start_positions.push_back(dog.GetPosition());
         
@@ -334,10 +336,20 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    for (size_t i = 0; i < active_players.size(); ++i) {
-        auto& dog = active_players[i]->GetDog();
-        dog.SetPosition(end_positions[i]);
+    // Обновляем позиции только активных игроков
+    size_t active_index = 0;
+    for (auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
+        auto& dog = player->GetDog();
+        if (active_index < end_positions.size()) {
+            dog.SetPosition(end_positions[active_index]);
+            active_index++;
+        }
     }
+    
+    // Логика сбора предметов для активных игроков
+    auto active_players = GetActivePlayers();
     
     ItemGathererProviderImpl provider;
     
@@ -350,12 +362,21 @@ void GameSession::Tick(double delta_time) {
     }
     
     for (size_t i = 0; i < active_players.size(); ++i) {
+        const auto& player = active_players[i];
+        const auto& dog = player->GetDog();
+        
+        Point start_pos = dog.GetPosition();
+        Point end_pos = {
+            dog.GetPosition().x + dog.GetSpeed().x * delta_time,
+            dog.GetPosition().y + dog.GetSpeed().y * delta_time
+        };
+        
         provider.gatherers.push_back({
-            {start_positions[i].x, start_positions[i].y},
-            {end_positions[i].x, end_positions[i].y},
+            {start_pos.x, start_pos.y},
+            {end_pos.x, end_pos.y},
             0.3,
             i,
-            active_players[i]
+            player
         });
     }
     

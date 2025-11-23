@@ -478,6 +478,7 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
     
     auto response = MakeStringResponse(http::status::ok, json::serialize(result_array), req);
     response.set(http::field::cache_control, "no-cache");
+    response.set(http::field::content_length, std::to_string(response.body().size()));
     return response;
 }
 
