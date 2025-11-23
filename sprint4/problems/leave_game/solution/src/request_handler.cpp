@@ -19,7 +19,7 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
-    // Р”РѕР±Р°РІР»СЏРµРј РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅСѓСЋ С„СѓРЅРєС†РёСЋ РґР»СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёРё С‡РёСЃРµР»
+    // Добавляем вспомогательную функцию для сериализации чисел
     json::value serialize_number(double value) {
         if (value == std::floor(value)) {
             return json::value(static_cast<int64_t>(value));
@@ -170,9 +170,15 @@ StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
     auto session = player->GetSession();
     json::value players_json = json::object();
-    for (const auto& p : session->GetPlayers()) {
+    for (const auto& p : session->GetActivePlayers()) {
         players_json.as_object()[std::to_string(*p->GetId())] = {
             {"name", p->GetDog().GetName()}
         };
@@ -204,13 +210,19 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
     auto session = player->GetSession();
     json::value players_json = json::object();
     
-    for (const auto& p : session->GetPlayers()) {
+    for (const auto& p : session->GetActivePlayers()) {
         const auto& dog = p->GetDog();
         
-        // РЎРѕР·РґР°РµРј JSON РґР»СЏ СЂСЋРєР·Р°РєР°
+        // Создаем JSON для рюкзака
         json::array bag_json;
         for (const auto& item : p->GetBag()) {
             bag_json.push_back({
@@ -224,11 +236,11 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
             {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
             {"dir", model::DirectionToString(dog.GetDirection())},
             {"bag", std::move(bag_json)},
-            {"score", p->GetScore()}  // Р”РѕР±Р°РІР»СЏРµРј РїРѕР»Рµ СЃ РѕС‡РєР°РјРё
+            {"score", p->GetScore()}  // Добавляем поле с очками
         };
     }
 
-    // Р”РѕР±Р°РІР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕС‚РµСЂСЏРЅРЅС‹С… РїСЂРµРґРјРµС‚Р°С…
+    // Добавляем информацию о потерянных предметах
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (const auto& obj : lost_objects) {
@@ -276,6 +288,12 @@ StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
         return MakeErrorResponse(http::status::unauthorized,
                                "unknownToken",
                                "Player token has not been found", req);
+    }
+
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
     }
 
     try {
@@ -342,7 +360,7 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        // Р’РђР–РќРћ: Р’С‹Р·С‹РІР°РµРј StateManager РґР»СЏ СЂСѓС‡РЅС‹С… С‚РёРєРѕРІ
+        // ВАЖНО: Вызываем StateManager для ручных тиков
         auto delta_ms = std::chrono::milliseconds(delta);
         game_.Tick(static_cast<double>(delta) / 1000.0);
         state_manager_.OnTick(delta_ms);
@@ -352,6 +370,115 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
         return MakeErrorResponse(http::status::bad_request,
             "invalidArgument", "Failed to parse tick request JSON", req);
     }
+}
+
+StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
+    if (req.method() != http::verb::get && req.method() != http::verb::head) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+            "invalidMethod", "Only GET and HEAD methods are allowed", req);
+        response.set(http::field::allow, "GET, HEAD");
+        return response;
+    }
+
+    // Парсим параметры запроса
+    int start = 0;
+    int max_items = 100;
+    
+    std::string target_str = req.target().to_string();
+    size_t query_start = target_str.find('?');
+    if (query_start != std::string::npos) {
+        std::string query_str = target_str.substr(query_start + 1);
+        std::istringstream query_stream(query_str);
+        std::string param;
+        
+        while (std::getline(query_stream, param, '&')) {
+            size_t eq_pos = param.find('=');
+            if (eq_pos != std::string::npos) {
+                std::string key = param.substr(0, eq_pos);
+                std::string value = param.substr(eq_pos + 1);
+                
+                if (key == "start") {
+                    try {
+                        start = std::stoi(value);
+                        if (start < 0) start = 0;
+                    } catch (...) {
+                        // Игнорируем неверные значения
+                    }
+                } else if (key == "maxItems") {
+                    try {
+                        max_items = std::stoi(value);
+                        if (max_items < 0) max_items = 100;
+                        if (max_items > 100) {
+                            return MakeErrorResponse(http::status::bad_request,
+                                "badRequest", "Max items cannot exceed 100", req);
+                        }
+                    } catch (...) {
+                        // Игнорируем неверные значения
+                    }
+                }
+            }
+        }
+    }
+
+    // Получаем список ушедших игроков из модели
+    const auto& retired_players = game_.GetRetiredPlayers();
+    
+    // Создаем записи для ответа
+    std::vector<json::value> records_json;
+    for (const auto& record : retired_players) {
+        records_json.push_back({
+            {"name", record.name},
+            {"score", record.score},
+            {"playTime", record.play_time}
+        });
+    }
+    
+    // Сортируем записи согласно требованиям
+    std::sort(records_json.begin(), records_json.end(), 
+        [](const json::value& a, const json::value& b) {
+            const auto& a_obj = a.as_object();
+            const auto& b_obj = b.as_object();
+            
+            int a_score = a_obj.at("score").as_int64();
+            int b_score = b_obj.at("score").as_int64();
+            
+            if (a_score != b_score) {
+                return a_score > b_score; // По убыванию очков
+            }
+            
+            double a_time = a_obj.at("playTime").as_double();
+            double b_time = b_obj.at("playTime").as_double();
+            
+            if (a_time != b_time) {
+                return a_time < b_time; // По возрастанию времени
+            }
+            
+            std::string a_name = a_obj.at("name").as_string().c_str();
+            std::string b_name = b_obj.at("name").as_string().c_str();
+            
+            return a_name < b_name; // По возрастанию имени
+        });
+    
+    // Применяем пагинацию
+    if (start >= records_json.size()) {
+        records_json.clear();
+    } else {
+        if (start > 0) {
+            records_json.erase(records_json.begin(), records_json.begin() + start);
+        }
+        if (max_items < records_json.size()) {
+            records_json.resize(max_items);
+        }
+    }
+    
+    json::array result_array;
+    for (auto& record : records_json) {
+        result_array.push_back(record);
+    }
+    
+    auto response = MakeStringResponse(http::status::ok, json::serialize(result_array), req);
+    response.set(http::field::cache_control, "no-cache");
+    return response;
 }
 
 std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
@@ -417,7 +544,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Р—Р°РіСЂСѓР¶Р°РµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ JSON РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ lootTypes Рё bagCapacity
+            // Загружаем оригинальный JSON для получения lootTypes и bagCapacity
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -429,7 +556,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // РС‰РµРј РєР°СЂС‚Сѓ РІ РєРѕРЅС„РёРіРµ
+            // Ищем карту в конфиге
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -444,7 +571,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // РЎРѕР·РґР°РµРј РѕС‚РІРµС‚ СЃ lootTypes Рё bagCapacity
+            // Создаем ответ с lootTypes и bagCapacity
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},
@@ -456,7 +583,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                     : json::array()}
             };
 
-            // Р”РѕР±Р°РІР»СЏРµРј bagCapacity РµСЃР»Рё РѕРЅРѕ РµСЃС‚СЊ РІ РєРѕРЅС„РёРіРµ
+            // Добавляем bagCapacity если оно есть в конфиге
             if (map_json.as_object().contains("bagCapacity")) {
                 response_json.as_object()["bagCapacity"] = 
                     map_json.as_object().at("bagCapacity");
@@ -481,6 +608,10 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         return MakeErrorResponse(http::status::not_found,
                                "mapNotFound",
                                "Map not found", req);
+    }
+
+    if (req.target() == "/api/v1/game/records") {
+        return HandleGetRecords(std::move(req));
     }
 
     return MakeErrorResponse(http::status::bad_request,

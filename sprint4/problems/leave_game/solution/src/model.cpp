@@ -67,7 +67,7 @@ std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_na
         } else {
             double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
             session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
-                randomize_spawn_points_, loot_generator_, bag_capacity);
+                randomize_spawn_points_, loot_generator_, bag_capacity, retirement_time_);
             session->SetLootTypesCount(loot_types_count);
             session->SetLootValues(loot_values);
             map_id_to_session_[map_id] = session;
@@ -182,7 +182,13 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
 void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
     if (loot_types_count_ == 0) return;
 
-    unsigned looters_count = players_.size();
+    unsigned looters_count = 0;
+    for (const auto& player : players_) {
+        if (!player->IsRetired()) {
+            looters_count++;
+        }
+    }
+    
     unsigned current_loot_count = lost_objects_.size();
     
     unsigned new_loot_count = loot_generator_->Generate(delta_time, current_loot_count, looters_count);
@@ -233,6 +239,37 @@ void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
     }
 }
 
+std::vector<std::shared_ptr<Player>> GameSession::GetActivePlayers() const {
+    std::vector<std::shared_ptr<Player>> active_players;
+    for (const auto& player : players_) {
+        if (!player->IsRetired()) {
+            active_players.push_back(player);
+        }
+    }
+    return active_players;
+}
+
+std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
+    std::vector<std::shared_ptr<Player>> retired_players;
+    auto now = std::chrono::steady_clock::now();
+    
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    for (auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
+        const auto& dog = player->GetDog();
+        auto last_move = dog.GetLastMoveTime();
+        auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
+        
+        if (time_since_last_move >= retirement_time_) {
+            player->Retire();
+            retired_players.push_back(player);
+        }
+    }
+    
+    return retired_players;
+}
+
 namespace {
 
 struct ItemGathererProviderImpl : public collision_detector::ItemGathererProvider {
@@ -278,10 +315,13 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
+    // Убираем ушедших игроков из активных
+    auto active_players = GetActivePlayers();
+    
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
-    for (const auto& player : players_) {
+    for (const auto& player : active_players) {
         const auto& dog = player->GetDog();
         start_positions.push_back(dog.GetPosition());
         
@@ -294,8 +334,8 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    for (size_t i = 0; i < players_.size(); ++i) {
-        auto& dog = players_[i]->GetDog();
+    for (size_t i = 0; i < active_players.size(); ++i) {
+        auto& dog = active_players[i]->GetDog();
         dog.SetPosition(end_positions[i]);
     }
     
@@ -309,13 +349,13 @@ void GameSession::Tick(double delta_time) {
         });
     }
     
-    for (size_t i = 0; i < players_.size(); ++i) {
+    for (size_t i = 0; i < active_players.size(); ++i) {
         provider.gatherers.push_back({
             {start_positions[i].x, start_positions[i].y},
             {end_positions[i].x, end_positions[i].y},
             0.3,
             i,
-            players_[i]
+            active_players[i]
         });
     }
     
@@ -354,6 +394,8 @@ void GameSession::Tick(double delta_time) {
         auto& gatherer = provider.gatherers[event.gatherer_id];
         auto& player = gatherer.player;
         
+        if (player->IsRetired()) continue;
+        
         if (event.type == Event::GATHER) {
             size_t item_idx = event.item_id;
             if (item_idx >= lost_objects_.size()) continue;
@@ -381,7 +423,7 @@ void GameSession::Tick(double delta_time) {
     lost_objects_.erase(new_end, lost_objects_.end());
 }
 
-// Р РµР°Р»РёР·Р°С†РёРё РјРµС‚РѕРґРѕРІ РґР»СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёРё/РґРµСЃРµСЂРёР°Р»РёР·Р°С†РёРё
+// Реализации методов для сериализации/десериализации
 void GameSession::AddRestoredPlayer(std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     players_.push_back(player);
@@ -413,26 +455,20 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     map_id_to_session_[map_id] = session;
     
-    // Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј mapping С‚РѕРєРµРЅРѕРІ РґР»СЏ РёРіСЂРѕРєРѕРІ СЌС‚РѕР№ СЃРµСЃСЃРёРё
+    // Восстанавливаем mapping токенов для игроков этой сессии
     for (const auto& player : session->GetPlayers()) {
         token_to_player_[player->GetToken()] = player;
-        std::cout << "DEBUG: AddRestoredSession - Added token: " << *player->GetToken() 
-                  << " for player ID: " << *player->GetId() << std::endl;
     }
     
     uint32_t session_id = *session->GetId();
     if (session_id >= next_session_id_.load()) {
         next_session_id_.store(session_id + 1);
     }
-    
-    std::cout << "DEBUG: AddRestoredSession completed. Total tokens: " << token_to_player_.size() << std::endl;
 }
 
 void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     token_to_player_[token] = player;
-    std::cout << "DEBUG: RestoreTokenToPlayerMapping - token: " << *token 
-              << " -> player ID: " << *player->GetId() << std::endl;
 }
 
 std::string DirectionToString(Direction dir) {

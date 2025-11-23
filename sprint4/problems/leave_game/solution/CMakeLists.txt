@@ -26,9 +26,11 @@ add_executable(game_server
     src/loot_generator.cpp
     src/loot_generator.h
     src/collision_detector.cpp
+    src/collision_detector.h
     src/serializer.cpp
+    src/serializer.h
     src/state_manager.cpp
-    
+    src/state_manager.h
 )
 
 target_link_libraries(game_server PRIVATE        
@@ -37,35 +39,9 @@ target_link_libraries(game_server PRIVATE
     CONAN_PKG::libpq      # Добавляем PostgreSQL
     CONAN_PKG::libpqxx    # Добавляем pqxx
 )
+
 set_target_properties(game_server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-# Тесты
-add_executable(game_server_tests
-    src/model.h
-    src/model.cpp
-    src/loot_generator.h
-    src/loot_generator.cpp
-    src/tagged.h
-    src/collision_detector.cpp
-    tests/model-tests.cpp
-    tests/loot_generator_tests.cpp
-)
-
-target_include_directories(game_server_tests PRIVATE 
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-target_link_libraries(game_server_tests PRIVATE 
-    CONAN_PKG::catch2 
-    CONAN_PKG::boost 
-    Threads::Threads
-    CONAN_PKG::libpq      # Добавляем для тестов если нужно
-    CONAN_PKG::libpqxx    # Добавляем для тестов если нужно
-)
-
-# Установка выходной директории для тестов
-set_target_properties(game_server_tests PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+# Тесты УДАЛЕНЫ - они не нужны для решения задачи

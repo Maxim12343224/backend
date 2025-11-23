@@ -89,6 +89,10 @@ namespace http_handler {
                         return send(std::move(response));
                     }
                 }
+                else if (string_req.target() == "/api/v1/game/records") {
+                    auto response = HandleGetRecords(std::move(string_req));
+                    return send(std::move(response));
+                }
                 else {
                     auto response = HandleApiRequest(std::move(string_req));
                     return send(std::move(response));
@@ -113,6 +117,7 @@ namespace http_handler {
         StringResponse HandleGameState(StringRequest&& req);
         StringResponse HandlePlayerAction(StringRequest&& req);
         StringResponse HandleTick(StringRequest&& req);
+        StringResponse HandleGetRecords(StringRequest&& req);  // Добавлено объявление
 
         std::optional<std::string> GetTokenFromRequest(const StringRequest& req);
 

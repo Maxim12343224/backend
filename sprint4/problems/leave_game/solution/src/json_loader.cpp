@@ -68,6 +68,16 @@ namespace json_loader {
             game.SetLootGeneratorConfig(period_ms, probability);
         }
 
+        void ParseDogRetirementTime(const json::object& config_obj, model::Game& game) {
+            if (!config_obj.contains("dogRetirementTime")) {
+                return;
+            }
+
+            double retirement_seconds = config_obj.at("dogRetirementTime").as_double();
+            auto retirement_ms = std::chrono::milliseconds(static_cast<int>(retirement_seconds * 1000));
+            game.SetRetirementTime(retirement_ms);
+        }
+
         void ParseMapLootTypes(const json::object& map_obj, model::Game& game, const model::Map::Id& map_id) {
             if (!map_obj.contains("lootTypes")) {
                 return;
@@ -76,14 +86,14 @@ namespace json_loader {
             auto& loot_types = map_obj.at("lootTypes").as_array();
             game.SetMapLootTypesCount(map_id, loot_types.size());
             
-            // РР·РІР»РµРєР°РµРј Р·РЅР°С‡РµРЅРёСЏ РїСЂРµРґРјРµС‚РѕРІ
+            // Извлекаем значения предметов
             std::vector<int> loot_values;
             for (const auto& loot_type : loot_types) {
                 auto& loot_obj = loot_type.as_object();
                 if (loot_obj.contains("value")) {
                     loot_values.push_back(static_cast<int>(loot_obj.at("value").as_int64()));
                 } else {
-                    loot_values.push_back(0);  // Р—РЅР°С‡РµРЅРёРµ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
+                    loot_values.push_back(0);  // Значение по умолчанию
                 }
             }
             
@@ -143,6 +153,7 @@ namespace json_loader {
             auto& root = value.as_object();
             
             ParseLootGeneratorConfig(root, game);
+            ParseDogRetirementTime(root, game);
             
             if (root.contains("defaultDogSpeed")) {
                 game.SetDefaultDogSpeed(root.at("defaultDogSpeed").as_double());

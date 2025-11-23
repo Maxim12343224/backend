@@ -8,7 +8,6 @@
 #include <cmath>
 #include <mutex>
 #include <optional>
-#include <algorithm>
 #include <chrono>
 #include <iostream>
 
@@ -157,22 +156,36 @@ namespace model {
             : name_(std::move(name)),
             position_(start_pos),
             speed_{ 0.0, 0.0 },
-            direction_(start_dir) {
+            direction_(start_dir),
+            last_move_time_(std::chrono::steady_clock::now()) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
         Point GetPosition() const noexcept { return position_; }
         Point GetSpeed() const noexcept { return speed_; }
         Direction GetDirection() const noexcept { return direction_; }
-        void SetSpeed(Point speed) noexcept { speed_ = speed; }
+        void SetSpeed(Point speed) noexcept {
+            speed_ = speed;
+            if (speed.x != 0.0 || speed.y != 0.0) {
+                last_move_time_ = std::chrono::steady_clock::now();
+            }
+        }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
+
+        std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
+            return last_move_time_;
+        }
+        void UpdateLastMoveTime() noexcept {
+            last_move_time_ = std::chrono::steady_clock::now();
+        }
 
     private:
         std::string name_;
         Point position_;
         Point speed_;
         Direction direction_;
+        std::chrono::steady_clock::time_point last_move_time_;
     };
 
     struct LostObject {
@@ -190,7 +203,9 @@ namespace model {
         using Token = util::Tagged<std::string, Player>;
 
         Player(std::shared_ptr<GameSession> session, Dog dog, uint32_t id, std::string token, size_t bag_capacity)
-            : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)), session_(std::move(session)), bag_capacity_(bag_capacity) {
+            : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)),
+            session_(std::move(session)), bag_capacity_(bag_capacity),
+            join_time_(std::chrono::steady_clock::now()) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -202,6 +217,15 @@ namespace model {
         size_t GetBagCapacity() const noexcept { return bag_capacity_; }
         bool IsBagFull() const noexcept { return bag_.size() >= bag_capacity_; }
         int GetScore() const noexcept { return score_; }
+
+        std::chrono::steady_clock::time_point GetJoinTime() const noexcept { return join_time_; }
+        std::chrono::steady_clock::time_point GetRetirementTime() const noexcept { return retirement_time_; }
+        void SetRetirementTime(std::chrono::steady_clock::time_point time) noexcept { retirement_time_ = time; }
+        bool IsRetired() const noexcept { return is_retired_; }
+        void Retire() noexcept {
+            is_retired_ = true;
+            retirement_time_ = std::chrono::steady_clock::now();
+        }
 
         bool AddItemToBag(const LostObject& item) {
             if (IsBagFull()) return false;
@@ -220,6 +244,9 @@ namespace model {
         std::vector<LostObject> bag_;
         size_t bag_capacity_;
         int score_ = 0;
+        std::chrono::steady_clock::time_point join_time_;
+        std::chrono::steady_clock::time_point retirement_time_;
+        bool is_retired_ = false;
     };
 
     class GameSession : public std::enable_shared_from_this<GameSession> {
@@ -227,17 +254,20 @@ namespace model {
         using Id = util::Tagged<uint32_t, GameSession>;
 
         explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
-            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity)
+            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity,
+            std::chrono::milliseconds retirement_time)
             : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
             randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)),
-            bag_capacity_(bag_capacity) {
+            bag_capacity_(bag_capacity), retirement_time_(retirement_time) {
         }
 
         const Id& GetId() const noexcept { return id_; }
         const Map& GetMap() const noexcept { return map_; }
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
+        std::vector<std::shared_ptr<Player>> GetActivePlayers() const;
         const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
+        std::chrono::milliseconds GetRetirementTime() const noexcept { return retirement_time_; }
 
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
@@ -248,6 +278,8 @@ namespace model {
         void SetPlayerAction(const Player::Token& token, const std::string& move);
         void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
+
+        std::vector<std::shared_ptr<Player>> CheckRetiredPlayers();
 
         // Методы для восстановления состояния
         void AddRestoredPlayer(std::shared_ptr<Player> player);
@@ -268,6 +300,17 @@ namespace model {
         mutable std::recursive_mutex mutex_;
         size_t bag_capacity_;
         std::vector<int> loot_values_;
+        std::chrono::milliseconds retirement_time_;
+    };
+
+    // Структура для хранения записи об ушедшем игроке
+    struct RetiredPlayerRecord {
+        std::string name;
+        int score;
+        double play_time;
+
+        RetiredPlayerRecord(std::string n, int s, double pt)
+            : name(std::move(n)), score(s), play_time(pt) {}
     };
 
     class Game {
@@ -285,6 +328,13 @@ namespace model {
         size_t GetDefaultBagCapacity() const noexcept { return default_bag_capacity_; }
         void SetRandomizeSpawnPoints(bool randomize) noexcept {
             randomize_spawn_points_ = randomize;
+        }
+
+        void SetRetirementTime(std::chrono::milliseconds time) noexcept {
+            retirement_time_ = time;
+        }
+        std::chrono::milliseconds GetRetirementTime() const noexcept {
+            return retirement_time_;
         }
 
         void SetLootGeneratorConfig(std::chrono::milliseconds period, double probability) {
@@ -371,6 +421,27 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
+        // Методы для работы с ушедшими игроками
+        void AddRetiredPlayer(std::shared_ptr<Player> player) {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                player->GetRetirementTime() - player->GetJoinTime());
+            double play_time_seconds = play_time.count() / 1000.0;
+
+            retired_players_.emplace_back(
+                player->GetDog().GetName(),
+                player->GetScore(),
+                play_time_seconds
+            );
+
+            // Удаляем токен
+            token_to_player_.erase(player->GetToken());
+        }
+
+        const std::vector<RetiredPlayerRecord>& GetRetiredPlayers() const {
+            return retired_players_;
+        }
+
         void SetPlayerAction(const Player::Token& token, const std::string& move) {
             auto player = FindPlayerByToken(token);
             if (!player) return;
@@ -391,6 +462,12 @@ namespace model {
 
             for (auto& session : sessions) {
                 session->Tick(delta_time);
+
+                // Проверяем игроков на уход на покой
+                auto retired_players = session->CheckRetiredPlayers();
+                for (auto& player : retired_players) {
+                    AddRetiredPlayer(player);
+                }
             }
         }
 
@@ -415,6 +492,8 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
+        std::chrono::milliseconds retirement_time_{ 60000 }; // 60 секунд по умолчанию
+        std::vector<RetiredPlayerRecord> retired_players_;
     };
 
     std::string DirectionToString(Direction dir);

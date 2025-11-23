@@ -157,7 +157,7 @@ int main(int argc, const char* argv[]) {
 
         StateManager state_manager(game, state_file, save_state_period);
         
-        // Р—Р°РіСЂСѓР¶Р°РµРј СЃРѕСЃС‚РѕСЏРЅРёРµ, РµСЃР»Рё СѓРєР°Р·Р°РЅ С„Р°Р№Р» СЃРѕСЃС‚РѕСЏРЅРёСЏ
+        // Загружаем состояние, если указан файл состояния
         if (!state_file.empty()) {
             try {
                 if (!state_manager.LoadState()) {
@@ -166,10 +166,10 @@ int main(int argc, const char* argv[]) {
                     std::cout << "Game state loaded successfully" << std::endl;
                 }
             } catch (const std::exception& e) {
-                // Р’РђР–РќРћ: РќРµ Р·Р°РІРµСЂС€Р°РµРј СЂР°Р±РѕС‚Сѓ РїСЂРё РѕС€РёР±РєРµ Р·Р°РіСЂСѓР·РєРё СЃРѕСЃС‚РѕСЏРЅРёСЏ
-                // РџСЂРѕРґРѕР»Р¶Р°РµРј СЃ С‡РёСЃС‚С‹Рј СЃРѕСЃС‚РѕСЏРЅРёРµРј РІРјРµСЃС‚Рѕ Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚С‹
+                // ВАЖНО: Не завершаем работу при ошибке загрузки состояния
+                // Продолжаем с чистым состоянием вместо завершения работы
                 std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
-                // РќР• РІРѕР·РІСЂР°С‰Р°РµРј EXIT_FAILURE - РїСЂРѕРґРѕР»Р¶Р°РµРј СЂР°Р±РѕС‚Сѓ!
+                // НЕ возвращаем EXIT_FAILURE - продолжаем работу!
             }
         }
 
