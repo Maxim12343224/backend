@@ -6,7 +6,6 @@
 #include <iostream>
 #include <limits>
 #include <variant>
-#include <chrono>
 
 namespace model {
 using namespace std::literals;
@@ -68,9 +67,15 @@ std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_na
         } else {
             double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
             session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
-                randomize_spawn_points_, loot_generator_, bag_capacity);
+                randomize_spawn_points_, loot_generator_, bag_capacity, retirement_time_);
             session->SetLootTypesCount(loot_types_count);
             session->SetLootValues(loot_values);
+            
+            // Устанавливаем callback выхода игроков
+            if (retirement_callback_) {
+                session->SetRetirementCallback(retirement_callback_);
+            }
+            
             map_id_to_session_[map_id] = session;
         }
     }
@@ -79,11 +84,6 @@ std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_na
     if (!player) {
         return nullptr;
     }
-    
-    // Устанавливаем время входа и последней активности
-    auto now = std::chrono::steady_clock::now();
-    player->SetJoinTime(now);
-    player->UpdateLastActivityTime();
     
     {
         std::lock_guard<std::recursive_mutex> lock(mutex_);
@@ -149,6 +149,9 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
             std::move(token),
             bag_capacity_
         );
+
+        // Устанавливаем время входа игрока
+        player->SetJoinTime(std::chrono::steady_clock::now());
 
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         players_.push_back(player);
@@ -283,6 +286,35 @@ struct Event {
 
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    // Проверяем выход игроков по бездействию
+    std::vector<std::shared_ptr<Player>> players_to_remove;
+    for (auto& player : players_) {
+        player->UpdateIdleTime(delta_time);
+        
+        // Если игрок бездействует дольше разрешенного времени
+        if (player->GetIdleTime() >= retirement_time_) {
+            players_to_remove.push_back(player);
+        }
+    }
+    
+    // Обрабатываем выход игроков
+    for (auto& player : players_to_remove) {
+        auto current_time = std::chrono::steady_clock::now();
+        auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+            current_time - player->GetJoinTime()).count() / 1000.0;
+            
+        // Вызываем callback если он установлен
+        if (retirement_callback_) {
+            retirement_callback_(player->GetDog().GetName(), player->GetScore(), play_time);
+        }
+        
+        // Удаляем игрока из сессии
+        auto it = std::find(players_.begin(), players_.end(), player);
+        if (it != players_.end()) {
+            players_.erase(it);
+        }
+    }
     
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
@@ -439,179 +471,6 @@ void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_p
     token_to_player_[token] = player;
     std::cout << "DEBUG: RestoreTokenToPlayerMapping - token: " << *token 
               << " -> player ID: " << *player->GetId() << std::endl;
-}
-
-void Game::SetPlayerAction(const Player::Token& token, const std::string& move) {
-    auto player = FindPlayerByToken(token);
-    if (!player) return;
-    
-    // Обновляем время активности при любом действии
-    player->UpdateLastActivityTime();
-    
-    auto session = player->GetSession();
-    if (session) {
-        session->SetPlayerAction(token, move);
-    }
-}
-
-void Game::Tick(double delta_time) {
-    std::vector<std::shared_ptr<GameSession>> sessions;
-    {
-        std::lock_guard<std::recursive_mutex> lock(mutex_);
-        for (const auto& [map_id, session] : map_id_to_session_) {
-            sessions.push_back(session);
-        }
-    }
-
-    for (auto& session : sessions) {
-        session->Tick(delta_time);
-    }
-    
-    // Проверяем неактивных игроков
-    CheckInactivePlayers();
-}
-
-// Реализация проверки неактивных игроков
-void Game::CheckInactivePlayers() {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto now = std::chrono::steady_clock::now();
-    
-    std::vector<std::shared_ptr<Player>> players_to_remove;
-    
-    for (const auto& [token, player] : token_to_player_) {
-        if (player->IsRetired()) continue;
-        
-        // Проверяем, движется ли игрок
-        bool is_moving = player->IsMoving();
-        auto last_activity = player->GetLastActivityTime();
-        auto inactive_duration = std::chrono::duration<double>(now - last_activity).count();
-        
-        // Если игрок не двигается и время бездействия превышает лимит
-        if (!is_moving && inactive_duration >= dog_retirement_time_) {
-            player->Retire(now);
-            players_to_remove.push_back(player);
-            
-            // Добавляем в базу данных
-            AddRetiredPlayerToDatabase(
-                player->GetDog().GetName(),
-                player->GetScore(),
-                player->GetPlayTimeSeconds()
-            );
-        }
-    }
-    
-    // Удаляем ушедших на пенсию игроков из активных
-    for (const auto& player : players_to_remove) {
-        token_to_player_.erase(player->GetToken());
-    }
-}
-
-// Реализация методов базы данных
-void Game::InitializeDatabase() {
-    // Получаем строку подключения из переменной окружения
-    const char* db_url = std::getenv("GAME_DB_URL");
-    if (!db_url) {
-        std::cout << "GAME_DB_URL not set, database features disabled" << std::endl;
-        return;
-    }
-    
-    db_connection_string_ = db_url;
-    
-    try {
-        auto conn = CreateConnection();
-        pqxx::work txn(*conn);
-        
-        // Создаем таблицу если её нет
-        txn.exec(
-            "CREATE TABLE IF NOT EXISTS retired_players ("
-            "id SERIAL PRIMARY KEY,"
-            "name TEXT NOT NULL,"
-            "score INTEGER NOT NULL,"
-            "play_time DOUBLE PRECISION NOT NULL,"
-            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-            ")"
-        );
-        
-        // Создаем индексы для быстрой сортировки
-        txn.exec("CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players (score DESC)");
-        txn.exec("CREATE INDEX IF NOT EXISTS idx_retired_players_play_time ON retired_players (play_time ASC)");
-        txn.exec("CREATE INDEX IF NOT EXISTS idx_retired_players_name ON retired_players (name ASC)");
-        
-        // Подготавливаем запросы
-        conn->prepare("insert_retired_player", 
-            "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)");
-        conn->prepare("select_records", 
-            "SELECT name, score, play_time FROM retired_players "
-            "ORDER BY score DESC, play_time ASC, name ASC "
-            "LIMIT $2 OFFSET $1");
-            
-        txn.commit();
-        std::cout << "Database initialized successfully" << std::endl;
-        
-    } catch (const std::exception& e) {
-        std::cout << "Database initialization failed: " << e.what() << std::endl;
-    }
-}
-
-std::unique_ptr<pqxx::connection> Game::CreateConnection() const {
-    if (db_connection_string_.empty()) {
-        throw std::runtime_error("Database connection string not set");
-    }
-    
-    try {
-        auto conn = std::make_unique<pqxx::connection>(db_connection_string_);
-        if (!conn->is_open()) {
-            throw std::runtime_error("Failed to connect to database");
-        }
-        return conn;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("Database connection error: " + std::string(e.what()));
-    }
-}
-
-void Game::AddRetiredPlayerToDatabase(const std::string& name, int score, double play_time) {
-    if (db_connection_string_.empty()) return;
-    
-    std::lock_guard<std::mutex> lock(db_mutex_);
-    try {
-        auto conn = CreateConnection();
-        pqxx::work txn(*conn);
-        txn.exec_prepared("insert_retired_player", name, score, play_time);
-        txn.commit();
-    } catch (const std::exception& e) {
-        std::cout << "Failed to add retired player to database: " << e.what() << std::endl;
-    }
-}
-
-std::vector<Game::RetiredPlayerRecord> Game::GetRecordsFromDatabase(int start, int max_items) {
-    if (db_connection_string_.empty()) {
-        return {};
-    }
-    
-    if (max_items > 100) {
-        throw std::runtime_error("maxItems cannot exceed 100");
-    }
-    
-    std::lock_guard<std::mutex> lock(db_mutex_);
-    try {
-        auto conn = CreateConnection();
-        pqxx::work txn(*conn);
-        
-        auto result = txn.exec_prepared("select_records", start, max_items);
-        
-        std::vector<RetiredPlayerRecord> records;
-        for (const auto& row : result) {
-            records.push_back({
-                row["name"].as<std::string>(),
-                row["score"].as<int>(),
-                row["play_time"].as<double>()
-            });
-        }
-        
-        return records;
-    } catch (const std::exception& e) {
-        throw std::runtime_error("Failed to retrieve records: " + std::string(e.what()));
-    }
 }
 
 std::string DirectionToString(Direction dir) {

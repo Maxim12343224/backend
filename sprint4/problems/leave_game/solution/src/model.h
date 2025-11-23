@@ -11,9 +11,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <pqxx/connection>
-#include <pqxx/transaction>
-#include <pqxx/pqxx>
+#include <functional>
 
 #include "tagged.h"
 #include "loot_generator.h"
@@ -215,25 +213,21 @@ namespace model {
         void ClearBag() { bag_.clear(); }
         void AddScore(int points) { score_ += points; }
 
-        // Методы для управления временем бездействия
-        void UpdateLastActivityTime() noexcept { last_activity_time_ = std::chrono::steady_clock::now(); }
-        std::chrono::steady_clock::time_point GetLastActivityTime() const noexcept { return last_activity_time_; }
-        bool IsMoving() const noexcept { return dog_.GetSpeed().x != 0.0 || dog_.GetSpeed().y != 0.0; }
-
-        // Методы для управления временем игры
-        void SetJoinTime(std::chrono::steady_clock::time_point join_time) noexcept { join_time_ = join_time; }
-        std::chrono::steady_clock::time_point GetJoinTime() const noexcept { return join_time_; }
-
-        // Метод для выхода на пенсию
-        void Retire(std::chrono::steady_clock::time_point retire_time) noexcept {
-            retire_time_ = retire_time;
-            is_retired_ = true;
+        // Новые методы для отслеживания бездействия
+        void UpdateIdleTime(double delta_time) {
+            if (dog_.GetSpeed().x == 0.0 && dog_.GetSpeed().y == 0.0) {
+                idle_time_ += delta_time;
+            }
+            else {
+                idle_time_ = 0.0;
+            }
         }
-        bool IsRetired() const noexcept { return is_retired_; }
-        double GetPlayTimeSeconds() const noexcept {
-            if (!is_retired_ || retire_time_ < join_time_) return 0.0;
-            return std::chrono::duration<double>(retire_time_ - join_time_).count();
-        }
+        double GetIdleTime() const noexcept { return idle_time_; }
+        void ResetIdleTime() { idle_time_ = 0.0; }
+
+        // Методы для времени игры
+        void SetJoinTime(std::chrono::steady_clock::time_point time) { join_time_ = time; }
+        std::chrono::steady_clock::time_point GetJoinTime() const { return join_time_; }
 
     private:
         Id id_;
@@ -243,10 +237,8 @@ namespace model {
         std::vector<LostObject> bag_;
         size_t bag_capacity_;
         int score_ = 0;
-        std::chrono::steady_clock::time_point last_activity_time_;
+        double idle_time_ = 0.0;
         std::chrono::steady_clock::time_point join_time_;
-        std::chrono::steady_clock::time_point retire_time_;
-        bool is_retired_ = false;
     };
 
     class GameSession : public std::enable_shared_from_this<GameSession> {
@@ -254,10 +246,10 @@ namespace model {
         using Id = util::Tagged<uint32_t, GameSession>;
 
         explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
-            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity)
+            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity, double retirement_time)
             : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
             randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)),
-            bag_capacity_(bag_capacity) {
+            bag_capacity_(bag_capacity), retirement_time_(retirement_time) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -265,10 +257,16 @@ namespace model {
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
         const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
+        double GetRetirementTime() const noexcept { return retirement_time_; }
 
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
         void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
+
+        // Новый метод для установки callback'а выхода игроков
+        void SetRetirementCallback(std::function<void(const std::string&, int, double)> callback) {
+            retirement_callback_ = std::move(callback);
+        }
 
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
@@ -295,6 +293,8 @@ namespace model {
         mutable std::recursive_mutex mutex_;
         size_t bag_capacity_;
         std::vector<int> loot_values_;
+        double retirement_time_ = 60.0; // По умолчанию 60 секунд
+        std::function<void(const std::string&, int, double)> retirement_callback_;
     };
 
     class Game {
@@ -303,9 +303,7 @@ namespace model {
 
         Game() = default;
         explicit Game(double default_dog_speed, size_t default_bag_capacity = 3)
-            : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {
-            InitializeDatabase();
-        }
+            : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {}
 
         void AddMap(Map map);
         void SetDefaultDogSpeed(double speed) noexcept { default_dog_speed_ = speed; }
@@ -314,6 +312,15 @@ namespace model {
         size_t GetDefaultBagCapacity() const noexcept { return default_bag_capacity_; }
         void SetRandomizeSpawnPoints(bool randomize) noexcept {
             randomize_spawn_points_ = randomize;
+        }
+
+        // Новые методы для времени выхода на покой
+        void SetRetirementTime(double time) noexcept { retirement_time_ = time; }
+        double GetRetirementTime() const noexcept { return retirement_time_; }
+
+        // Новый метод для установки callback'а выхода игроков
+        void SetRetirementCallback(std::function<void(const std::string&, int, double)> callback) {
+            retirement_callback_ = std::move(callback);
         }
 
         void SetLootGeneratorConfig(std::chrono::milliseconds period, double probability) {
@@ -409,27 +416,23 @@ namespace model {
             }
         }
 
-        void Tick(double delta_time);
+        void Tick(double delta_time) {
+            std::vector<std::shared_ptr<GameSession>> sessions;
+            {
+                std::lock_guard<std::recursive_mutex> lock(mutex_);
+                for (const auto& [map_id, session] : map_id_to_session_) {
+                    sessions.push_back(session);
+                }
+            }
+
+            for (auto& session : sessions) {
+                session->Tick(delta_time);
+            }
+        }
 
         // Методы для восстановления состояния
         void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
         void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
-
-        // Методы для управления временем бездействия
-        void SetDogRetirementTime(double seconds) noexcept { dog_retirement_time_ = seconds; }
-        double GetDogRetirementTime() const noexcept { return dog_retirement_time_; }
-
-        // Метод для проверки и обработки неактивных игроков
-        void CheckInactivePlayers();
-
-        // Методы для работы с таблицей рекордов
-        void AddRetiredPlayerToDatabase(const std::string& name, int score, double play_time);
-        struct RetiredPlayerRecord {
-            std::string name;
-            int score;
-            double play_time;
-        };
-        std::vector<RetiredPlayerRecord> GetRecordsFromDatabase(int start = 0, int max_items = 100);
 
     private:
         using MapIdHasher = util::TaggedHasher<Map::Id>;
@@ -448,17 +451,8 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-
-        // Поля для времени бездействия
-        double dog_retirement_time_ = 60.0; // 1 минута по умолчанию
-
-        // Поля для базы данных
-        std::string db_connection_string_;
-        mutable std::mutex db_mutex_;
-
-        // Методы для работы с БД
-        void InitializeDatabase();
-        std::unique_ptr<pqxx::connection> CreateConnection() const;
+        double retirement_time_ = 60.0; // По умолчанию 60 секунд
+        std::function<void(const std::string&, int, double)> retirement_callback_;
     };
 
     std::string DirectionToString(Direction dir);

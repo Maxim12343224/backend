@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <boost/system/error_code.hpp>
 #include "state_manager.h"
-#include "retired_players_repository.h"  // Добавьте этот include
 #include <pqxx/pqxx>
 
 using namespace std::literals;
@@ -168,28 +167,36 @@ int main(int argc, const char* argv[]) {
                     std::cout << "Game state loaded successfully" << std::endl;
                 }
             } catch (const std::exception& e) {
+                // ВАЖНО: Не завершаем работу при ошибке загрузки состояния
+                // Продолжаем с чистым состоянием вместо завершения работы
                 std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
+                // НЕ возвращаем EXIT_FAILURE - продолжаем работу!
             }
         }
 
-        // Инициализация базы данных рекордов
-        std::shared_ptr<model::RetiredPlayersRepository> retired_repo;
+        // Инициализация базы данных для рекордов
+        std::shared_ptr<http_handler::RecordsDatabase> records_db;
         const char* db_url = std::getenv("GAME_DB_URL");
         if (db_url) {
             try {
-                auto db_connection = std::make_shared<pqxx::connection>(db_url);
-                auto retired_db = std::make_shared<postgres::RetiredPlayersDatabase>(std::move(*db_connection));
-                retired_repo = std::shared_ptr<model::RetiredPlayersRepository>(
-                    &retired_db->GetRetiredPlayers(), 
-                    [retired_db](model::RetiredPlayersRepository*) {}  // deleter that keeps shared_ptr alive
-                );
-                std::cout << "Database for retired players initialized successfully" << std::endl;
+                auto db_conn = std::make_shared<pqxx::connection>(db_url);
+                records_db = std::make_shared<http_handler::RecordsDatabase>(db_conn);
+                records_db->EnsureTableExists();
+                records_db->PrepareStatements();
+                
+                // Устанавливаем callback для записи ушедших игроков
+                game.SetRetirementCallback([records_db](const std::string& name, int score, double play_time) {
+                    records_db->AddRetiredPlayer(name, score, play_time);
+                });
+                
+                std::cout << "Database connection established and tables ensured" << std::endl;
             } catch (const std::exception& e) {
                 std::cerr << "Failed to initialize database: " << e.what() << std::endl;
-                std::cerr << "Records functionality will be disabled" << std::endl;
+                return EXIT_FAILURE;
             }
         } else {
-            std::cout << "GAME_DB_URL not set, records functionality disabled" << std::endl;
+            std::cerr << "GAME_DB_URL environment variable is not set" << std::endl;
+            return EXIT_FAILURE;
         }
 
         const unsigned num_threads = std::thread::hardware_concurrency();
@@ -219,7 +226,7 @@ int main(int argc, const char* argv[]) {
         });
 
         http_handler::RequestHandler base_handler{ 
-            game, static_path, is_tick_automatic, config_path, state_manager, retired_repo 
+            game, static_path, is_tick_automatic, config_path, state_manager, records_db
         };
         http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
 
@@ -240,7 +247,7 @@ int main(int argc, const char* argv[]) {
             {"tick_period_ms", tick_period},
             {"state_file", state_file.string()},
             {"save_state_period_ms", save_state_period.count()},
-            {"database_enabled", retired_repo != nullptr}
+            {"database_initialized", db_url != nullptr}
         };
         BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, start_data)
             << "server started";

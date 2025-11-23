@@ -68,13 +68,13 @@ namespace json_loader {
             game.SetLootGeneratorConfig(period_ms, probability);
         }
 
-        void ParseDogRetirementTime(const json::object& config_obj, model::Game& game) {
+        void ParseRetirementTime(const json::object& config_obj, model::Game& game) {
             if (!config_obj.contains("dogRetirementTime")) {
                 return;
             }
-            
+
             double retirement_time = config_obj.at("dogRetirementTime").as_double();
-            game.SetDogRetirementTime(retirement_time);
+            game.SetRetirementTime(retirement_time);
         }
 
         void ParseMapLootTypes(const json::object& map_obj, model::Game& game, const model::Map::Id& map_id) {
@@ -152,7 +152,7 @@ namespace json_loader {
             auto& root = value.as_object();
             
             ParseLootGeneratorConfig(root, game);
-            ParseDogRetirementTime(root, game);
+            ParseRetirementTime(root, game);
             
             if (root.contains("defaultDogSpeed")) {
                 game.SetDefaultDogSpeed(root.at("defaultDogSpeed").as_double());

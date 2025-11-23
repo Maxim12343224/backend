@@ -11,7 +11,6 @@
 #include <random>
 #include <chrono>
 #include <cmath>
-#include <sstream>
 
 namespace http_handler {
 namespace beast = boost::beast;
@@ -355,79 +354,71 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
     }
 }
 
-StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
+StringResponse RequestHandler::HandleRecords(StringRequest&& req) {
     if (req.method() != http::verb::get && req.method() != http::verb::head) {
         auto response = MakeErrorResponse(http::status::method_not_allowed,
-                                        "invalidMethod",
-                                        "Only GET and HEAD methods are allowed", req);
+            "invalidMethod", "Only GET and HEAD methods are allowed", req);
         response.set(http::field::allow, "GET, HEAD");
         return response;
     }
 
     try {
         // Парсим параметры запроса
+        auto params = ParseQuery(req.target().to_string());
+        
         int start = 0;
         int max_items = 100;
         
-        // Извлекаем параметры из URL
-        std::string target = req.target().to_string();
-        size_t question_pos = target.find('?');
-        if (question_pos != std::string::npos) {
-            std::string query_str = target.substr(question_pos + 1);
-            std::istringstream query_stream(query_str);
-            std::string param;
-            
-            while (std::getline(query_stream, param, '&')) {
-                size_t equal_pos = param.find('=');
-                if (equal_pos != std::string::npos) {
-                    std::string key = param.substr(0, equal_pos);
-                    std::string value = param.substr(equal_pos + 1);
-                    
-                    if (key == "start") {
-                        start = std::stoi(value);
-                        if (start < 0) start = 0;
-                    } else if (key == "maxItems") {
-                        max_items = std::stoi(value);
-                        if (max_items <= 0) max_items = 100;
-                    }
+        if (params.count("start")) {
+            try {
+                start = std::stoi(params["start"]);
+                if (start < 0) {
+                    return MakeErrorResponse(http::status::bad_request,
+                        "invalidArgument", "start must be non-negative", req);
                 }
+            } catch (const std::exception&) {
+                return MakeErrorResponse(http::status::bad_request,
+                    "invalidArgument", "start must be an integer", req);
             }
         }
         
-        // Получаем записи из базы данных
-        auto records = game_.GetRecordsFromDatabase(start, max_items);
+        if (params.count("maxItems")) {
+            try {
+                max_items = std::stoi(params["maxItems"]);
+                if (max_items < 0) {
+                    return MakeErrorResponse(http::status::bad_request,
+                        "invalidArgument", "maxItems must be non-negative", req);
+                }
+                if (max_items > 100) {
+                    return MakeErrorResponse(http::status::bad_request,
+                        "invalidArgument", "maxItems must not be greater than 100", req);
+                }
+            } catch (const std::exception&) {
+                return MakeErrorResponse(http::status::bad_request,
+                    "invalidArgument", "maxItems must be an integer", req);
+            }
+        }
+
+        // Получаем записи из БД
+        auto records = records_db_->GetRecords(start, max_items);
         
         // Формируем JSON ответ
         json::array records_json;
-        for (const auto& record : records) {
+        for (const auto& [name, score, play_time] : records) {
             records_json.push_back({
-                {"name", record.name},
-                {"score", record.score},
-                {"playTime", record.play_time}
+                {"name", name},
+                {"score", score},
+                {"playTime", play_time}
             });
         }
-        
-        auto response = MakeStringResponse(http::status::ok, 
-                                         json::serialize(records_json), req);
-        response.set(http::field::content_type, "application/json");
+
+        auto response = MakeStringResponse(http::status::ok, json::serialize(records_json), req);
         response.set(http::field::cache_control, "no-cache");
-        response.content_length(response.body().size());
         return response;
         
-    } catch (const std::runtime_error& e) {
-        std::string error_msg = e.what();
-        if (error_msg.find("maxItems cannot exceed 100") != std::string::npos) {
-            return MakeErrorResponse(http::status::bad_request,
-                                   "invalidArgument",
-                                   "maxItems cannot exceed 100", req);
-        }
-        return MakeErrorResponse(http::status::internal_server_error,
-                               "databaseError",
-                               "Failed to retrieve records", req);
     } catch (const std::exception& e) {
         return MakeErrorResponse(http::status::internal_server_error,
-                               "databaseError",
-                               "Failed to retrieve records", req);
+            "internalError", "Failed to retrieve records", req);
     }
 }
 
@@ -443,6 +434,30 @@ std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringReque
         }
     }
     return std::nullopt;
+}
+
+std::unordered_map<std::string, std::string> RequestHandler::ParseQuery(const std::string& query) {
+    std::unordered_map<std::string, std::string> params;
+    
+    size_t question_pos = query.find('?');
+    if (question_pos == std::string::npos) {
+        return params;
+    }
+    
+    std::string query_str = query.substr(question_pos + 1);
+    std::istringstream iss(query_str);
+    std::string pair;
+    
+    while (std::getline(iss, pair, '&')) {
+        size_t equal_pos = pair.find('=');
+        if (equal_pos != std::string::npos) {
+            std::string key = pair.substr(0, equal_pos);
+            std::string value = pair.substr(equal_pos + 1);
+            params[key] = value;
+        }
+    }
+    
+    return params;
 }
 
 StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
