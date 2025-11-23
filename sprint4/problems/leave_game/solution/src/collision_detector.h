@@ -1,4 +1,3 @@
-==== = collision_detector.h ==== =
 #pragma once
 
 #include "geom.h"

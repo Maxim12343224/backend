@@ -1,4 +1,3 @@
-===== collision_detector.cpp =====
 #include "collision_detector.h"
 #include <cassert>
 #include <algorithm>
