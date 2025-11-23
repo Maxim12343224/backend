@@ -67,15 +67,9 @@ std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_na
         } else {
             double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
             session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
-                randomize_spawn_points_, loot_generator_, bag_capacity, retirement_time_);
+                randomize_spawn_points_, loot_generator_, bag_capacity);
             session->SetLootTypesCount(loot_types_count);
             session->SetLootValues(loot_values);
-            
-            // Устанавливаем callback выхода игроков
-            if (retirement_callback_) {
-                session->SetRetirementCallback(retirement_callback_);
-            }
-            
             map_id_to_session_[map_id] = session;
         }
     }
@@ -149,9 +143,6 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
             std::move(token),
             bag_capacity_
         );
-
-        // Устанавливаем время входа игрока
-        player->SetJoinTime(std::chrono::steady_clock::now());
 
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         players_.push_back(player);
@@ -287,35 +278,6 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Проверяем выход игроков по бездействию
-    std::vector<std::shared_ptr<Player>> players_to_remove;
-    for (auto& player : players_) {
-        player->UpdateIdleTime(delta_time);
-        
-        // Если игрок бездействует дольше разрешенного времени
-        if (player->GetIdleTime() >= retirement_time_) {
-            players_to_remove.push_back(player);
-        }
-    }
-    
-    // Обрабатываем выход игроков
-    for (auto& player : players_to_remove) {
-        auto current_time = std::chrono::steady_clock::now();
-        auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-            current_time - player->GetJoinTime()).count() / 1000.0;
-            
-        // Вызываем callback если он установлен
-        if (retirement_callback_) {
-            retirement_callback_(player->GetDog().GetName(), player->GetScore(), play_time);
-        }
-        
-        // Удаляем игрока из сессии
-        auto it = std::find(players_.begin(), players_.end(), player);
-        if (it != players_.end()) {
-            players_.erase(it);
-        }
-    }
-    
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
@@ -419,7 +381,7 @@ void GameSession::Tick(double delta_time) {
     lost_objects_.erase(new_end, lost_objects_.end());
 }
 
-// Реализации методов для сериализации/десериализации
+// Р РµР°Р»РёР·Р°С†РёРё РјРµС‚РѕРґРѕРІ РґР»СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёРё/РґРµСЃРµСЂРёР°Р»РёР·Р°С†РёРё
 void GameSession::AddRestoredPlayer(std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     players_.push_back(player);
@@ -451,7 +413,7 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     map_id_to_session_[map_id] = session;
     
-    // Восстанавливаем mapping токенов для игроков этой сессии
+    // Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј mapping С‚РѕРєРµРЅРѕРІ РґР»СЏ РёРіСЂРѕРєРѕРІ СЌС‚РѕР№ СЃРµСЃСЃРёРё
     for (const auto& player : session->GetPlayers()) {
         token_to_player_[player->GetToken()] = player;
         std::cout << "DEBUG: AddRestoredSession - Added token: " << *player->GetToken() 

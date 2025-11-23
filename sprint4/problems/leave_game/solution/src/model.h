@@ -11,7 +11,6 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
-#include <functional>
 
 #include "tagged.h"
 #include "loot_generator.h"
@@ -213,22 +212,6 @@ namespace model {
         void ClearBag() { bag_.clear(); }
         void AddScore(int points) { score_ += points; }
 
-        // Новые методы для отслеживания бездействия
-        void UpdateIdleTime(double delta_time) {
-            if (dog_.GetSpeed().x == 0.0 && dog_.GetSpeed().y == 0.0) {
-                idle_time_ += delta_time;
-            }
-            else {
-                idle_time_ = 0.0;
-            }
-        }
-        double GetIdleTime() const noexcept { return idle_time_; }
-        void ResetIdleTime() { idle_time_ = 0.0; }
-
-        // Методы для времени игры
-        void SetJoinTime(std::chrono::steady_clock::time_point time) { join_time_ = time; }
-        std::chrono::steady_clock::time_point GetJoinTime() const { return join_time_; }
-
     private:
         Id id_;
         Token token_;
@@ -237,8 +220,6 @@ namespace model {
         std::vector<LostObject> bag_;
         size_t bag_capacity_;
         int score_ = 0;
-        double idle_time_ = 0.0;
-        std::chrono::steady_clock::time_point join_time_;
     };
 
     class GameSession : public std::enable_shared_from_this<GameSession> {
@@ -246,10 +227,10 @@ namespace model {
         using Id = util::Tagged<uint32_t, GameSession>;
 
         explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
-            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity, double retirement_time)
+            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity)
             : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
             randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)),
-            bag_capacity_(bag_capacity), retirement_time_(retirement_time) {
+            bag_capacity_(bag_capacity) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -257,16 +238,10 @@ namespace model {
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
         const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
-        double GetRetirementTime() const noexcept { return retirement_time_; }
 
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
         void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
-
-        // Новый метод для установки callback'а выхода игроков
-        void SetRetirementCallback(std::function<void(const std::string&, int, double)> callback) {
-            retirement_callback_ = std::move(callback);
-        }
 
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
@@ -293,8 +268,6 @@ namespace model {
         mutable std::recursive_mutex mutex_;
         size_t bag_capacity_;
         std::vector<int> loot_values_;
-        double retirement_time_ = 60.0; // По умолчанию 60 секунд
-        std::function<void(const std::string&, int, double)> retirement_callback_;
     };
 
     class Game {
@@ -312,15 +285,6 @@ namespace model {
         size_t GetDefaultBagCapacity() const noexcept { return default_bag_capacity_; }
         void SetRandomizeSpawnPoints(bool randomize) noexcept {
             randomize_spawn_points_ = randomize;
-        }
-
-        // Новые методы для времени выхода на покой
-        void SetRetirementTime(double time) noexcept { retirement_time_ = time; }
-        double GetRetirementTime() const noexcept { return retirement_time_; }
-
-        // Новый метод для установки callback'а выхода игроков
-        void SetRetirementCallback(std::function<void(const std::string&, int, double)> callback) {
-            retirement_callback_ = std::move(callback);
         }
 
         void SetLootGeneratorConfig(std::chrono::milliseconds period, double probability) {
@@ -451,8 +415,6 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-        double retirement_time_ = 60.0; // По умолчанию 60 секунд
-        std::function<void(const std::string&, int, double)> retirement_callback_;
     };
 
     std::string DirectionToString(Direction dir);

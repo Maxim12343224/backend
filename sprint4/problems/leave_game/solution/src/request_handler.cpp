@@ -19,7 +19,7 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
-    // Добавляем вспомогательную функцию для сериализации чисел
+    // Р”РѕР±Р°РІР»СЏРµРј РІСЃРїРѕРјРѕРіР°С‚РµР»СЊРЅСѓСЋ С„СѓРЅРєС†РёСЋ РґР»СЏ СЃРµСЂРёР°Р»РёР·Р°С†РёРё С‡РёСЃРµР»
     json::value serialize_number(double value) {
         if (value == std::floor(value)) {
             return json::value(static_cast<int64_t>(value));
@@ -210,7 +210,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     for (const auto& p : session->GetPlayers()) {
         const auto& dog = p->GetDog();
         
-        // Создаем JSON для рюкзака
+        // РЎРѕР·РґР°РµРј JSON РґР»СЏ СЂСЋРєР·Р°РєР°
         json::array bag_json;
         for (const auto& item : p->GetBag()) {
             bag_json.push_back({
@@ -224,11 +224,11 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
             {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
             {"dir", model::DirectionToString(dog.GetDirection())},
             {"bag", std::move(bag_json)},
-            {"score", p->GetScore()}  // Добавляем поле с очками
+            {"score", p->GetScore()}  // Р”РѕР±Р°РІР»СЏРµРј РїРѕР»Рµ СЃ РѕС‡РєР°РјРё
         };
     }
 
-    // Добавляем информацию о потерянных предметах
+    // Р”РѕР±Р°РІР»СЏРµРј РёРЅС„РѕСЂРјР°С†РёСЋ Рѕ РїРѕС‚РµСЂСЏРЅРЅС‹С… РїСЂРµРґРјРµС‚Р°С…
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (const auto& obj : lost_objects) {
@@ -342,7 +342,7 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        // ВАЖНО: Вызываем StateManager для ручных тиков
+        // Р’РђР–РќРћ: Р’С‹Р·С‹РІР°РµРј StateManager РґР»СЏ СЂСѓС‡РЅС‹С… С‚РёРєРѕРІ
         auto delta_ms = std::chrono::milliseconds(delta);
         game_.Tick(static_cast<double>(delta) / 1000.0);
         state_manager_.OnTick(delta_ms);
@@ -351,74 +351,6 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
     } catch (const std::exception& e) {
         return MakeErrorResponse(http::status::bad_request,
             "invalidArgument", "Failed to parse tick request JSON", req);
-    }
-}
-
-StringResponse RequestHandler::HandleRecords(StringRequest&& req) {
-    if (req.method() != http::verb::get && req.method() != http::verb::head) {
-        auto response = MakeErrorResponse(http::status::method_not_allowed,
-            "invalidMethod", "Only GET and HEAD methods are allowed", req);
-        response.set(http::field::allow, "GET, HEAD");
-        return response;
-    }
-
-    try {
-        // Парсим параметры запроса
-        auto params = ParseQuery(req.target().to_string());
-        
-        int start = 0;
-        int max_items = 100;
-        
-        if (params.count("start")) {
-            try {
-                start = std::stoi(params["start"]);
-                if (start < 0) {
-                    return MakeErrorResponse(http::status::bad_request,
-                        "invalidArgument", "start must be non-negative", req);
-                }
-            } catch (const std::exception&) {
-                return MakeErrorResponse(http::status::bad_request,
-                    "invalidArgument", "start must be an integer", req);
-            }
-        }
-        
-        if (params.count("maxItems")) {
-            try {
-                max_items = std::stoi(params["maxItems"]);
-                if (max_items < 0) {
-                    return MakeErrorResponse(http::status::bad_request,
-                        "invalidArgument", "maxItems must be non-negative", req);
-                }
-                if (max_items > 100) {
-                    return MakeErrorResponse(http::status::bad_request,
-                        "invalidArgument", "maxItems must not be greater than 100", req);
-                }
-            } catch (const std::exception&) {
-                return MakeErrorResponse(http::status::bad_request,
-                    "invalidArgument", "maxItems must be an integer", req);
-            }
-        }
-
-        // Получаем записи из БД
-        auto records = records_db_->GetRecords(start, max_items);
-        
-        // Формируем JSON ответ
-        json::array records_json;
-        for (const auto& [name, score, play_time] : records) {
-            records_json.push_back({
-                {"name", name},
-                {"score", score},
-                {"playTime", play_time}
-            });
-        }
-
-        auto response = MakeStringResponse(http::status::ok, json::serialize(records_json), req);
-        response.set(http::field::cache_control, "no-cache");
-        return response;
-        
-    } catch (const std::exception& e) {
-        return MakeErrorResponse(http::status::internal_server_error,
-            "internalError", "Failed to retrieve records", req);
     }
 }
 
@@ -434,30 +366,6 @@ std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringReque
         }
     }
     return std::nullopt;
-}
-
-std::unordered_map<std::string, std::string> RequestHandler::ParseQuery(const std::string& query) {
-    std::unordered_map<std::string, std::string> params;
-    
-    size_t question_pos = query.find('?');
-    if (question_pos == std::string::npos) {
-        return params;
-    }
-    
-    std::string query_str = query.substr(question_pos + 1);
-    std::istringstream iss(query_str);
-    std::string pair;
-    
-    while (std::getline(iss, pair, '&')) {
-        size_t equal_pos = pair.find('=');
-        if (equal_pos != std::string::npos) {
-            std::string key = pair.substr(0, equal_pos);
-            std::string value = pair.substr(equal_pos + 1);
-            params[key] = value;
-        }
-    }
-    
-    return params;
 }
 
 StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
@@ -509,7 +417,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Загружаем оригинальный JSON для получения lootTypes и bagCapacity
+            // Р—Р°РіСЂСѓР¶Р°РµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ JSON РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ lootTypes Рё bagCapacity
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -521,7 +429,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // Ищем карту в конфиге
+            // РС‰РµРј РєР°СЂС‚Сѓ РІ РєРѕРЅС„РёРіРµ
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -536,7 +444,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // Создаем ответ с lootTypes и bagCapacity
+            // РЎРѕР·РґР°РµРј РѕС‚РІРµС‚ СЃ lootTypes Рё bagCapacity
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},
@@ -548,7 +456,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                     : json::array()}
             };
 
-            // Добавляем bagCapacity если оно есть в конфиге
+            // Р”РѕР±Р°РІР»СЏРµРј bagCapacity РµСЃР»Рё РѕРЅРѕ РµСЃС‚СЊ РІ РєРѕРЅС„РёРіРµ
             if (map_json.as_object().contains("bagCapacity")) {
                 response_json.as_object()["bagCapacity"] = 
                     map_json.as_object().at("bagCapacity");

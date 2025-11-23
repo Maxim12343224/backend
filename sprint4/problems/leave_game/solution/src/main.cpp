@@ -11,7 +11,6 @@
 #include <filesystem>
 #include <boost/system/error_code.hpp>
 #include "state_manager.h"
-#include <pqxx/pqxx>
 
 using namespace std::literals;
 namespace net = boost::asio;
@@ -158,7 +157,7 @@ int main(int argc, const char* argv[]) {
 
         StateManager state_manager(game, state_file, save_state_period);
         
-        // Загружаем состояние, если указан файл состояния
+        // Р—Р°РіСЂСѓР¶Р°РµРј СЃРѕСЃС‚РѕСЏРЅРёРµ, РµСЃР»Рё СѓРєР°Р·Р°РЅ С„Р°Р№Р» СЃРѕСЃС‚РѕСЏРЅРёСЏ
         if (!state_file.empty()) {
             try {
                 if (!state_manager.LoadState()) {
@@ -167,36 +166,11 @@ int main(int argc, const char* argv[]) {
                     std::cout << "Game state loaded successfully" << std::endl;
                 }
             } catch (const std::exception& e) {
-                // ВАЖНО: Не завершаем работу при ошибке загрузки состояния
-                // Продолжаем с чистым состоянием вместо завершения работы
+                // Р’РђР–РќРћ: РќРµ Р·Р°РІРµСЂС€Р°РµРј СЂР°Р±РѕС‚Сѓ РїСЂРё РѕС€РёР±РєРµ Р·Р°РіСЂСѓР·РєРё СЃРѕСЃС‚РѕСЏРЅРёСЏ
+                // РџСЂРѕРґРѕР»Р¶Р°РµРј СЃ С‡РёСЃС‚С‹Рј СЃРѕСЃС‚РѕСЏРЅРёРµРј РІРјРµСЃС‚Рѕ Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚С‹
                 std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
-                // НЕ возвращаем EXIT_FAILURE - продолжаем работу!
+                // РќР• РІРѕР·РІСЂР°С‰Р°РµРј EXIT_FAILURE - РїСЂРѕРґРѕР»Р¶Р°РµРј СЂР°Р±РѕС‚Сѓ!
             }
-        }
-
-        // Инициализация базы данных для рекордов
-        std::shared_ptr<http_handler::RecordsDatabase> records_db;
-        const char* db_url = std::getenv("GAME_DB_URL");
-        if (db_url) {
-            try {
-                auto db_conn = std::make_shared<pqxx::connection>(db_url);
-                records_db = std::make_shared<http_handler::RecordsDatabase>(db_conn);
-                records_db->EnsureTableExists();
-                records_db->PrepareStatements();
-                
-                // Устанавливаем callback для записи ушедших игроков
-                game.SetRetirementCallback([records_db](const std::string& name, int score, double play_time) {
-                    records_db->AddRetiredPlayer(name, score, play_time);
-                });
-                
-                std::cout << "Database connection established and tables ensured" << std::endl;
-            } catch (const std::exception& e) {
-                std::cerr << "Failed to initialize database: " << e.what() << std::endl;
-                return EXIT_FAILURE;
-            }
-        } else {
-            std::cerr << "GAME_DB_URL environment variable is not set" << std::endl;
-            return EXIT_FAILURE;
         }
 
         const unsigned num_threads = std::thread::hardware_concurrency();
@@ -226,7 +200,7 @@ int main(int argc, const char* argv[]) {
         });
 
         http_handler::RequestHandler base_handler{ 
-            game, static_path, is_tick_automatic, config_path, state_manager, records_db
+            game, static_path, is_tick_automatic, config_path, state_manager 
         };
         http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
 
@@ -246,8 +220,7 @@ int main(int argc, const char* argv[]) {
             {"randomize_spawn_points", randomize_spawn},
             {"tick_period_ms", tick_period},
             {"state_file", state_file.string()},
-            {"save_state_period_ms", save_state_period.count()},
-            {"database_initialized", db_url != nullptr}
+            {"save_state_period_ms", save_state_period.count()}
         };
         BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, start_data)
             << "server started";
