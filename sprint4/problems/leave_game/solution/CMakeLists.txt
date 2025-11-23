@@ -28,9 +28,7 @@ add_executable(game_server
     src/collision_detector.cpp
     src/serializer.cpp
     src/state_manager.cpp
-    # Добавляем новые файлы для работы с БД
-    src/retired_players_repository.cpp
-    src/retired_players_repository.h
+    
 )
 
 target_link_libraries(game_server PRIVATE        
