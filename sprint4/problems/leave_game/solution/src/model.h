@@ -489,7 +489,7 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-        std::chrono::milliseconds retirement_time_{ 60000 }; // 60                    
+        std::chrono::milliseconds retirement_time_{ 500 };                   
         std::vector<RetiredPlayerRecord> retired_players_;
     };
 
