@@ -170,6 +170,7 @@ StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
+    // ВАЖНО: Проверяем, не ушел ли игрок на пенсию
     if (player->IsRetired()) {
         return MakeErrorResponse(http::status::unauthorized,
                                "invalidToken",
@@ -210,6 +211,7 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
+    // ВАЖНО: Проверяем, не ушел ли игрок на пенсию
     if (player->IsRetired()) {
         return MakeErrorResponse(http::status::unauthorized,
                                "invalidToken",
@@ -290,6 +292,7 @@ StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
+    // ВАЖНО: Проверяем, не ушел ли игрок на пенсию
     if (player->IsRetired()) {
         return MakeErrorResponse(http::status::unauthorized,
                                "invalidToken",

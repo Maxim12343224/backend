@@ -166,17 +166,14 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
         void SetSpeed(Point speed) noexcept {
             speed_ = speed;
-            if (speed.x != 0.0 || speed.y != 0.0) {
-                last_move_time_ = std::chrono::steady_clock::now();
-            }
         }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
 
-        std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
+        std::chrono::steady_clock::time_point GetLastActivityTime() const noexcept {
             return last_move_time_;
         }
-        void UpdateLastMoveTime() noexcept {
+        void UpdateActivityTime() noexcept {
             last_move_time_ = std::chrono::steady_clock::now();
         }
 
@@ -281,7 +278,7 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> CheckRetiredPlayers();
 
-        // Методы для восстановления состояния
+        //                                    
         void AddRestoredPlayer(std::shared_ptr<Player> player);
         void AddRestoredLostObject(const LostObject& obj);
         void SetNextLostObjectId(size_t id);
@@ -303,7 +300,7 @@ namespace model {
         std::chrono::milliseconds retirement_time_;
     };
 
-    // Структура для хранения записи об ушедшем игроке
+    //                                                
     struct RetiredPlayerRecord {
         std::string name;
         int score;
@@ -421,7 +418,7 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
-        // Методы для работы с ушедшими игроками
+        //                                      
         void AddRetiredPlayer(std::shared_ptr<Player> player) {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
             auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -434,7 +431,7 @@ namespace model {
                 play_time_seconds
             );
 
-            // Удаляем токен
+            //              
             token_to_player_.erase(player->GetToken());
         }
 
@@ -463,7 +460,7 @@ namespace model {
             for (auto& session : sessions) {
                 session->Tick(delta_time);
 
-                // Проверяем игроков на уход на покой
+                // ВАЖНО: Проверяем ушедших игроков после каждого тика
                 auto retired_players = session->CheckRetiredPlayers();
                 for (auto& player : retired_players) {
                     AddRetiredPlayer(player);
@@ -471,7 +468,7 @@ namespace model {
             }
         }
 
-        // Методы для восстановления состояния
+        //                                    
         void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
         void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
 
@@ -492,7 +489,7 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-        std::chrono::milliseconds retirement_time_{ 60000 }; // 60 секунд по умолчанию
+        std::chrono::milliseconds retirement_time_{ 60000 }; // 60                    
         std::vector<RetiredPlayerRecord> retired_players_;
     };
 

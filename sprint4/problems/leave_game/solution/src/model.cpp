@@ -160,6 +160,10 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         if (player->GetToken() != token) continue;
         
         auto& dog = player->GetDog();
+        
+        // ВАЖНО: Обновляем время активности при ЛЮБОЙ команде
+        dog.UpdateActivityTime();
+        
         if (move == "L") {
             dog.SetSpeed({-dog_speed_, 0.0});
             dog.SetDirection(Direction::West);
@@ -174,9 +178,8 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
             dog.SetDirection(Direction::South);
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
+            // Время уже обновлено выше - это начало бездействия
         }
-        // ВАЖНО: Обновляем время последнего движения при любой команде
-        dog.UpdateLastMoveTime();
         break;
     }
 }
@@ -260,10 +263,17 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
         if (player->IsRetired()) continue;
         
         const auto& dog = player->GetDog();
-        auto last_move = dog.GetLastMoveTime();
-        auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
+        auto last_activity = dog.GetLastActivityTime();
+        auto time_since_last_activity = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_activity);
         
-        if (time_since_last_move >= retirement_time_) {
+        // Отладочная информация
+        std::cout << "DEBUG: Player " << player->GetDog().GetName() 
+                  << " - time since last activity: " << time_since_last_activity.count() << "ms"
+                  << ", retirement time: " << retirement_time_.count() << "ms"
+                  << std::endl;
+        
+        if (time_since_last_activity >= retirement_time_) {
+            std::cout << "DEBUG: RETIRING player " << player->GetDog().GetName() << std::endl;
             player->Retire();
             retired_players.push_back(player);
         }

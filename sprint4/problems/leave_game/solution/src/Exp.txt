@@ -14,10 +14,10 @@
 namespace collision_detector {
 
 CollectionResult TryCollectPoint(geom::Point2D a, geom::Point2D b, geom::Point2D c) {
-    // Проверим, что перемещение ненулевое.
-    // Тут приходится использовать строгое равенство, а не приближённое,
-    // пскольку при сборе заказов придётся учитывать перемещение даже на небольшое
-    // расстояние.
+    // РџСЂРѕРІРµСЂРёРј, С‡С‚Рѕ РїРµСЂРµРјРµС‰РµРЅРёРµ РЅРµРЅСѓР»РµРІРѕРµ.
+    // РўСѓС‚ РїСЂРёС…РѕРґРёС‚СЃСЏ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ СЃС‚СЂРѕРіРѕРµ СЂР°РІРµРЅСЃС‚РІРѕ, Р° РЅРµ РїСЂРёР±Р»РёР¶С‘РЅРЅРѕРµ,
+    // РїСЃРєРѕР»СЊРєСѓ РїСЂРё СЃР±РѕСЂРµ Р·Р°РєР°Р·РѕРІ РїСЂРёРґС‘С‚СЃСЏ СѓС‡РёС‚С‹РІР°С‚СЊ РїРµСЂРµРјРµС‰РµРЅРёРµ РґР°Р¶Рµ РЅР° РЅРµР±РѕР»СЊС€РѕРµ
+    // СЂР°СЃСЃС‚РѕСЏРЅРёРµ.
     assert(b.x != a.x || b.y != a.y);
     const double u_x = c.x - a.x;
     const double u_y = c.y - a.y;
@@ -90,54 +90,54 @@ std::vector<GatheringEvent> FindGatherEvents(const ItemGathererProvider& provide
 
 namespace collision_detector {
 
-struct CollectionResult {
-    bool IsCollected(double collect_radius) const {
-        return proj_ratio >= 0 && proj_ratio <= 1 && sq_distance <= collect_radius * collect_radius;
-    }
+    struct CollectionResult {
+        bool IsCollected(double collect_radius) const {
+            return proj_ratio >= 0 && proj_ratio <= 1 && sq_distance <= collect_radius * collect_radius;
+        }
 
-    // квадрат расстояния до точки
-    double sq_distance;
+        // РєРІР°РґСЂР°С‚ СЂР°СЃСЃС‚РѕСЏРЅРёСЏ РґРѕ С‚РѕС‡РєРё
+        double sq_distance;
 
-    // доля пройденного отрезка
-    double proj_ratio;
-};
+        // РґРѕР»СЏ РїСЂРѕР№РґРµРЅРЅРѕРіРѕ РѕС‚СЂРµР·РєР°
+        double proj_ratio;
+    };
 
-// Движемся из точки a в точку b и пытаемся подобрать точку c.
-// Эта функция реализована в уроке.
-CollectionResult TryCollectPoint(geom::Point2D a, geom::Point2D b, geom::Point2D c);
+    // Р”РІРёР¶РµРјСЃСЏ РёР· С‚РѕС‡РєРё a РІ С‚РѕС‡РєСѓ b Рё РїС‹С‚Р°РµРјСЃСЏ РїРѕРґРѕР±СЂР°С‚СЊ С‚РѕС‡РєСѓ c.
+    // Р­С‚Р° С„СѓРЅРєС†РёСЏ СЂРµР°Р»РёР·РѕРІР°РЅР° РІ СѓСЂРѕРєРµ.
+    CollectionResult TryCollectPoint(geom::Point2D a, geom::Point2D b, geom::Point2D c);
 
-struct Item {
-    geom::Point2D position;
-    double width;
-};
+    struct Item {
+        geom::Point2D position;
+        double width;
+    };
 
-struct Gatherer {
-    geom::Point2D start_pos;
-    geom::Point2D end_pos;
-    double width;
-};
+    struct Gatherer {
+        geom::Point2D start_pos;
+        geom::Point2D end_pos;
+        double width;
+    };
 
-class ItemGathererProvider {
-protected:
-    ~ItemGathererProvider() = default;
+    class ItemGathererProvider {
+    protected:
+        ~ItemGathererProvider() = default;
 
-public:
-    virtual size_t ItemsCount() const = 0;
-    virtual Item GetItem(size_t idx) const = 0;
-    virtual size_t GatherersCount() const = 0;
-    virtual Gatherer GetGatherer(size_t idx) const = 0;
-};
+    public:
+        virtual size_t ItemsCount() const = 0;
+        virtual Item GetItem(size_t idx) const = 0;
+        virtual size_t GatherersCount() const = 0;
+        virtual Gatherer GetGatherer(size_t idx) const = 0;
+    };
 
-struct GatheringEvent {
-    size_t item_id;
-    size_t gatherer_id;
-    double sq_distance;
-    double time;
-};
+    struct GatheringEvent {
+        size_t item_id;
+        size_t gatherer_id;
+        double sq_distance;
+        double time;
+    };
 
-// Эту функцию вам нужно будет реализовать в соответствующем задании.
-// При проверке ваших тестов она не нужна - функция будет линковаться снаружи.
-std::vector<GatheringEvent> FindGatherEvents(const ItemGathererProvider& provider);
+    // Р­С‚Сѓ С„СѓРЅРєС†РёСЋ РІР°Рј РЅСѓР¶РЅРѕ Р±СѓРґРµС‚ СЂРµР°Р»РёР·РѕРІР°С‚СЊ РІ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РµРј Р·Р°РґР°РЅРёРё.
+    // РџСЂРё РїСЂРѕРІРµСЂРєРµ РІР°С€РёС… С‚РµСЃС‚РѕРІ РѕРЅР° РЅРµ РЅСѓР¶РЅР° - С„СѓРЅРєС†РёСЏ Р±СѓРґРµС‚ Р»РёРЅРєРѕРІР°С‚СЊСЃСЏ СЃРЅР°СЂСѓР¶Рё.
+    std::vector<GatheringEvent> FindGatherEvents(const ItemGathererProvider& provider);
 
 }  // namespace collision_detector
 
@@ -399,6 +399,16 @@ namespace json_loader {
             game.SetLootGeneratorConfig(period_ms, probability);
         }
 
+        void ParseDogRetirementTime(const json::object& config_obj, model::Game& game) {
+            if (!config_obj.contains("dogRetirementTime")) {
+                return;
+            }
+
+            double retirement_seconds = config_obj.at("dogRetirementTime").as_double();
+            auto retirement_ms = std::chrono::milliseconds(static_cast<int>(retirement_seconds * 1000));
+            game.SetRetirementTime(retirement_ms);
+        }
+
         void ParseMapLootTypes(const json::object& map_obj, model::Game& game, const model::Map::Id& map_id) {
             if (!map_obj.contains("lootTypes")) {
                 return;
@@ -474,6 +484,7 @@ namespace json_loader {
             auto& root = value.as_object();
             
             ParseLootGeneratorConfig(root, game);
+            ParseDogRetirementTime(root, game);
             
             if (root.contains("defaultDogSpeed")) {
                 game.SetDefaultDogSpeed(root.at("defaultDogSpeed").as_double());
@@ -612,7 +623,6 @@ unsigned LootGenerator::Generate(TimeInterval time_delta, unsigned loot_count,
 } // namespace loot_gen
 
 
-
 ===== loot_generator.h =====
 #pragma once
 #include <chrono>
@@ -620,49 +630,48 @@ unsigned LootGenerator::Generate(TimeInterval time_delta, unsigned loot_count,
 
 namespace loot_gen {
 
-/*
- *  Генератор трофеев
- */
-class LootGenerator {
-public:
-    using RandomGenerator = std::function<double()>;
-    using TimeInterval = std::chrono::milliseconds;
-
     /*
-     * base_interval - базовый отрезок времени > 0
-     * probability - вероятность появления трофея в течение базового интервала времени
-     * random_generator - генератор псевдослучайных чисел в диапазоне от [0 до 1]
+     *  Р“РµРЅРµСЂР°С‚РѕСЂ С‚СЂРѕС„РµРµРІ
      */
-    LootGenerator(TimeInterval base_interval, double probability,
-                  RandomGenerator random_gen = DefaultGenerator)
-        : base_interval_{base_interval}
-        , probability_{probability}
-        , random_generator_{std::move(random_gen)} {
-    }
+    class LootGenerator {
+    public:
+        using RandomGenerator = std::function<double()>;
+        using TimeInterval = std::chrono::milliseconds;
 
-    /*
-     * Возвращает количество трофеев, которые должны появиться на карте спустя
-     * заданный промежуток времени.
-     * Количество трофеев, появляющихся на карте не превышает количество мародёров.
-     *
-     * time_delta - отрезок времени, прошедший с момента предыдущего вызова Generate
-     * loot_count - количество трофеев на карте до вызова Generate
-     * looter_count - количество мародёров на карте
-     */
-    unsigned Generate(TimeInterval time_delta, unsigned loot_count, unsigned looter_count);
+        /*
+         * base_interval - Р±Р°Р·РѕРІС‹Р№ РѕС‚СЂРµР·РѕРє РІСЂРµРјРµРЅРё > 0
+         * probability - РІРµСЂРѕСЏС‚РЅРѕСЃС‚СЊ РїРѕСЏРІР»РµРЅРёСЏ С‚СЂРѕС„РµСЏ РІ С‚РµС‡РµРЅРёРµ Р±Р°Р·РѕРІРѕРіРѕ РёРЅС‚РµСЂРІР°Р»Р° РІСЂРµРјРµРЅРё
+         * random_generator - РіРµРЅРµСЂР°С‚РѕСЂ РїСЃРµРІРґРѕСЃР»СѓС‡Р°Р№РЅС‹С… С‡РёСЃРµР» РІ РґРёР°РїР°Р·РѕРЅРµ РѕС‚ [0 РґРѕ 1]
+         */
+        LootGenerator(TimeInterval base_interval, double probability,
+            RandomGenerator random_gen = DefaultGenerator)
+            : base_interval_{ base_interval }
+            , probability_{ probability }
+            , random_generator_{ std::move(random_gen) } {
+        }
 
-private:
-    static double DefaultGenerator() noexcept {
-        return 1.0;
+        /*
+         * Р’РѕР·РІСЂР°С‰Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ С‚СЂРѕС„РµРµРІ, РєРѕС‚РѕСЂС‹Рµ РґРѕР»Р¶РЅС‹ РїРѕСЏРІРёС‚СЊСЃСЏ РЅР° РєР°СЂС‚Рµ СЃРїСѓСЃС‚СЏ
+         * Р·Р°РґР°РЅРЅС‹Р№ РїСЂРѕРјРµР¶СѓС‚РѕРє РІСЂРµРјРµРЅРё.
+         * РљРѕР»РёС‡РµСЃС‚РІРѕ С‚СЂРѕС„РµРµРІ, РїРѕСЏРІР»СЏСЋС‰РёС…СЃСЏ РЅР° РєР°СЂС‚Рµ РЅРµ РїСЂРµРІС‹С€Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ РјР°СЂРѕРґС‘СЂРѕРІ.
+         *
+         * time_delta - РѕС‚СЂРµР·РѕРє РІСЂРµРјРµРЅРё, РїСЂРѕС€РµРґС€РёР№ СЃ РјРѕРјРµРЅС‚Р° РїСЂРµРґС‹РґСѓС‰РµРіРѕ РІС‹Р·РѕРІР° Generate
+         * loot_count - РєРѕР»РёС‡РµСЃС‚РІРѕ С‚СЂРѕС„РµРµРІ РЅР° РєР°СЂС‚Рµ РґРѕ РІС‹Р·РѕРІР° Generate
+         * looter_count - РєРѕР»РёС‡РµСЃС‚РІРѕ РјР°СЂРѕРґС‘СЂРѕРІ РЅР° РєР°СЂС‚Рµ
+         */
+        unsigned Generate(TimeInterval time_delta, unsigned loot_count, unsigned looter_count);
+
+    private:
+        static double DefaultGenerator() noexcept {
+            return 1.0;
+        };
+        TimeInterval base_interval_;
+        double probability_;
+        TimeInterval time_without_loot_{};
+        RandomGenerator random_generator_;
     };
-    TimeInterval base_interval_;
-    double probability_;
-    TimeInterval time_without_loot_{};
-    RandomGenerator random_generator_;
-};
 
 }  // namespace loot_gen
-
 
 
 ===== main.cpp =====
@@ -982,7 +991,7 @@ std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_na
         } else {
             double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
             session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
-                randomize_spawn_points_, loot_generator_, bag_capacity);
+                randomize_spawn_points_, loot_generator_, bag_capacity, retirement_time_);
             session->SetLootTypesCount(loot_types_count);
             session->SetLootValues(loot_values);
             map_id_to_session_[map_id] = session;
@@ -1090,6 +1099,8 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
+        // ВАЖНО: Обновляем время последнего движения при любой команде
+        dog.UpdateLastMoveTime();
         break;
     }
 }
@@ -1097,7 +1108,13 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
 void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
     if (loot_types_count_ == 0) return;
 
-    unsigned looters_count = players_.size();
+    unsigned looters_count = 0;
+    for (const auto& player : players_) {
+        if (!player->IsRetired()) {
+            looters_count++;
+        }
+    }
+    
     unsigned current_loot_count = lost_objects_.size();
     
     unsigned new_loot_count = loot_generator_->Generate(delta_time, current_loot_count, looters_count);
@@ -1148,6 +1165,37 @@ void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
     }
 }
 
+std::vector<std::shared_ptr<Player>> GameSession::GetActivePlayers() const {
+    std::vector<std::shared_ptr<Player>> active_players;
+    for (const auto& player : players_) {
+        if (!player->IsRetired()) {
+            active_players.push_back(player);
+        }
+    }
+    return active_players;
+}
+
+std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
+    std::vector<std::shared_ptr<Player>> retired_players;
+    auto now = std::chrono::steady_clock::now();
+    
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    for (auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
+        const auto& dog = player->GetDog();
+        auto last_move = dog.GetLastMoveTime();
+        auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
+        
+        if (time_since_last_move >= retirement_time_) {
+            player->Retire();
+            retired_players.push_back(player);
+        }
+    }
+    
+    return retired_players;
+}
+
 namespace {
 
 struct ItemGathererProviderImpl : public collision_detector::ItemGathererProvider {
@@ -1193,10 +1241,13 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
+    // Обновляем позиции всех игроков (включая ушедших, чтобы не ломать логику)
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
     for (const auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
         const auto& dog = player->GetDog();
         start_positions.push_back(dog.GetPosition());
         
@@ -1209,10 +1260,20 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    for (size_t i = 0; i < players_.size(); ++i) {
-        auto& dog = players_[i]->GetDog();
-        dog.SetPosition(end_positions[i]);
+    // Обновляем позиции только активных игроков
+    size_t active_index = 0;
+    for (auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
+        auto& dog = player->GetDog();
+        if (active_index < end_positions.size()) {
+            dog.SetPosition(end_positions[active_index]);
+            active_index++;
+        }
     }
+    
+    // Логика сбора предметов для активных игроков
+    auto active_players = GetActivePlayers();
     
     ItemGathererProviderImpl provider;
     
@@ -1224,13 +1285,22 @@ void GameSession::Tick(double delta_time) {
         });
     }
     
-    for (size_t i = 0; i < players_.size(); ++i) {
+    for (size_t i = 0; i < active_players.size(); ++i) {
+        const auto& player = active_players[i];
+        const auto& dog = player->GetDog();
+        
+        Point start_pos = dog.GetPosition();
+        Point end_pos = {
+            dog.GetPosition().x + dog.GetSpeed().x * delta_time,
+            dog.GetPosition().y + dog.GetSpeed().y * delta_time
+        };
+        
         provider.gatherers.push_back({
-            {start_positions[i].x, start_positions[i].y},
-            {end_positions[i].x, end_positions[i].y},
+            {start_pos.x, start_pos.y},
+            {end_pos.x, end_pos.y},
             0.3,
             i,
-            players_[i]
+            player
         });
     }
     
@@ -1268,6 +1338,8 @@ void GameSession::Tick(double delta_time) {
     for (const auto& event : events) {
         auto& gatherer = provider.gatherers[event.gatherer_id];
         auto& player = gatherer.player;
+        
+        if (player->IsRetired()) continue;
         
         if (event.type == Event::GATHER) {
             size_t item_idx = event.item_id;
@@ -1331,23 +1403,17 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
     // Восстанавливаем mapping токенов для игроков этой сессии
     for (const auto& player : session->GetPlayers()) {
         token_to_player_[player->GetToken()] = player;
-        std::cout << "DEBUG: AddRestoredSession - Added token: " << *player->GetToken() 
-                  << " for player ID: " << *player->GetId() << std::endl;
     }
     
     uint32_t session_id = *session->GetId();
     if (session_id >= next_session_id_.load()) {
         next_session_id_.store(session_id + 1);
     }
-    
-    std::cout << "DEBUG: AddRestoredSession completed. Total tokens: " << token_to_player_.size() << std::endl;
 }
 
 void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     token_to_player_[token] = player;
-    std::cout << "DEBUG: RestoreTokenToPlayerMapping - token: " << *token 
-              << " -> player ID: " << *player->GetId() << std::endl;
 }
 
 std::string DirectionToString(Direction dir) {
@@ -1374,7 +1440,6 @@ std::string DirectionToString(Direction dir) {
 #include <cmath>
 #include <mutex>
 #include <optional>
-#include <algorithm>
 #include <chrono>
 #include <iostream>
 
@@ -1523,22 +1588,36 @@ namespace model {
             : name_(std::move(name)),
             position_(start_pos),
             speed_{ 0.0, 0.0 },
-            direction_(start_dir) {
+            direction_(start_dir),
+            last_move_time_(std::chrono::steady_clock::now()) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
         Point GetPosition() const noexcept { return position_; }
         Point GetSpeed() const noexcept { return speed_; }
         Direction GetDirection() const noexcept { return direction_; }
-        void SetSpeed(Point speed) noexcept { speed_ = speed; }
+        void SetSpeed(Point speed) noexcept {
+            speed_ = speed;
+            if (speed.x != 0.0 || speed.y != 0.0) {
+                last_move_time_ = std::chrono::steady_clock::now();
+            }
+        }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
+
+        std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
+            return last_move_time_;
+        }
+        void UpdateLastMoveTime() noexcept {
+            last_move_time_ = std::chrono::steady_clock::now();
+        }
 
     private:
         std::string name_;
         Point position_;
         Point speed_;
         Direction direction_;
+        std::chrono::steady_clock::time_point last_move_time_;
     };
 
     struct LostObject {
@@ -1556,7 +1635,9 @@ namespace model {
         using Token = util::Tagged<std::string, Player>;
 
         Player(std::shared_ptr<GameSession> session, Dog dog, uint32_t id, std::string token, size_t bag_capacity)
-            : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)), session_(std::move(session)), bag_capacity_(bag_capacity) {
+            : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)),
+            session_(std::move(session)), bag_capacity_(bag_capacity),
+            join_time_(std::chrono::steady_clock::now()) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -1568,6 +1649,15 @@ namespace model {
         size_t GetBagCapacity() const noexcept { return bag_capacity_; }
         bool IsBagFull() const noexcept { return bag_.size() >= bag_capacity_; }
         int GetScore() const noexcept { return score_; }
+
+        std::chrono::steady_clock::time_point GetJoinTime() const noexcept { return join_time_; }
+        std::chrono::steady_clock::time_point GetRetirementTime() const noexcept { return retirement_time_; }
+        void SetRetirementTime(std::chrono::steady_clock::time_point time) noexcept { retirement_time_ = time; }
+        bool IsRetired() const noexcept { return is_retired_; }
+        void Retire() noexcept {
+            is_retired_ = true;
+            retirement_time_ = std::chrono::steady_clock::now();
+        }
 
         bool AddItemToBag(const LostObject& item) {
             if (IsBagFull()) return false;
@@ -1586,6 +1676,9 @@ namespace model {
         std::vector<LostObject> bag_;
         size_t bag_capacity_;
         int score_ = 0;
+        std::chrono::steady_clock::time_point join_time_;
+        std::chrono::steady_clock::time_point retirement_time_;
+        bool is_retired_ = false;
     };
 
     class GameSession : public std::enable_shared_from_this<GameSession> {
@@ -1593,17 +1686,20 @@ namespace model {
         using Id = util::Tagged<uint32_t, GameSession>;
 
         explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
-            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity)
+            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity,
+            std::chrono::milliseconds retirement_time)
             : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
             randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)),
-            bag_capacity_(bag_capacity) {
+            bag_capacity_(bag_capacity), retirement_time_(retirement_time) {
         }
 
         const Id& GetId() const noexcept { return id_; }
         const Map& GetMap() const noexcept { return map_; }
         const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
+        std::vector<std::shared_ptr<Player>> GetActivePlayers() const;
         const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
+        std::chrono::milliseconds GetRetirementTime() const noexcept { return retirement_time_; }
 
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
@@ -1614,6 +1710,8 @@ namespace model {
         void SetPlayerAction(const Player::Token& token, const std::string& move);
         void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
+
+        std::vector<std::shared_ptr<Player>> CheckRetiredPlayers();
 
         // ������ ��� �������������� ���������
         void AddRestoredPlayer(std::shared_ptr<Player> player);
@@ -1634,6 +1732,17 @@ namespace model {
         mutable std::recursive_mutex mutex_;
         size_t bag_capacity_;
         std::vector<int> loot_values_;
+        std::chrono::milliseconds retirement_time_;
+    };
+
+    // ��������� ��� �������� ������ �� ������� ������
+    struct RetiredPlayerRecord {
+        std::string name;
+        int score;
+        double play_time;
+
+        RetiredPlayerRecord(std::string n, int s, double pt)
+            : name(std::move(n)), score(s), play_time(pt) {}
     };
 
     class Game {
@@ -1651,6 +1760,13 @@ namespace model {
         size_t GetDefaultBagCapacity() const noexcept { return default_bag_capacity_; }
         void SetRandomizeSpawnPoints(bool randomize) noexcept {
             randomize_spawn_points_ = randomize;
+        }
+
+        void SetRetirementTime(std::chrono::milliseconds time) noexcept {
+            retirement_time_ = time;
+        }
+        std::chrono::milliseconds GetRetirementTime() const noexcept {
+            return retirement_time_;
         }
 
         void SetLootGeneratorConfig(std::chrono::milliseconds period, double probability) {
@@ -1737,6 +1853,27 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
+        // ������ ��� ������ � �������� ��������
+        void AddRetiredPlayer(std::shared_ptr<Player> player) {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                player->GetRetirementTime() - player->GetJoinTime());
+            double play_time_seconds = play_time.count() / 1000.0;
+
+            retired_players_.emplace_back(
+                player->GetDog().GetName(),
+                player->GetScore(),
+                play_time_seconds
+            );
+
+            // ������� �����
+            token_to_player_.erase(player->GetToken());
+        }
+
+        const std::vector<RetiredPlayerRecord>& GetRetiredPlayers() const {
+            return retired_players_;
+        }
+
         void SetPlayerAction(const Player::Token& token, const std::string& move) {
             auto player = FindPlayerByToken(token);
             if (!player) return;
@@ -1757,6 +1894,12 @@ namespace model {
 
             for (auto& session : sessions) {
                 session->Tick(delta_time);
+
+                // ��������� ������� �� ���� �� �����
+                auto retired_players = session->CheckRetiredPlayers();
+                for (auto& player : retired_players) {
+                    AddRetiredPlayer(player);
+                }
             }
         }
 
@@ -1781,6 +1924,8 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
+        std::chrono::milliseconds retirement_time_{ 60000 }; // 60 ������ �� ���������
+        std::vector<RetiredPlayerRecord> retired_players_;
     };
 
     std::string DirectionToString(Direction dir);
@@ -1961,9 +2106,15 @@ StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
     auto session = player->GetSession();
     json::value players_json = json::object();
-    for (const auto& p : session->GetPlayers()) {
+    for (const auto& p : session->GetActivePlayers()) {
         players_json.as_object()[std::to_string(*p->GetId())] = {
             {"name", p->GetDog().GetName()}
         };
@@ -1995,10 +2146,16 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
     auto session = player->GetSession();
     json::value players_json = json::object();
     
-    for (const auto& p : session->GetPlayers()) {
+    for (const auto& p : session->GetActivePlayers()) {
         const auto& dog = p->GetDog();
         
         // Создаем JSON для рюкзака
@@ -2067,6 +2224,12 @@ StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
         return MakeErrorResponse(http::status::unauthorized,
                                "unknownToken",
                                "Player token has not been found", req);
+    }
+
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
     }
 
     try {
@@ -2143,6 +2306,116 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
         return MakeErrorResponse(http::status::bad_request,
             "invalidArgument", "Failed to parse tick request JSON", req);
     }
+}
+
+StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
+    if (req.method() != http::verb::get && req.method() != http::verb::head) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+            "invalidMethod", "Only GET and HEAD methods are allowed", req);
+        response.set(http::field::allow, "GET, HEAD");
+        return response;
+    }
+
+    // Парсим параметры запроса
+    int start = 0;
+    int max_items = 100;
+    
+    std::string target_str = req.target().to_string();
+    size_t query_start = target_str.find('?');
+    if (query_start != std::string::npos) {
+        std::string query_str = target_str.substr(query_start + 1);
+        std::istringstream query_stream(query_str);
+        std::string param;
+        
+        while (std::getline(query_stream, param, '&')) {
+            size_t eq_pos = param.find('=');
+            if (eq_pos != std::string::npos) {
+                std::string key = param.substr(0, eq_pos);
+                std::string value = param.substr(eq_pos + 1);
+                
+                if (key == "start") {
+                    try {
+                        start = std::stoi(value);
+                        if (start < 0) start = 0;
+                    } catch (...) {
+                        // Игнорируем неверные значения
+                    }
+                } else if (key == "maxItems") {
+                    try {
+                        max_items = std::stoi(value);
+                        if (max_items < 0) max_items = 100;
+                        if (max_items > 100) {
+                            return MakeErrorResponse(http::status::bad_request,
+                                "badRequest", "Max items cannot exceed 100", req);
+                        }
+                    } catch (...) {
+                        // Игнорируем неверные значения
+                    }
+                }
+            }
+        }
+    }
+
+    // Получаем список ушедших игроков из модели
+    const auto& retired_players = game_.GetRetiredPlayers();
+    
+    // Создаем записи для ответа
+    std::vector<json::value> records_json;
+    for (const auto& record : retired_players) {
+        records_json.push_back({
+            {"name", record.name},
+            {"score", record.score},
+            {"playTime", record.play_time}
+        });
+    }
+    
+    // Сортируем записи согласно требованиям
+    std::sort(records_json.begin(), records_json.end(), 
+        [](const json::value& a, const json::value& b) {
+            const auto& a_obj = a.as_object();
+            const auto& b_obj = b.as_object();
+            
+            int a_score = a_obj.at("score").as_int64();
+            int b_score = b_obj.at("score").as_int64();
+            
+            if (a_score != b_score) {
+                return a_score > b_score; // По убыванию очков
+            }
+            
+            double a_time = a_obj.at("playTime").as_double();
+            double b_time = b_obj.at("playTime").as_double();
+            
+            if (a_time != b_time) {
+                return a_time < b_time; // По возрастанию времени
+            }
+            
+            std::string a_name = a_obj.at("name").as_string().c_str();
+            std::string b_name = b_obj.at("name").as_string().c_str();
+            
+            return a_name < b_name; // По возрастанию имени
+        });
+    
+    // Применяем пагинацию
+    if (start >= records_json.size()) {
+        records_json.clear();
+    } else {
+        if (start > 0) {
+            records_json.erase(records_json.begin(), records_json.begin() + start);
+        }
+        if (max_items < records_json.size()) {
+            records_json.resize(max_items);
+        }
+    }
+    
+    json::array result_array;
+    for (auto& record : records_json) {
+        result_array.push_back(record);
+    }
+    
+    auto response = MakeStringResponse(http::status::ok, json::serialize(result_array), req);
+    response.set(http::field::cache_control, "no-cache");
+    response.set(http::field::content_length, std::to_string(response.body().size()));
+    return response;
 }
 
 std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
@@ -2272,6 +2545,10 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         return MakeErrorResponse(http::status::not_found,
                                "mapNotFound",
                                "Map not found", req);
+    }
+
+    if (req.target() == "/api/v1/game/records") {
+        return HandleGetRecords(std::move(req));
     }
 
     return MakeErrorResponse(http::status::bad_request,
@@ -2504,6 +2781,10 @@ namespace http_handler {
                         return send(std::move(response));
                     }
                 }
+                else if (string_req.target() == "/api/v1/game/records") {
+                    auto response = HandleGetRecords(std::move(string_req));
+                    return send(std::move(response));
+                }
                 else {
                     auto response = HandleApiRequest(std::move(string_req));
                     return send(std::move(response));
@@ -2528,6 +2809,7 @@ namespace http_handler {
         StringResponse HandleGameState(StringRequest&& req);
         StringResponse HandlePlayerAction(StringRequest&& req);
         StringResponse HandleTick(StringRequest&& req);
+        StringResponse HandleGetRecords(StringRequest&& req);  // ��������� ����������
 
         std::optional<std::string> GetTokenFromRequest(const StringRequest& req);
 
@@ -2884,9 +3166,11 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                     throw std::runtime_error("Map not found: " + ser_session.map_id);
                 }
 
+                // ИСПРАВЛЕНИЕ: Добавляем retirement_time как седьмой параметр
                 auto session = std::make_shared<model::GameSession>(
                     *map, ser_session.id, ser_session.dog_speed, false, 
-                    game.GetLootGenerator(), game.GetMapBagCapacity(model::Map::Id{ser_session.map_id})
+                    game.GetLootGenerator(), game.GetMapBagCapacity(model::Map::Id{ser_session.map_id}),
+                    game.GetRetirementTime()  // Добавлен седьмой параметр
                 );
 
                 session->SetLootTypesCount(game.GetMapLootTypesCount(model::Map::Id{ser_session.map_id}));
