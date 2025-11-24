@@ -496,44 +496,6 @@ void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_p
     token_to_player_[token] = player;
 }
 
-// ИСПРАВЛЕНО: Добавлен метод AddRetiredPlayer для правильного управления ушедшими игроками
-void Game::AddRetiredPlayer(std::shared_ptr<Player> player) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        player->GetRetirementTime() - player->GetJoinTime());
-    double play_time_seconds = play_time.count() / 1000.0;
-
-    retired_players_.emplace_back(
-        player->GetDog().GetName(),
-        player->GetScore(),
-        play_time_seconds
-    );
-
-    // КРИТИЧЕСКИ ВАЖНО: Удаляем из активных игроков
-    token_to_player_.erase(player->GetToken());
-}
-
-// ИСПРАВЛЕНО: Tick теперь вызывает CheckRetiredPlayers для каждого session
-void Game::Tick(double delta_time) {
-    std::vector<std::shared_ptr<GameSession>> sessions;
-    {
-        std::lock_guard<std::recursive_mutex> lock(mutex_);
-        for (const auto& [map_id, session] : map_id_to_session_) {
-            sessions.push_back(session);
-        }
-    }
-
-    for (auto& session : sessions) {
-        session->Tick(delta_time);
-
-        // ИСПРАВЛЕНО: Регулярно проверяем ушедших игроков
-        auto retired_players = session->CheckRetiredPlayers();
-        for (auto& player : retired_players) {
-            AddRetiredPlayer(player);
-        }
-    }
-}
-
 std::string DirectionToString(Direction dir) {
     switch (dir) {
         case Direction::North: return "U";
