@@ -49,8 +49,16 @@ namespace http_server {
     }
 
     void Session::Close() {
-        beast::error_code ec;
-        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+        try {
+            stream_.socket().shutdown(tcp::socket::shutdown_send);
+        } catch (const std::exception& e) {
+            json::value data{
+                {"error", e.what()},
+                {"where", "close"}
+            };
+            BOOST_LOG_TRIVIAL(warning) << boost::log::add_value(logger::additional_data, data)
+                << "socket shutdown warning";
+        }
     }
 
     void Session::ReportError(beast::error_code ec, std::string_view where) {

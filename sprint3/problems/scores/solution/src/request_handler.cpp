@@ -19,6 +19,7 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
+    constexpr double MS_IN_SECOND = 1000.0;
     
     json::value serialize_number(double value) {
         if (value == std::floor(value)) {
@@ -342,7 +343,7 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        game_.Tick(static_cast<double>(delta) / 1000.0);
+        game_.Tick(static_cast<double>(delta) / MS_IN_SECOND);
 
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {
@@ -366,7 +367,9 @@ std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringReque
 }
 
 StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
-    if (req.target() == "/api/v1/maps") {
+    const std::string MAPS_ENDPOINT = "/api/v1/maps";
+    
+    if (req.target() == MAPS_ENDPOINT) {
         if (req.method() != http::verb::get && req.method() != http::verb::head) {
             auto response = MakeErrorResponse(http::status::method_not_allowed,
                                            "invalidMethod",

@@ -10,6 +10,12 @@
 namespace model {
 using namespace std::literals;
 
+namespace {
+    constexpr double ROAD_BOUNDING_BOX_OFFSET = 0.4;
+    constexpr double ROAD_BOUNDING_BOX_WIDTH = 0.8;
+    constexpr double MS_IN_SECOND = 1000.0;
+}
+
 void Map::AddOffice(Office office) {
     if (warehouse_id_to_index_.contains(office.GetId())) {
         throw std::invalid_argument("Duplicate warehouse");
@@ -37,6 +43,45 @@ void Game::AddMap(Map map) {
             throw;
         }
     }
+}
+
+void Game::SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    map_loot_types_count_[map_id] = count;
+}
+
+size_t Game::GetMapLootTypesCount(const Map::Id& map_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
+        return it->second;
+    }
+    return 0;
+}
+
+void Game::SetMapBagCapacity(const Map::Id& map_id, size_t capacity) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    map_bag_capacity_[map_id] = capacity;
+}
+
+size_t Game::GetMapBagCapacity(const Map::Id& map_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (auto it = map_bag_capacity_.find(map_id); it != map_bag_capacity_.end()) {
+        return it->second;
+    }
+    return default_bag_capacity_;
+}
+
+void Game::SetMapLootValues(const Map::Id& map_id, const std::vector<int>& values) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    map_loot_values_[map_id] = values;
+}
+
+std::vector<int> Game::GetMapLootValues(const Map::Id& map_id) const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    if (auto it = map_loot_values_.find(map_id); it != map_loot_values_.end()) {
+        return it->second;
+    }
+    return {};
 }
 
 std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
@@ -167,10 +212,10 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
             dog.SetSpeed({dog_speed_, 0.0});
             dog.SetDirection(Direction::East);
         } else if (move == "U") {
-            dog.SetSpeed({0.0, -dog_speed_});
+            dog.SetSpeed({0.0, dog_speed_});
             dog.SetDirection(Direction::North);
         } else if (move == "D") {
-            dog.SetSpeed({0.0, dog_speed_});
+            dog.SetSpeed({0.0, -dog_speed_});
             dog.SetDirection(Direction::South);
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
@@ -293,7 +338,7 @@ void GameSession::Tick(double delta_time) {
         end_positions.push_back(end_pos);
     }
     
-    GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
+    GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * MS_IN_SECOND)));
     
     
     for (size_t i = 0; i < players_.size(); ++i) {

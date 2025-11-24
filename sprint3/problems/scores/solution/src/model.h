@@ -74,12 +74,12 @@ namespace model {
             if (IsHorizontal()) {
                 Coord x0 = std::min(start_.x, end_.x);
                 Coord x1 = std::max(start_.x, end_.x);
-                return { {x0, start_.y - 0.4}, {x1 - x0, 0.8} };
+                return { {x0, start_.y - ROAD_BOUNDING_BOX_OFFSET}, {x1 - x0, ROAD_BOUNDING_BOX_WIDTH} };
             }
             else {
                 Coord y0 = std::min(start_.y, end_.y);
                 Coord y1 = std::max(start_.y, end_.y);
-                return { {start_.x - 0.4, y0}, {0.8, y1 - y0} };
+                return { {start_.x - ROAD_BOUNDING_BOX_OFFSET, y0}, {ROAD_BOUNDING_BOX_WIDTH, y1 - y0} };
             }
         }
 
@@ -289,44 +289,12 @@ namespace model {
             return loot_generator_;
         }
 
-        void SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            map_loot_types_count_[map_id] = count;
-        }
-
-        size_t GetMapLootTypesCount(const Map::Id& map_id) const {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
-                return it->second;
-            }
-            return 0;
-        }
-
-        void SetMapBagCapacity(const Map::Id& map_id, size_t capacity) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            map_bag_capacity_[map_id] = capacity;
-        }
-
-        size_t GetMapBagCapacity(const Map::Id& map_id) const {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            if (auto it = map_bag_capacity_.find(map_id); it != map_bag_capacity_.end()) {
-                return it->second;
-            }
-            return default_bag_capacity_;
-        }
-
-        void SetMapLootValues(const Map::Id& map_id, const std::vector<int>& values) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            map_loot_values_[map_id] = values;
-        }
-
-        std::vector<int> GetMapLootValues(const Map::Id& map_id) const {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-            if (auto it = map_loot_values_.find(map_id); it != map_loot_values_.end()) {
-                return it->second;
-            }
-            return {};
-        }
+        void SetMapLootTypesCount(const Map::Id& map_id, size_t count);
+        size_t GetMapLootTypesCount(const Map::Id& map_id) const;
+        void SetMapBagCapacity(const Map::Id& map_id, size_t capacity);
+        size_t GetMapBagCapacity(const Map::Id& map_id) const;
+        void SetMapLootValues(const Map::Id& map_id, const std::vector<int>& values);
+        std::vector<int> GetMapLootValues(const Map::Id& map_id) const;
 
         const Maps& GetMaps() const noexcept { return maps_; }
         const Map* FindMap(const Map::Id& id) const noexcept {
