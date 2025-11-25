@@ -391,7 +391,7 @@ namespace model {
     public:
         using Maps = std::vector<Map>;
 
-        Game() = default;
+        Game() : retired_repo_(""), default_dog_speed_(1.0), default_bag_capacity_(3) {}
         explicit Game(const std::string& db_url, double default_dog_speed, size_t default_bag_capacity = 3)
             : retired_repo_(db_url), default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {}
 

@@ -63,7 +63,7 @@ namespace {
 
         void OnTick(boost::system::error_code ec) {  
             using namespace std::chrono;
-            assert(strand_.running_in_this_thread());
+            assert(strrand_.running_in_this_thread());
 
             if (!ec) {
                 auto this_tick = Clock::now();
@@ -161,8 +161,8 @@ int main(int argc, const char* argv[]) {
 
         std::cout << "Using database: " << db_url << std::endl;
 
-        // Создаем игру с подключением к БД
-        model::Game game(db_url);
+        // Создаем игру с подключением к БД и значениями по умолчанию
+        model::Game game(db_url, 1.0, 3); // db_url, default_dog_speed, default_bag_capacity
         json_loader::LoadGame(config_path, game);
         game.SetRandomizeSpawnPoints(randomize_spawn);
 
