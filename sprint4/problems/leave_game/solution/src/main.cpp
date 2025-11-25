@@ -151,7 +151,18 @@ int main(int argc, const char* argv[]) {
 
         logger::InitLogging();
         
-        model::Game game;
+        // Получаем URL базы данных из переменной окружения
+        const char* db_url = std::getenv("GAME_DB_URL");
+        if (!db_url) {
+            std::cerr << "Error: GAME_DB_URL environment variable is not set" << std::endl;
+            std::cerr << "Please set it with: export GAME_DB_URL=postgresql://username:password@localhost:5432/game_db" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        std::cout << "Using database: " << db_url << std::endl;
+
+        // Создаем игру с подключением к БД
+        model::Game game(db_url);
         json_loader::LoadGame(config_path, game);
         game.SetRandomizeSpawnPoints(randomize_spawn);
 
@@ -220,7 +231,8 @@ int main(int argc, const char* argv[]) {
             {"randomize_spawn_points", randomize_spawn},
             {"tick_period_ms", tick_period},
             {"state_file", state_file.string()},
-            {"save_state_period_ms", save_state_period.count()}
+            {"save_state_period_ms", save_state_period.count()},
+            {"database_url", db_url}
         };
         BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, start_data)
             << "server started";

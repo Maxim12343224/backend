@@ -160,10 +160,6 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         if (player->GetToken() != token) continue;
         
         auto& dog = player->GetDog();
-        
-        // ИСПРАВЛЕНО: Обновляем время активности при ЛЮБОЙ команде, включая остановку
-        dog.UpdateActivityTime();
-        
         if (move == "L") {
             dog.SetSpeed({-dog_speed_, 0.0});
             dog.SetDirection(Direction::West);
@@ -178,8 +174,9 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
             dog.SetDirection(Direction::South);
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
-            // Время уже обновлено выше - это начало отсчета бездействия
         }
+        // Обновляем время последнего движения при любой команде
+        dog.UpdateLastMoveTime();
         break;
     }
 }
@@ -263,11 +260,10 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
         if (player->IsRetired()) continue;
         
         const auto& dog = player->GetDog();
-        auto last_activity = dog.GetLastActivityTime();
-        auto time_since_last_activity = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_activity);
+        auto last_move = dog.GetLastMoveTime();
+        auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
         
-        // ИСПРАВЛЕНО: Правильное сравнение времени бездействия с порогом retirement
-        if (time_since_last_activity >= retirement_time_) {
+        if (time_since_last_move >= retirement_time_) {
             player->Retire();
             retired_players.push_back(player);
         }
@@ -321,7 +317,7 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Обновляем позиции всех игроков (включая ушедших, чтобы не ломать логику)
+    // Обновляем позиции всех активных игроков
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     

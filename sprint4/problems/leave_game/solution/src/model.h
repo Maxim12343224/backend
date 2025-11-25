@@ -10,6 +10,7 @@
 #include <optional>
 #include <chrono>
 #include <iostream>
+#include <pqxx/pqxx>
 
 #include "tagged.h"
 #include "loot_generator.h"
@@ -166,14 +167,17 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
         void SetSpeed(Point speed) noexcept {
             speed_ = speed;
+            if (speed.x != 0.0 || speed.y != 0.0) {
+                last_move_time_ = std::chrono::steady_clock::now();
+            }
         }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
 
-        std::chrono::steady_clock::time_point GetLastActivityTime() const noexcept {
+        std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
             return last_move_time_;
         }
-        void UpdateActivityTime() noexcept {
+        void UpdateLastMoveTime() noexcept {
             last_move_time_ = std::chrono::steady_clock::now();
         }
 
@@ -246,6 +250,90 @@ namespace model {
         bool is_retired_ = false;
     };
 
+    // Репозиторий для работы с ушедшими игроками в PostgreSQL
+    class RetiredPlayersRepository {
+    public:
+        RetiredPlayersRepository(const std::string& db_url) : conn_(db_url) {
+            CreateTableIfNotExists();
+        }
+
+        void AddRetiredPlayer(const std::string& name, int score, double play_time) {
+            try {
+                pqxx::work txn(conn_);
+                txn.exec_params(
+                    "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
+                    name, score, play_time
+                );
+                txn.commit();
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to add retired player: " << e.what() << std::endl;
+                throw;
+            }
+        }
+
+        std::vector<std::tuple<std::string, int, double>> GetRecords(int start = 0, int max_items = 100) {
+            try {
+                pqxx::work txn(conn_);
+                auto result = txn.exec_params(
+                    "SELECT name, score, play_time FROM retired_players "
+                    "ORDER BY score DESC, play_time ASC, name ASC "
+                    "LIMIT $1 OFFSET $2",
+                    max_items, start
+                );
+
+                std::vector<std::tuple<std::string, int, double>> records;
+                for (const auto& row : result) {
+                    records.emplace_back(
+                        row["name"].as<std::string>(),
+                        row["score"].as<int>(),
+                        row["play_time"].as<double>()
+                    );
+                }
+                return records;
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to get records: " << e.what() << std::endl;
+                throw;
+            }
+        }
+
+    private:
+        void CreateTableIfNotExists() {
+            try {
+                pqxx::work txn(conn_);
+                txn.exec(
+                    "CREATE TABLE IF NOT EXISTS retired_players ("
+                    "id SERIAL PRIMARY KEY,"
+                    "name TEXT NOT NULL,"
+                    "score INTEGER NOT NULL,"
+                    "play_time DOUBLE PRECISION NOT NULL,"
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                    ")"
+                );
+                txn.exec(
+                    "CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players (score DESC, play_time ASC, name ASC)"
+                );
+                txn.commit();
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to create table: " << e.what() << std::endl;
+                throw;
+            }
+        }
+
+        pqxx::connection conn_;
+    };
+
+    struct RetiredPlayerRecord {
+        std::string name;
+        int score;
+        double play_time;
+
+        RetiredPlayerRecord(std::string n, int s, double pt)
+            : name(std::move(n)), score(s), play_time(pt) {}
+    };
+
     class GameSession : public std::enable_shared_from_this<GameSession> {
     public:
         using Id = util::Tagged<uint32_t, GameSession>;
@@ -278,7 +366,6 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> CheckRetiredPlayers();
 
-        //                                    
         void AddRestoredPlayer(std::shared_ptr<Player> player);
         void AddRestoredLostObject(const LostObject& obj);
         void SetNextLostObjectId(size_t id);
@@ -300,23 +387,13 @@ namespace model {
         std::chrono::milliseconds retirement_time_;
     };
 
-    //                                                
-    struct RetiredPlayerRecord {
-        std::string name;
-        int score;
-        double play_time;
-
-        RetiredPlayerRecord(std::string n, int s, double pt)
-            : name(std::move(n)), score(s), play_time(pt) {}
-    };
-
     class Game {
     public:
         using Maps = std::vector<Map>;
 
         Game() = default;
-        explicit Game(double default_dog_speed, size_t default_bag_capacity = 3)
-            : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {}
+        explicit Game(const std::string& db_url, double default_dog_speed, size_t default_bag_capacity = 3)
+            : retired_repo_(db_url), default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {}
 
         void AddMap(Map map);
         void SetDefaultDogSpeed(double speed) noexcept { default_dog_speed_ = speed; }
@@ -418,25 +495,32 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
-        //                                      
         void AddRetiredPlayer(std::shared_ptr<Player> player) {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
             auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 player->GetRetirementTime() - player->GetJoinTime());
             double play_time_seconds = play_time.count() / 1000.0;
 
-            retired_players_.emplace_back(
+            // Сохраняем в PostgreSQL
+            retired_repo_.AddRetiredPlayer(
                 player->GetDog().GetName(),
                 player->GetScore(),
                 play_time_seconds
             );
 
-            //              
+            // Удаляем из активных игроков
             token_to_player_.erase(player->GetToken());
         }
 
-        const std::vector<RetiredPlayerRecord>& GetRetiredPlayers() const {
-            return retired_players_;
+        std::vector<RetiredPlayerRecord> GetRetiredPlayers(int start = 0, int max_items = 100) {
+            auto db_records = retired_repo_.GetRecords(start, max_items);
+            std::vector<RetiredPlayerRecord> records;
+
+            for (const auto& [name, score, play_time] : db_records) {
+                records.emplace_back(name, score, play_time);
+            }
+
+            return records;
         }
 
         void SetPlayerAction(const Player::Token& token, const std::string& move) {
@@ -460,7 +544,6 @@ namespace model {
             for (auto& session : sessions) {
                 session->Tick(delta_time);
 
-                // ВАЖНО: Проверяем ушедших игроков после каждого тика
                 auto retired_players = session->CheckRetiredPlayers();
                 for (auto& player : retired_players) {
                     AddRetiredPlayer(player);
@@ -468,7 +551,6 @@ namespace model {
             }
         }
 
-        //                                    
         void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
         void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
 
@@ -476,6 +558,7 @@ namespace model {
         using MapIdHasher = util::TaggedHasher<Map::Id>;
         using MapIdToIndex = std::unordered_map<Map::Id, size_t, MapIdHasher>;
 
+        RetiredPlayersRepository retired_repo_;
         std::vector<Map> maps_;
         MapIdToIndex map_id_to_index_;
         std::unordered_map<Map::Id, std::shared_ptr<GameSession>, MapIdHasher> map_id_to_session_;
@@ -489,8 +572,7 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-        std::chrono::milliseconds retirement_time_{ 500 };                   
-        std::vector<RetiredPlayerRecord> retired_players_;
+        std::chrono::milliseconds retirement_time_{ 60000 }; // 60 секунд по умолчанию
     };
 
     std::string DirectionToString(Direction dir);

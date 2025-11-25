@@ -19,12 +19,22 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
-    // Добавляем вспомогательную функцию для сериализации чисел
+    // Исправляем сериализацию чисел для избежания научной нотации
     json::value serialize_number(double value) {
-        if (value == std::floor(value)) {
-            return json::value(static_cast<int64_t>(value));
+        // Используем фиксированную точность вместо научной нотации
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(3) << value;
+        std::string str = oss.str();
+        
+        // Убираем лишние нули в конце
+        if (str.find('.') != std::string::npos) {
+            str = str.substr(0, str.find_last_not_of('0') + 1);
+            if (str.back() == '.') {
+                str.pop_back();
+            }
         }
-        return json::value(value);
+        
+        return json::value(std::stod(str));
     }
 
     json::value SerializeRoad(const model::Road& road) {
@@ -170,7 +180,6 @@ StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
-    // ВАЖНО: Проверяем, не ушел ли игрок на пенсию
     if (player->IsRetired()) {
         return MakeErrorResponse(http::status::unauthorized,
                                "invalidToken",
@@ -211,7 +220,6 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
-    // ВАЖНО: Проверяем, не ушел ли игрок на пенсию
     if (player->IsRetired()) {
         return MakeErrorResponse(http::status::unauthorized,
                                "invalidToken",
@@ -292,7 +300,6 @@ StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
                                "Player token has not been found", req);
     }
 
-    // ВАЖНО: Проверяем, не ушел ли игрок на пенсию
     if (player->IsRetired()) {
         return MakeErrorResponse(http::status::unauthorized,
                                "invalidToken",
@@ -423,66 +430,29 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
         }
     }
 
-    // Получаем список ушедших игроков из модели
-    const auto& retired_players = game_.GetRetiredPlayers();
-    
-    // Создаем записи для ответа
-    std::vector<json::value> records_json;
-    for (const auto& record : retired_players) {
-        records_json.push_back({
-            {"name", record.name},
-            {"score", record.score},
-            {"playTime", record.play_time}
-        });
-    }
-    
-    // Сортируем записи согласно требованиям
-    std::sort(records_json.begin(), records_json.end(), 
-        [](const json::value& a, const json::value& b) {
-            const auto& a_obj = a.as_object();
-            const auto& b_obj = b.as_object();
-            
-            int a_score = a_obj.at("score").as_int64();
-            int b_score = b_obj.at("score").as_int64();
-            
-            if (a_score != b_score) {
-                return a_score > b_score; // По убыванию очков
-            }
-            
-            double a_time = a_obj.at("playTime").as_double();
-            double b_time = b_obj.at("playTime").as_double();
-            
-            if (a_time != b_time) {
-                return a_time < b_time; // По возрастанию времени
-            }
-            
-            std::string a_name = a_obj.at("name").as_string().c_str();
-            std::string b_name = b_obj.at("name").as_string().c_str();
-            
-            return a_name < b_name; // По возрастанию имени
-        });
-    
-    // Применяем пагинацию
-    if (start >= records_json.size()) {
-        records_json.clear();
-    } else {
-        if (start > 0) {
-            records_json.erase(records_json.begin(), records_json.begin() + start);
+    try {
+        // Получаем записи из БД через модель
+        auto records = game_.GetRetiredPlayers(start, max_items);
+        
+        // Создаем JSON массив
+        json::array records_json;
+        for (const auto& record : records) {
+            records_json.push_back({
+                {"name", record.name},
+                {"score", record.score},
+                {"playTime", serialize_number(record.play_time)}
+            });
         }
-        if (max_items < records_json.size()) {
-            records_json.resize(max_items);
-        }
+        
+        auto response = MakeStringResponse(http::status::ok, json::serialize(records_json), req);
+        response.set(http::field::cache_control, "no-cache");
+        response.set(http::field::content_length, std::to_string(response.body().size()));
+        return response;
+        
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::internal_server_error,
+            "internalError", "Failed to retrieve records", req);
     }
-    
-    json::array result_array;
-    for (auto& record : records_json) {
-        result_array.push_back(record);
-    }
-    
-    auto response = MakeStringResponse(http::status::ok, json::serialize(result_array), req);
-    response.set(http::field::cache_control, "no-cache");
-    response.set(http::field::content_length, std::to_string(response.body().size()));
-    return response;
 }
 
 std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
