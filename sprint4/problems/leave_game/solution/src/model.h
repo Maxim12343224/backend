@@ -156,9 +156,9 @@ namespace model {
         Dog(std::string name, Point start_pos, Direction start_dir = Direction::North)
             : name_(std::move(name)),
             position_(start_pos),
-            speed_{ 0.0, 0.0 },
+            speed_{ 0.0, 0.0 },  // Начальная скорость = 0
             direction_(start_dir),
-            last_move_time_(std::chrono::steady_clock::now()) {
+            last_move_time_(std::chrono::steady_clock::now()) {  // Время создания
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -259,15 +259,25 @@ namespace model {
 
         void AddRetiredPlayer(const std::string& name, int score, double play_time) {
             try {
+                // ОТЛАДОЧНЫЙ ВЫВОД
+                std::cout << " DEBUG RetiredPlayersRepository::AddRetiredPlayer" << std::endl;
+                std::cout << "   Name: " << name << std::endl;
+                std::cout << "   Score: " << score << std::endl;
+                std::cout << "   Play time: " << play_time << " seconds" << std::endl;
+
                 pqxx::work txn(conn_);
                 txn.exec_params(
                     "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
                     name, score, play_time
                 );
                 txn.commit();
+
+                // ОТЛАДОЧНЫЙ ВЫВОД - успех
+                std::cout << " DEBUG: Player successfully saved to PostgreSQL" << std::endl;
             }
             catch (const std::exception& e) {
-                std::cerr << "Failed to add retired player: " << e.what() << std::endl;
+                // ОТЛАДОЧНЫЙ ВЫВОД - ошибка
+                std::cerr << " DEBUG: Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
                 throw;
             }
         }

@@ -256,19 +256,51 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     auto now = std::chrono::steady_clock::now();
     
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    std::cout << "=== DEBUG CheckRetiredPlayers ===" << std::endl;
+    std::cout << "Players count: " << players_.size() << std::endl;
+    std::cout << "Retirement time: " << retirement_time_.count() << "ms" << std::endl;
+    
     for (auto& player : players_) {
-        if (player->IsRetired()) continue;
+        if (player->IsRetired()) {
+            std::cout << "Player " << player->GetDog().GetName() << " - ALREADY RETIRED" << std::endl;
+            continue;
+        }
         
         const auto& dog = player->GetDog();
-        auto last_move = dog.GetLastMoveTime();
-        auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
+        bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
-        if (time_since_last_move >= retirement_time_) {
-            player->Retire();
-            retired_players.push_back(player);
+        // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: разная логика для движущихся и стоящих собак
+        if (is_moving) {
+            // Собака движется - сбрасываем таймер бездействия
+            std::cout << "Player " << player->GetDog().GetName() << " is MOVING - timer reset" << std::endl;
+            // Здесь можно сбросить время начала бездействия, если оно отслеживается
+        } else {
+            // Собака остановилась - проверяем время бездействия
+            auto last_move = dog.GetLastMoveTime();
+            auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
+            
+            std::cout << "Player " << player->GetDog().GetName() 
+                      << " - STOPPED for " << time_since_last_move.count() << "ms"
+                      << " (threshold: " << retirement_time_.count() << "ms)" << std::endl;
+            
+            // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: собака должна была хотя бы раз двигаться
+            // чтобы не уходить на пенсию сразу после создания
+            bool has_ever_moved = (last_move > player->GetJoinTime());
+            
+            if (time_since_last_move >= retirement_time_ && has_ever_moved) {
+                std::cout << "RETIRING player " << player->GetDog().GetName() << std::endl;
+                player->Retire();
+                retired_players.push_back(player);
+            } else if (!has_ever_moved) {
+                std::cout << "   Player " << player->GetDog().GetName() << " never moved - ignoring" << std::endl;
+            } else {
+                std::cout << "   Player " << player->GetDog().GetName() << " inactive but not enough time" << std::endl;
+            }
         }
     }
     
+    std::cout << "Retired " << retired_players.size() << " players in this check" << std::endl;
     return retired_players;
 }
 
