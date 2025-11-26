@@ -175,7 +175,6 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
-        // Обновляем время последнего движения при любой команде
         dog.UpdateLastMoveTime();
         break;
     }
@@ -257,45 +256,25 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    std::cout << "=== DEBUG CheckRetiredPlayers ===" << std::endl;
-    std::cout << "Players count: " << players_.size() << std::endl;
-    std::cout << "Retirement time: " << retirement_time_.count() << "ms" << std::endl;
-    
     for (auto& player : players_) {
         if (player->IsRetired()) {
-            std::cout << "Player " << player->GetDog().GetName() << " - ALREADY RETIRED" << std::endl;
             continue;
         }
         
         const auto& dog = player->GetDog();
         bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
-        if (is_moving) {
-            // Собака движется - сбрасываем таймер бездействия
-            std::cout << "Player " << player->GetDog().GetName() << " is MOVING - timer reset" << std::endl;
-        } else {
-            // Собака остановилась - проверяем время бездействия
+        if (!is_moving) {
             auto last_move = dog.GetLastMoveTime();
             auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
             
-            std::cout << "Player " << player->GetDog().GetName() 
-                      << " - STOPPED for " << time_since_last_move.count() << "ms"
-                      << " (threshold: " << retirement_time_.count() << "ms)" << std::endl;
-            
-            // ИСПРАВЛЕНИЕ: убираем проверку has_ever_moved
-            // Собака должна уходить на пенсию если стоит на месте дольше retirement_time
-            // независимо от того, двигалась ли она когда-то
             if (time_since_last_move >= retirement_time_) {
-                std::cout << "🚨 RETIRING player " << player->GetDog().GetName() << std::endl;
                 player->Retire();
                 retired_players.push_back(player);
-            } else {
-                std::cout << "   Player " << player->GetDog().GetName() << " inactive but not enough time" << std::endl;
             }
         }
     }
     
-    std::cout << "Retired " << retired_players.size() << " players in this check" << std::endl;
     return retired_players;
 }
 
@@ -344,7 +323,6 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Обновляем позиции всех активных игроков
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
@@ -363,7 +341,6 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    // Обновляем позиции только активных игроков
     size_t active_index = 0;
     for (auto& player : players_) {
         if (player->IsRetired()) continue;
@@ -375,7 +352,6 @@ void GameSession::Tick(double delta_time) {
         }
     }
     
-    // Логика сбора предметов для активных игроков
     auto active_players = GetActivePlayers();
     
     ItemGathererProviderImpl provider;
@@ -471,7 +447,6 @@ void GameSession::Tick(double delta_time) {
     lost_objects_.erase(new_end, lost_objects_.end());
 }
 
-// Реализации методов для сериализации/десериализации
 void GameSession::AddRestoredPlayer(std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     players_.push_back(player);
@@ -503,7 +478,6 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     map_id_to_session_[map_id] = session;
     
-    // Восстанавливаем mapping токенов для игроков этой сессии
     for (const auto& player : session->GetPlayers()) {
         token_to_player_[player->GetToken()] = player;
     }

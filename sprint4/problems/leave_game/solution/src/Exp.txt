@@ -740,7 +740,7 @@ namespace {
 
         void OnTick(boost::system::error_code ec) {  
             using namespace std::chrono;
-            assert(strand_.running_in_this_thread());
+            assert(strrand_.running_in_this_thread());
 
             if (!ec) {
                 auto this_tick = Clock::now();
@@ -828,7 +828,18 @@ int main(int argc, const char* argv[]) {
 
         logger::InitLogging();
         
-        model::Game game;
+        // Получаем URL базы данных из переменной окружения
+        const char* db_url = std::getenv("GAME_DB_URL");
+        if (!db_url) {
+            std::cerr << "Error: GAME_DB_URL environment variable is not set" << std::endl;
+            std::cerr << "Please set it with: export GAME_DB_URL=postgresql://username:password@localhost:5432/game_db" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        std::cout << "Using database: " << db_url << std::endl;
+
+        // Создаем игру с подключением к БД и значениями по умолчанию
+        model::Game game(db_url, 1.0, 3); // db_url, default_dog_speed, default_bag_capacity
         json_loader::LoadGame(config_path, game);
         game.SetRandomizeSpawnPoints(randomize_spawn);
 
@@ -897,7 +908,8 @@ int main(int argc, const char* argv[]) {
             {"randomize_spawn_points", randomize_spawn},
             {"tick_period_ms", tick_period},
             {"state_file", state_file.string()},
-            {"save_state_period_ms", save_state_period.count()}
+            {"save_state_period_ms", save_state_period.count()},
+            {"database_url", db_url}
         };
         BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, start_data)
             << "server started";
@@ -1099,7 +1111,7 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
-        // ВАЖНО: Обновляем время последнего движения при любой команде
+        // Обновляем время последнего движения при любой команде
         dog.UpdateLastMoveTime();
         break;
     }
@@ -1180,19 +1192,46 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     auto now = std::chrono::steady_clock::now();
     
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    std::cout << "=== DEBUG CheckRetiredPlayers ===" << std::endl;
+    std::cout << "Players count: " << players_.size() << std::endl;
+    std::cout << "Retirement time: " << retirement_time_.count() << "ms" << std::endl;
+    
     for (auto& player : players_) {
-        if (player->IsRetired()) continue;
+        if (player->IsRetired()) {
+            std::cout << "Player " << player->GetDog().GetName() << " - ALREADY RETIRED" << std::endl;
+            continue;
+        }
         
         const auto& dog = player->GetDog();
-        auto last_move = dog.GetLastMoveTime();
-        auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
+        bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
-        if (time_since_last_move >= retirement_time_) {
-            player->Retire();
-            retired_players.push_back(player);
+        if (is_moving) {
+            // Собака движется - сбрасываем таймер бездействия
+            std::cout << "Player " << player->GetDog().GetName() << " is MOVING - timer reset" << std::endl;
+        } else {
+            // Собака остановилась - проверяем время бездействия
+            auto last_move = dog.GetLastMoveTime();
+            auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
+            
+            std::cout << "Player " << player->GetDog().GetName() 
+                      << " - STOPPED for " << time_since_last_move.count() << "ms"
+                      << " (threshold: " << retirement_time_.count() << "ms)" << std::endl;
+            
+            // ИСПРАВЛЕНИЕ: убираем проверку has_ever_moved
+            // Собака должна уходить на пенсию если стоит на месте дольше retirement_time
+            // независимо от того, двигалась ли она когда-то
+            if (time_since_last_move >= retirement_time_) {
+                std::cout << "🚨 RETIRING player " << player->GetDog().GetName() << std::endl;
+                player->Retire();
+                retired_players.push_back(player);
+            } else {
+                std::cout << "   Player " << player->GetDog().GetName() << " inactive but not enough time" << std::endl;
+            }
         }
     }
     
+    std::cout << "Retired " << retired_players.size() << " players in this check" << std::endl;
     return retired_players;
 }
 
@@ -1241,7 +1280,7 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Обновляем позиции всех игроков (включая ушедших, чтобы не ломать логику)
+    // Обновляем позиции всех активных игроков
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
@@ -1442,6 +1481,7 @@ std::string DirectionToString(Direction dir) {
 #include <optional>
 #include <chrono>
 #include <iostream>
+#include <pqxx/pqxx>
 
 #include "tagged.h"
 #include "loot_generator.h"
@@ -1587,9 +1627,9 @@ namespace model {
         Dog(std::string name, Point start_pos, Direction start_dir = Direction::North)
             : name_(std::move(name)),
             position_(start_pos),
-            speed_{ 0.0, 0.0 },
+            speed_{ 0.0, 0.0 },  // ��������� �������� = 0
             direction_(start_dir),
-            last_move_time_(std::chrono::steady_clock::now()) {
+            last_move_time_(std::chrono::steady_clock::now()) {  // ����� ��������
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -1681,6 +1721,100 @@ namespace model {
         bool is_retired_ = false;
     };
 
+    // ����������� ��� ������ � �������� �������� � PostgreSQL
+    class RetiredPlayersRepository {
+    public:
+        RetiredPlayersRepository(const std::string& db_url) : conn_(db_url) {
+            CreateTableIfNotExists();
+        }
+
+        void AddRetiredPlayer(const std::string& name, int score, double play_time) {
+            try {
+                // ���������� �����
+                std::cout << " DEBUG RetiredPlayersRepository::AddRetiredPlayer" << std::endl;
+                std::cout << "   Name: " << name << std::endl;
+                std::cout << "   Score: " << score << std::endl;
+                std::cout << "   Play time: " << play_time << " seconds" << std::endl;
+
+                pqxx::work txn(conn_);
+                txn.exec_params(
+                    "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
+                    name, score, play_time
+                );
+                txn.commit();
+
+                // ���������� ����� - �����
+                std::cout << " DEBUG: Player successfully saved to PostgreSQL" << std::endl;
+            }
+            catch (const std::exception& e) {
+                // ���������� ����� - ������
+                std::cerr << " DEBUG: Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
+                throw;
+            }
+        }
+
+        std::vector<std::tuple<std::string, int, double>> GetRecords(int start = 0, int max_items = 100) {
+            try {
+                pqxx::work txn(conn_);
+                auto result = txn.exec_params(
+                    "SELECT name, score, play_time FROM retired_players "
+                    "ORDER BY score DESC, play_time ASC, name ASC "
+                    "LIMIT $1 OFFSET $2",
+                    max_items, start
+                );
+
+                std::vector<std::tuple<std::string, int, double>> records;
+                for (const auto& row : result) {
+                    records.emplace_back(
+                        row["name"].as<std::string>(),
+                        row["score"].as<int>(),
+                        row["play_time"].as<double>()
+                    );
+                }
+                return records;
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to get records: " << e.what() << std::endl;
+                throw;
+            }
+        }
+
+    private:
+        void CreateTableIfNotExists() {
+            try {
+                pqxx::work txn(conn_);
+                txn.exec(
+                    "CREATE TABLE IF NOT EXISTS retired_players ("
+                    "id SERIAL PRIMARY KEY,"
+                    "name TEXT NOT NULL,"
+                    "score INTEGER NOT NULL,"
+                    "play_time DOUBLE PRECISION NOT NULL,"
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                    ")"
+                );
+                txn.exec(
+                    "CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players (score DESC, play_time ASC, name ASC)"
+                );
+                txn.commit();
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to create table: " << e.what() << std::endl;
+                throw;
+            }
+        }
+
+        pqxx::connection conn_;
+    };
+
+    struct RetiredPlayerRecord {
+        std::string name;
+        int score;
+        double play_time;
+
+        RetiredPlayerRecord(std::string n, int s, double pt)
+            : name(std::move(n)), score(s), play_time(pt) {}
+    };
+
     class GameSession : public std::enable_shared_from_this<GameSession> {
     public:
         using Id = util::Tagged<uint32_t, GameSession>;
@@ -1713,7 +1847,6 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> CheckRetiredPlayers();
 
-        // ������ ��� �������������� ���������
         void AddRestoredPlayer(std::shared_ptr<Player> player);
         void AddRestoredLostObject(const LostObject& obj);
         void SetNextLostObjectId(size_t id);
@@ -1735,23 +1868,13 @@ namespace model {
         std::chrono::milliseconds retirement_time_;
     };
 
-    // ��������� ��� �������� ������ �� ������� ������
-    struct RetiredPlayerRecord {
-        std::string name;
-        int score;
-        double play_time;
-
-        RetiredPlayerRecord(std::string n, int s, double pt)
-            : name(std::move(n)), score(s), play_time(pt) {}
-    };
-
     class Game {
     public:
         using Maps = std::vector<Map>;
 
-        Game() = default;
-        explicit Game(double default_dog_speed, size_t default_bag_capacity = 3)
-            : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {}
+        Game() : retired_repo_(""), default_dog_speed_(1.0), default_bag_capacity_(3) {}
+        explicit Game(const std::string& db_url, double default_dog_speed, size_t default_bag_capacity = 3)
+            : retired_repo_(db_url), default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {}
 
         void AddMap(Map map);
         void SetDefaultDogSpeed(double speed) noexcept { default_dog_speed_ = speed; }
@@ -1853,25 +1976,32 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
-        // ������ ��� ������ � �������� ��������
         void AddRetiredPlayer(std::shared_ptr<Player> player) {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
             auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 player->GetRetirementTime() - player->GetJoinTime());
             double play_time_seconds = play_time.count() / 1000.0;
 
-            retired_players_.emplace_back(
+            // ��������� � PostgreSQL
+            retired_repo_.AddRetiredPlayer(
                 player->GetDog().GetName(),
                 player->GetScore(),
                 play_time_seconds
             );
 
-            // ������� �����
+            // ������� �� �������� �������
             token_to_player_.erase(player->GetToken());
         }
 
-        const std::vector<RetiredPlayerRecord>& GetRetiredPlayers() const {
-            return retired_players_;
+        std::vector<RetiredPlayerRecord> GetRetiredPlayers(int start = 0, int max_items = 100) {
+            auto db_records = retired_repo_.GetRecords(start, max_items);
+            std::vector<RetiredPlayerRecord> records;
+
+            for (const auto& [name, score, play_time] : db_records) {
+                records.emplace_back(name, score, play_time);
+            }
+
+            return records;
         }
 
         void SetPlayerAction(const Player::Token& token, const std::string& move) {
@@ -1895,7 +2025,6 @@ namespace model {
             for (auto& session : sessions) {
                 session->Tick(delta_time);
 
-                // ��������� ������� �� ���� �� �����
                 auto retired_players = session->CheckRetiredPlayers();
                 for (auto& player : retired_players) {
                     AddRetiredPlayer(player);
@@ -1903,7 +2032,6 @@ namespace model {
             }
         }
 
-        // ������ ��� �������������� ���������
         void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
         void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
 
@@ -1911,6 +2039,7 @@ namespace model {
         using MapIdHasher = util::TaggedHasher<Map::Id>;
         using MapIdToIndex = std::unordered_map<Map::Id, size_t, MapIdHasher>;
 
+        RetiredPlayersRepository retired_repo_;
         std::vector<Map> maps_;
         MapIdToIndex map_id_to_index_;
         std::unordered_map<Map::Id, std::shared_ptr<GameSession>, MapIdHasher> map_id_to_session_;
@@ -1925,7 +2054,6 @@ namespace model {
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
         std::chrono::milliseconds retirement_time_{ 60000 }; // 60 ������ �� ���������
-        std::vector<RetiredPlayerRecord> retired_players_;
     };
 
     std::string DirectionToString(Direction dir);
@@ -1955,12 +2083,22 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
-    // Добавляем вспомогательную функцию для сериализации чисел
+    // Исправляем сериализацию чисел для избежания научной нотации
     json::value serialize_number(double value) {
-        if (value == std::floor(value)) {
-            return json::value(static_cast<int64_t>(value));
+        // Используем фиксированную точность вместо научной нотации
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(3) << value;
+        std::string str = oss.str();
+        
+        // Убираем лишние нули в конце
+        if (str.find('.') != std::string::npos) {
+            str = str.substr(0, str.find_last_not_of('0') + 1);
+            if (str.back() == '.') {
+                str.pop_back();
+            }
         }
-        return json::value(value);
+        
+        return json::value(std::stod(str));
     }
 
     json::value SerializeRoad(const model::Road& road) {
@@ -2356,66 +2494,29 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
         }
     }
 
-    // Получаем список ушедших игроков из модели
-    const auto& retired_players = game_.GetRetiredPlayers();
-    
-    // Создаем записи для ответа
-    std::vector<json::value> records_json;
-    for (const auto& record : retired_players) {
-        records_json.push_back({
-            {"name", record.name},
-            {"score", record.score},
-            {"playTime", record.play_time}
-        });
-    }
-    
-    // Сортируем записи согласно требованиям
-    std::sort(records_json.begin(), records_json.end(), 
-        [](const json::value& a, const json::value& b) {
-            const auto& a_obj = a.as_object();
-            const auto& b_obj = b.as_object();
-            
-            int a_score = a_obj.at("score").as_int64();
-            int b_score = b_obj.at("score").as_int64();
-            
-            if (a_score != b_score) {
-                return a_score > b_score; // По убыванию очков
-            }
-            
-            double a_time = a_obj.at("playTime").as_double();
-            double b_time = b_obj.at("playTime").as_double();
-            
-            if (a_time != b_time) {
-                return a_time < b_time; // По возрастанию времени
-            }
-            
-            std::string a_name = a_obj.at("name").as_string().c_str();
-            std::string b_name = b_obj.at("name").as_string().c_str();
-            
-            return a_name < b_name; // По возрастанию имени
-        });
-    
-    // Применяем пагинацию
-    if (start >= records_json.size()) {
-        records_json.clear();
-    } else {
-        if (start > 0) {
-            records_json.erase(records_json.begin(), records_json.begin() + start);
+    try {
+        // Получаем записи из БД через модель
+        auto records = game_.GetRetiredPlayers(start, max_items);
+        
+        // Создаем JSON массив
+        json::array records_json;
+        for (const auto& record : records) {
+            records_json.push_back({
+                {"name", record.name},
+                {"score", record.score},
+                {"playTime", serialize_number(record.play_time)}
+            });
         }
-        if (max_items < records_json.size()) {
-            records_json.resize(max_items);
-        }
+        
+        auto response = MakeStringResponse(http::status::ok, json::serialize(records_json), req);
+        response.set(http::field::cache_control, "no-cache");
+        response.set(http::field::content_length, std::to_string(response.body().size()));
+        return response;
+        
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::internal_server_error,
+            "internalError", "Failed to retrieve records", req);
     }
-    
-    json::array result_array;
-    for (auto& record : records_json) {
-        result_array.push_back(record);
-    }
-    
-    auto response = MakeStringResponse(http::status::ok, json::serialize(result_array), req);
-    response.set(http::field::cache_control, "no-cache");
-    response.set(http::field::content_length, std::to_string(response.body().size()));
-    return response;
 }
 
 std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {

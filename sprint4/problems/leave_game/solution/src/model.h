@@ -156,9 +156,9 @@ namespace model {
         Dog(std::string name, Point start_pos, Direction start_dir = Direction::North)
             : name_(std::move(name)),
             position_(start_pos),
-            speed_{ 0.0, 0.0 },  // Начальная скорость = 0
+            speed_{ 0.0, 0.0 },
             direction_(start_dir),
-            last_move_time_(std::chrono::steady_clock::now()) {  // Время создания
+            last_move_time_(std::chrono::steady_clock::now()) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -167,9 +167,7 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
         void SetSpeed(Point speed) noexcept {
             speed_ = speed;
-            if (speed.x != 0.0 || speed.y != 0.0) {
-                last_move_time_ = std::chrono::steady_clock::now();
-            }
+            UpdateLastMoveTime();
         }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
@@ -250,7 +248,6 @@ namespace model {
         bool is_retired_ = false;
     };
 
-    // Репозиторий для работы с ушедшими игроками в PostgreSQL
     class RetiredPlayersRepository {
     public:
         RetiredPlayersRepository(const std::string& db_url) : conn_(db_url) {
@@ -259,25 +256,15 @@ namespace model {
 
         void AddRetiredPlayer(const std::string& name, int score, double play_time) {
             try {
-                // ОТЛАДОЧНЫЙ ВЫВОД
-                std::cout << " DEBUG RetiredPlayersRepository::AddRetiredPlayer" << std::endl;
-                std::cout << "   Name: " << name << std::endl;
-                std::cout << "   Score: " << score << std::endl;
-                std::cout << "   Play time: " << play_time << " seconds" << std::endl;
-
                 pqxx::work txn(conn_);
                 txn.exec_params(
                     "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
                     name, score, play_time
                 );
                 txn.commit();
-
-                // ОТЛАДОЧНЫЙ ВЫВОД - успех
-                std::cout << " DEBUG: Player successfully saved to PostgreSQL" << std::endl;
             }
             catch (const std::exception& e) {
-                // ОТЛАДОЧНЫЙ ВЫВОД - ошибка
-                std::cerr << " DEBUG: Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
+                std::cerr << "Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
                 throw;
             }
         }
@@ -498,7 +485,10 @@ namespace model {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
 
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
-                return it->second;
+                auto player = it->second;
+                if (!player->IsRetired()) {
+                    return player;
+                }
             }
             return nullptr;
         }
@@ -511,14 +501,12 @@ namespace model {
                 player->GetRetirementTime() - player->GetJoinTime());
             double play_time_seconds = play_time.count() / 1000.0;
 
-            // Сохраняем в PostgreSQL
             retired_repo_.AddRetiredPlayer(
                 player->GetDog().GetName(),
                 player->GetScore(),
                 play_time_seconds
             );
 
-            // Удаляем из активных игроков
             token_to_player_.erase(player->GetToken());
         }
 
@@ -582,7 +570,7 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-        std::chrono::milliseconds retirement_time_{ 60000 }; // 60 секунд по умолчанию
+        std::chrono::milliseconds retirement_time_{ 60000 };
     };
 
     std::string DirectionToString(Direction dir);
