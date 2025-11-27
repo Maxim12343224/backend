@@ -1111,7 +1111,6 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
-        // Обновляем время последнего движения при любой команде
         dog.UpdateLastMoveTime();
         break;
     }
@@ -1193,45 +1192,25 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    std::cout << "=== DEBUG CheckRetiredPlayers ===" << std::endl;
-    std::cout << "Players count: " << players_.size() << std::endl;
-    std::cout << "Retirement time: " << retirement_time_.count() << "ms" << std::endl;
-    
     for (auto& player : players_) {
         if (player->IsRetired()) {
-            std::cout << "Player " << player->GetDog().GetName() << " - ALREADY RETIRED" << std::endl;
             continue;
         }
         
         const auto& dog = player->GetDog();
         bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
-        if (is_moving) {
-            // Собака движется - сбрасываем таймер бездействия
-            std::cout << "Player " << player->GetDog().GetName() << " is MOVING - timer reset" << std::endl;
-        } else {
-            // Собака остановилась - проверяем время бездействия
+        if (!is_moving) {
             auto last_move = dog.GetLastMoveTime();
             auto time_since_last_move = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_move);
             
-            std::cout << "Player " << player->GetDog().GetName() 
-                      << " - STOPPED for " << time_since_last_move.count() << "ms"
-                      << " (threshold: " << retirement_time_.count() << "ms)" << std::endl;
-            
-            // ИСПРАВЛЕНИЕ: убираем проверку has_ever_moved
-            // Собака должна уходить на пенсию если стоит на месте дольше retirement_time
-            // независимо от того, двигалась ли она когда-то
             if (time_since_last_move >= retirement_time_) {
-                std::cout << "🚨 RETIRING player " << player->GetDog().GetName() << std::endl;
                 player->Retire();
                 retired_players.push_back(player);
-            } else {
-                std::cout << "   Player " << player->GetDog().GetName() << " inactive but not enough time" << std::endl;
             }
         }
     }
     
-    std::cout << "Retired " << retired_players.size() << " players in this check" << std::endl;
     return retired_players;
 }
 
@@ -1280,7 +1259,6 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Обновляем позиции всех активных игроков
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
@@ -1299,7 +1277,6 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    // Обновляем позиции только активных игроков
     size_t active_index = 0;
     for (auto& player : players_) {
         if (player->IsRetired()) continue;
@@ -1311,7 +1288,6 @@ void GameSession::Tick(double delta_time) {
         }
     }
     
-    // Логика сбора предметов для активных игроков
     auto active_players = GetActivePlayers();
     
     ItemGathererProviderImpl provider;
@@ -1407,7 +1383,6 @@ void GameSession::Tick(double delta_time) {
     lost_objects_.erase(new_end, lost_objects_.end());
 }
 
-// Реализации методов для сериализации/десериализации
 void GameSession::AddRestoredPlayer(std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     players_.push_back(player);
@@ -1439,7 +1414,6 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     map_id_to_session_[map_id] = session;
     
-    // Восстанавливаем mapping токенов для игроков этой сессии
     for (const auto& player : session->GetPlayers()) {
         token_to_player_[player->GetToken()] = player;
     }
@@ -1627,9 +1601,9 @@ namespace model {
         Dog(std::string name, Point start_pos, Direction start_dir = Direction::North)
             : name_(std::move(name)),
             position_(start_pos),
-            speed_{ 0.0, 0.0 },  // ��������� �������� = 0
+            speed_{ 0.0, 0.0 },
             direction_(start_dir),
-            last_move_time_(std::chrono::steady_clock::now()) {  // ����� ��������
+            last_move_time_(std::chrono::steady_clock::now()) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -1638,9 +1612,7 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
         void SetSpeed(Point speed) noexcept {
             speed_ = speed;
-            if (speed.x != 0.0 || speed.y != 0.0) {
-                last_move_time_ = std::chrono::steady_clock::now();
-            }
+            UpdateLastMoveTime();
         }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
@@ -1721,7 +1693,6 @@ namespace model {
         bool is_retired_ = false;
     };
 
-    // ����������� ��� ������ � �������� �������� � PostgreSQL
     class RetiredPlayersRepository {
     public:
         RetiredPlayersRepository(const std::string& db_url) : conn_(db_url) {
@@ -1730,25 +1701,15 @@ namespace model {
 
         void AddRetiredPlayer(const std::string& name, int score, double play_time) {
             try {
-                // ���������� �����
-                std::cout << " DEBUG RetiredPlayersRepository::AddRetiredPlayer" << std::endl;
-                std::cout << "   Name: " << name << std::endl;
-                std::cout << "   Score: " << score << std::endl;
-                std::cout << "   Play time: " << play_time << " seconds" << std::endl;
-
                 pqxx::work txn(conn_);
                 txn.exec_params(
                     "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
                     name, score, play_time
                 );
                 txn.commit();
-
-                // ���������� ����� - �����
-                std::cout << " DEBUG: Player successfully saved to PostgreSQL" << std::endl;
             }
             catch (const std::exception& e) {
-                // ���������� ����� - ������
-                std::cerr << " DEBUG: Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
+                std::cerr << "Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
                 throw;
             }
         }
@@ -1969,7 +1930,10 @@ namespace model {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
 
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
-                return it->second;
+                auto player = it->second;
+                if (!player->IsRetired()) {
+                    return player;
+                }
             }
             return nullptr;
         }
@@ -1982,14 +1946,12 @@ namespace model {
                 player->GetRetirementTime() - player->GetJoinTime());
             double play_time_seconds = play_time.count() / 1000.0;
 
-            // ��������� � PostgreSQL
             retired_repo_.AddRetiredPlayer(
                 player->GetDog().GetName(),
                 player->GetScore(),
                 play_time_seconds
             );
 
-            // ������� �� �������� �������
             token_to_player_.erase(player->GetToken());
         }
 
@@ -2053,7 +2015,7 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-        std::chrono::milliseconds retirement_time_{ 60000 }; // 60 ������ �� ���������
+        std::chrono::milliseconds retirement_time_{ 60000 };
     };
 
     std::string DirectionToString(Direction dir);
@@ -2083,14 +2045,11 @@ namespace json = boost::json;
 namespace fs = std::filesystem;
 
 namespace {
-    // Исправляем сериализацию чисел для избежания научной нотации
     json::value serialize_number(double value) {
-        // Используем фиксированную точность вместо научной нотации
         std::ostringstream oss;
         oss << std::fixed << std::setprecision(3) << value;
         std::string str = oss.str();
         
-        // Убираем лишние нули в конце
         if (str.find('.') != std::string::npos) {
             str = str.substr(0, str.find_last_not_of('0') + 1);
             if (str.back() == '.') {
@@ -2296,7 +2255,6 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
     for (const auto& p : session->GetActivePlayers()) {
         const auto& dog = p->GetDog();
         
-        // Создаем JSON для рюкзака
         json::array bag_json;
         for (const auto& item : p->GetBag()) {
             bag_json.push_back({
@@ -2310,11 +2268,10 @@ StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
             {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
             {"dir", model::DirectionToString(dog.GetDirection())},
             {"bag", std::move(bag_json)},
-            {"score", p->GetScore()}  // Добавляем поле с очками
+            {"score", p->GetScore()}
         };
     }
 
-    // Добавляем информацию о потерянных предметах
     json::value lost_objects_json = json::object();
     const auto& lost_objects = session->GetLostObjects();
     for (const auto& obj : lost_objects) {
@@ -2434,7 +2391,6 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        // ВАЖНО: Вызываем StateManager для ручных тиков
         auto delta_ms = std::chrono::milliseconds(delta);
         game_.Tick(static_cast<double>(delta) / 1000.0);
         state_manager_.OnTick(delta_ms);
@@ -2454,7 +2410,6 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
         return response;
     }
 
-    // Парсим параметры запроса
     int start = 0;
     int max_items = 100;
     
@@ -2476,7 +2431,6 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
                         start = std::stoi(value);
                         if (start < 0) start = 0;
                     } catch (...) {
-                        // Игнорируем неверные значения
                     }
                 } else if (key == "maxItems") {
                     try {
@@ -2487,7 +2441,6 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
                                 "badRequest", "Max items cannot exceed 100", req);
                         }
                     } catch (...) {
-                        // Игнорируем неверные значения
                     }
                 }
             }
@@ -2495,10 +2448,8 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
     }
 
     try {
-        // Получаем записи из БД через модель
         auto records = game_.GetRetiredPlayers(start, max_items);
         
-        // Создаем JSON массив
         json::array records_json;
         for (const auto& record : records) {
             records_json.push_back({
@@ -2582,7 +2533,6 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         }
 
         if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
-            // Загружаем оригинальный JSON для получения lootTypes и bagCapacity
             std::ifstream file(config_path_);
             if (!file) {
                 return MakeErrorResponse(http::status::internal_server_error,
@@ -2594,7 +2544,6 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             buffer << file.rdbuf();
             auto config_json = json::parse(buffer.str());
 
-            // Ищем карту в конфиге
             json::value map_json;
             for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
                 if (map_val.as_object().at("id").as_string() == map_id) {
@@ -2609,7 +2558,6 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                        "Map not found in config", req);
             }
 
-            // Создаем ответ с lootTypes и bagCapacity
             json::value response_json{
                 {"id", *map->GetId()},
                 {"name", map->GetName()},
@@ -2621,7 +2569,6 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                     : json::array()}
             };
 
-            // Добавляем bagCapacity если оно есть в конфиге
             if (map_json.as_object().contains("bagCapacity")) {
                 response_json.as_object()["bagCapacity"] = 
                     map_json.as_object().at("bagCapacity");
