@@ -259,8 +259,12 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
+    // Временный вектор для активных игроков
+    std::vector<std::shared_ptr<Player>> active_players;
+    
     for (auto& player : players_) {
         if (player->IsRetired()) {
+            // Уже retired игроков пропускаем (они будут удалены)
             continue;
         }
         
@@ -293,16 +297,27 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
                 
                 player->Retire();
                 newly_retired_players.push_back(player);
+                // НЕ добавляем в active_players - этот игрок будет удален
+            } else {
+                // Игрок не retired - добавляем в активные
+                active_players.push_back(player);
             }
             
         } else {
             // СОБАКА ДВИЖЕТСЯ - сбрасываем таймер бездействия
             dog.UpdateLastMoveTime();
             std::cout << "DEBUG: " << dog.GetName() << " is moving - resetting inactivity timer" << std::endl;
+            
+            // Добавляем активного игрока
+            active_players.push_back(player);
         }
     }
     
+    // ЗАМЕНЯЕМ players_ на active_players (удаляем retired игроков)
+    players_ = std::move(active_players);
+    
     std::cout << "DEBUG: Found " << newly_retired_players.size() << " players to retire" << std::endl;
+    std::cout << "DEBUG: Active players count: " << players_.size() << std::endl;
     
     return newly_retired_players;
 }
