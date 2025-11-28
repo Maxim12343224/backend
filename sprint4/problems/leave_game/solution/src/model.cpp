@@ -254,71 +254,42 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     std::vector<std::shared_ptr<Player>> newly_retired_players;
     auto current_time = std::chrono::steady_clock::now();
     
-    // КОНСТАНТА: максимально допустимое время бездействия = 1 минута
-    const std::chrono::milliseconds MAX_ALLOWED_INACTIVITY(60000); // 1 минута = 60000 мс
+    // ЗАМЕНА: Используем retirement_time_ из конфигурации вместо жесткого значения
+    const auto MAX_ALLOWED_INACTIVITY = retirement_time_;
     
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Временный вектор для активных игроков
     std::vector<std::shared_ptr<Player>> active_players;
     
     for (auto& player : players_) {
         if (player->IsRetired()) {
-            // Уже retired игроков пропускаем (они будут удалены)
             continue;
         }
         
         Dog& dog = player->GetDog();
-        
-        // Проверяем условие начала бездействия: скорость равна нулю
         bool is_zero_speed = (dog.GetSpeed().x == 0.0 && dog.GetSpeed().y == 0.0);
         
         if (is_zero_speed) {
-            // СОБАКА НЕ ДВИЖЕТСЯ - проверяем время бездействия
-            
             auto last_move_time = dog.GetLastMoveTime();
             auto actual_inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
                 current_time - last_move_time);
             
-            // ПРЯМОЕ СРАВНЕНИЕ: превышено ли максимальное допустимое время бездействия?
+            // Сравниваем с настраиваемым временем из конфигурации
             bool should_retire = (actual_inactivity_duration >= MAX_ALLOWED_INACTIVITY);
             
-            std::cout << "=== INACTIVITY CHECK ===" << std::endl;
-            std::cout << "Player: " << dog.GetName() << std::endl;
-            std::cout << "Current speed: (" << dog.GetSpeed().x << ", " << dog.GetSpeed().y << ")" << std::endl;
-            std::cout << "Actual inactivity time: " << actual_inactivity_duration.count() << "ms" << std::endl;
-            std::cout << "Max allowed inactivity: " << MAX_ALLOWED_INACTIVITY.count() << "ms (1 minute)" << std::endl;
-            std::cout << "Should retire: " << (should_retire ? "YES" : "NO") << std::endl;
-            
             if (should_retire) {
-                std::cout << "*** RETIRING PLAYER: " << dog.GetName() << " ***" << std::endl;
-                std::cout << "Reason: Inactivity time " << actual_inactivity_duration.count() 
-                          << "ms >= max allowed " << MAX_ALLOWED_INACTIVITY.count() << "ms" << std::endl;
-                
                 player->Retire();
                 newly_retired_players.push_back(player);
-                // НЕ добавляем в active_players - этот игрок будет удален
             } else {
-                // Игрок не retired - добавляем в активные
                 active_players.push_back(player);
             }
-            
         } else {
-            // СОБАКА ДВИЖЕТСЯ - сбрасываем таймер бездействия
             dog.UpdateLastMoveTime();
-            std::cout << "DEBUG: " << dog.GetName() << " is moving - resetting inactivity timer" << std::endl;
-            
-            // Добавляем активного игрока
             active_players.push_back(player);
         }
     }
     
-    // ЗАМЕНЯЕМ players_ на active_players (удаляем retired игроков)
     players_ = std::move(active_players);
-    
-    std::cout << "DEBUG: Found " << newly_retired_players.size() << " players to retire" << std::endl;
-    std::cout << "DEBUG: Active players count: " << players_.size() << std::endl;
-    
     return newly_retired_players;
 }
 
