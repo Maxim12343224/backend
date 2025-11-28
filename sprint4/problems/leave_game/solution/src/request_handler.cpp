@@ -405,6 +405,7 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
                         start = std::stoi(value);
                         if (start < 0) start = 0;
                     } catch (...) {
+                        // Игнорируем невалидные значения, используем значение по умолчанию
                     }
                 } else if (key == "maxItems") {
                     try {
@@ -415,6 +416,7 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
                                 "badRequest", "Max items cannot exceed 100", req);
                         }
                     } catch (...) {
+                        // Игнорируем невалидные значения, используем значение по умолчанию
                     }
                 }
             }
@@ -442,20 +444,6 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
         return MakeErrorResponse(http::status::internal_server_error,
             "internalError", "Failed to retrieve records", req);
     }
-}
-
-std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
-    if (auto it = req.find(http::field::authorization); it != req.end()) {
-        auto auth_header = it->value();
-        if (auth_header.starts_with("Bearer ")) {
-            std::string token = std::string(auth_header.substr(7));
-            if (token.length() != 32) {
-                return std::nullopt;
-            }
-            return token;
-        }
-    }
-    return std::nullopt;
 }
 
 StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
@@ -620,6 +608,20 @@ StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
         return MakeStringResponse(http::status::internal_server_error,
                                 "Internal server error", req, "text/plain");
     }
+}
+
+std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
+    if (auto it = req.find(http::field::authorization); it != req.end()) {
+        auto auth_header = it->value();
+        if (auth_header.starts_with("Bearer ")) {
+            std::string token = std::string(auth_header.substr(7));
+            if (token.length() != 32) {
+                return std::nullopt;
+            }
+            return token;
+        }
+    }
+    return std::nullopt;
 }
 
 std::string RequestHandler::DecodeUrl(beast::string_view url) {

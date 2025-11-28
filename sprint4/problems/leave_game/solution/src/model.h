@@ -158,25 +158,21 @@ namespace model {
             position_(start_pos),
             speed_{ 0.0, 0.0 },
             direction_(start_dir),
-            last_move_time_(std::chrono::steady_clock::now()) {
+            last_move_game_time_(0.0) {  // ИСПРАВЛЕНО: используем игровое время вместо системного
         }
 
         const std::string& GetName() const noexcept { return name_; }
         Point GetPosition() const noexcept { return position_; }
         Point GetSpeed() const noexcept { return speed_; }
         Direction GetDirection() const noexcept { return direction_; }
-        void SetSpeed(Point speed) noexcept {
-            speed_ = speed;
-            UpdateLastMoveTime();
-        }
+        void SetSpeed(Point speed) noexcept { speed_ = speed; }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
 
-        std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
-            return last_move_time_;
-        }
-        void UpdateLastMoveTime() noexcept {
-            last_move_time_ = std::chrono::steady_clock::now();
+        // ИСПРАВЛЕНО: методы для работы с игровым временем вместо системного
+        double GetLastMoveGameTime() const noexcept { return last_move_game_time_; }
+        void UpdateLastMoveTime(double current_game_time) noexcept {
+            last_move_game_time_ = current_game_time;
         }
 
     private:
@@ -184,7 +180,7 @@ namespace model {
         Point position_;
         Point speed_;
         Direction direction_;
-        std::chrono::steady_clock::time_point last_move_time_;
+        double last_move_game_time_;  // ИСПРАВЛЕНО: игровое время последнего движения
     };
 
     struct LostObject {
@@ -355,6 +351,9 @@ namespace model {
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
         void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
 
+        // ИСПРАВЛЕНО: методы для работы с игровым временем
+        double GetGameTime() const noexcept { return game_time_; }
+
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
@@ -382,6 +381,7 @@ namespace model {
         size_t bag_capacity_;
         std::vector<int> loot_values_;
         std::chrono::milliseconds retirement_time_;
+        double game_time_ = 0.0;  // ИСПРАВЛЕНО: добавляем игровое время
     };
 
     class Game {

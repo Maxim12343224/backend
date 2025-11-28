@@ -117,7 +117,7 @@ namespace http_handler {
         StringResponse HandleGameState(StringRequest&& req);
         StringResponse HandlePlayerAction(StringRequest&& req);
         StringResponse HandleTick(StringRequest&& req);
-        StringResponse HandleGetRecords(StringRequest&& req);  // Добавлено объявление
+        StringResponse HandleGetRecords(StringRequest&& req);
 
         std::optional<std::string> GetTokenFromRequest(const StringRequest& req);
 
