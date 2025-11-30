@@ -11,6 +11,7 @@
 #include <chrono>
 #include <iostream>
 #include <pqxx/pqxx>
+#include <condition_variable>
 
 #include "tagged.h"
 #include "loot_generator.h"
@@ -158,21 +159,27 @@ namespace model {
             position_(start_pos),
             speed_{ 0.0, 0.0 },
             direction_(start_dir),
-            last_move_game_time_(0.0) {  // ИСПРАВЛЕНО: используем игровое время вместо системного
+            last_move_time_(std::chrono::steady_clock::now()) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
         Point GetPosition() const noexcept { return position_; }
         Point GetSpeed() const noexcept { return speed_; }
         Direction GetDirection() const noexcept { return direction_; }
-        void SetSpeed(Point speed) noexcept { speed_ = speed; }
+        void SetSpeed(Point speed) noexcept {
+            speed_ = speed;
+            if (speed.x != 0.0 || speed.y != 0.0) {
+                last_move_time_ = std::chrono::steady_clock::now();
+            }
+        }
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
         void SetPosition(Point p) noexcept { position_ = p; }
 
-        // ИСПРАВЛЕНО: методы для работы с игровым временем вместо системного
-        double GetLastMoveGameTime() const noexcept { return last_move_game_time_; }
-        void UpdateLastMoveTime(double current_game_time) noexcept {
-            last_move_game_time_ = current_game_time;
+        std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
+            return last_move_time_;
+        }
+        void UpdateLastMoveTime() noexcept {
+            last_move_time_ = std::chrono::steady_clock::now();
         }
 
     private:
@@ -180,7 +187,7 @@ namespace model {
         Point position_;
         Point speed_;
         Direction direction_;
-        double last_move_game_time_;  // ИСПРАВЛЕНО: игровое время последнего движения
+        std::chrono::steady_clock::time_point last_move_time_;
     };
 
     struct LostObject {
@@ -244,15 +251,94 @@ namespace model {
         bool is_retired_ = false;
     };
 
+    // Класс пула соединений
+    class ConnectionPool {
+        using PoolType = ConnectionPool;
+        using ConnectionPtr = std::shared_ptr<pqxx::connection>;
+
+    public:
+        class ConnectionWrapper {
+        public:
+            ConnectionWrapper(std::shared_ptr<pqxx::connection>&& conn, PoolType& pool) noexcept
+                : conn_{ std::move(conn) }
+                , pool_{ &pool } {
+            }
+
+            ConnectionWrapper(const ConnectionWrapper&) = delete;
+            ConnectionWrapper& operator=(const ConnectionWrapper&) = delete;
+
+            ConnectionWrapper(ConnectionWrapper&&) = default;
+            ConnectionWrapper& operator=(ConnectionWrapper&&) = default;
+
+            pqxx::connection& operator*() const& noexcept {
+                return *conn_;
+            }
+
+            pqxx::connection* operator->() const& noexcept {
+                return conn_.get();
+            }
+
+            ~ConnectionWrapper() {
+                if (conn_) {
+                    pool_->ReturnConnection(std::move(conn_));
+                }
+            }
+
+        private:
+            std::shared_ptr<pqxx::connection> conn_;
+            PoolType* pool_;
+        };
+
+        template <typename ConnectionFactory>
+        ConnectionPool(size_t capacity, ConnectionFactory&& connection_factory) {
+            pool_.reserve(capacity);
+            for (size_t i = 0; i < capacity; ++i) {
+                pool_.emplace_back(connection_factory());
+            }
+        }
+
+        ConnectionWrapper GetConnection() {
+            std::unique_lock lock{ mutex_ };
+            cond_var_.wait(lock, [this] {
+                return used_connections_ < pool_.size();
+                });
+            return { std::move(pool_[used_connections_++]), *this };
+        }
+
+        bool IsInitialized() const {
+            return !pool_.empty();
+        }
+
+    private:
+        void ReturnConnection(ConnectionPtr&& conn) {
+            {
+                std::lock_guard lock{ mutex_ };
+                pool_[--used_connections_] = std::move(conn);
+            }
+            cond_var_.notify_one();
+        }
+
+        std::mutex mutex_;
+        std::condition_variable cond_var_;
+        std::vector<ConnectionPtr> pool_;
+        size_t used_connections_ = 0;
+    };
+
     class RetiredPlayersRepository {
     public:
-        RetiredPlayersRepository(const std::string& db_url) : conn_(db_url) {
-            CreateTableIfNotExists();
+        RetiredPlayersRepository(const std::string& db_url) : db_url_(db_url) {
+            Initialize();
         }
 
         void AddRetiredPlayer(const std::string& name, int score, double play_time) {
+            if (use_memory_) {
+                AddToMemory(name, score, play_time);
+                return;
+            }
+
             try {
-                pqxx::work txn(conn_);
+                auto conn = pool_->GetConnection();
+                pqxx::work txn(*conn);
                 txn.exec_params(
                     "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
                     name, score, play_time
@@ -261,13 +347,19 @@ namespace model {
             }
             catch (const std::exception& e) {
                 std::cerr << "Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
-                throw;
+                use_memory_ = true;
+                AddToMemory(name, score, play_time);
             }
         }
 
         std::vector<std::tuple<std::string, int, double>> GetRecords(int start = 0, int max_items = 100) {
+            if (use_memory_) {
+                return GetFromMemory(start, max_items);
+            }
+
             try {
-                pqxx::work txn(conn_);
+                auto conn = pool_->GetConnection();
+                pqxx::work txn(*conn);
                 auto result = txn.exec_params(
                     "SELECT name, score, play_time FROM retired_players "
                     "ORDER BY score DESC, play_time ASC, name ASC "
@@ -286,15 +378,24 @@ namespace model {
                 return records;
             }
             catch (const std::exception& e) {
-                std::cerr << "Failed to get records: " << e.what() << std::endl;
-                throw;
+                std::cerr << "Failed to get records from PostgreSQL: " << e.what() << std::endl;
+                use_memory_ = true;
+                return GetFromMemory(start, max_items);
             }
         }
 
     private:
-        void CreateTableIfNotExists() {
+        void Initialize() {
             try {
-                pqxx::work txn(conn_);
+                // Создаем пул из 5 соединений
+                pool_ = std::make_unique<ConnectionPool>(5, [this] {
+                    auto conn = std::make_shared<pqxx::connection>(db_url_);
+                    return conn;
+                    });
+
+                // Создаем таблицу
+                auto conn = pool_->GetConnection();
+                pqxx::work txn(*conn);
                 txn.exec(
                     "CREATE TABLE IF NOT EXISTS retired_players ("
                     "id SERIAL PRIMARY KEY,"
@@ -308,14 +409,57 @@ namespace model {
                     "CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players (score DESC, play_time ASC, name ASC)"
                 );
                 txn.commit();
+
+                std::cout << "SUCCESS: PostgreSQL connection pool initialized" << std::endl;
             }
             catch (const std::exception& e) {
-                std::cerr << "Failed to create table: " << e.what() << std::endl;
-                throw;
+                std::cerr << "Failed to initialize PostgreSQL connection pool: " << e.what() << std::endl;
+                std::cerr << "Using in-memory storage" << std::endl;
+                use_memory_ = true;
             }
         }
 
-        pqxx::connection conn_;
+        void AddToMemory(const std::string& name, int score, double play_time) {
+            std::lock_guard lock(memory_mutex_);
+            memory_records_.emplace_back(name, score, play_time);
+            std::sort(memory_records_.begin(), memory_records_.end(),
+                [](const auto& a, const auto& b) {
+                    if (std::get<1>(a) != std::get<1>(b)) return std::get<1>(a) > std::get<1>(b);
+                    if (std::get<2>(a) != std::get<2>(b)) return std::get<2>(a) < std::get<2>(b);
+                    return std::get<0>(a) < std::get<0>(b);
+                });
+        }
+
+        std::vector<std::tuple<std::string, int, double>> GetFromMemory(int start, int max_items) {
+            std::lock_guard lock(memory_mutex_);
+
+            // Исправляем проблему с типами
+            if (start < 0) start = 0;
+            size_t start_idx = static_cast<size_t>(start);
+
+            if (start_idx >= memory_records_.size()) {
+                return {};
+            }
+
+            // Исправляем std::min с правильными типами
+            size_t end_idx = std::min(start_idx + static_cast<size_t>(max_items), memory_records_.size());
+
+            // Создаем результат правильно
+            std::vector<std::tuple<std::string, int, double>> result;
+            result.reserve(end_idx - start_idx);
+
+            for (size_t i = start_idx; i < end_idx; ++i) {
+                result.push_back(memory_records_[i]);
+            }
+
+            return result;
+        }
+
+        std::string db_url_;
+        std::unique_ptr<ConnectionPool> pool_;
+        bool use_memory_ = false;
+        std::vector<std::tuple<std::string, int, double>> memory_records_;
+        std::mutex memory_mutex_;
     };
 
     struct RetiredPlayerRecord {
@@ -351,9 +495,6 @@ namespace model {
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
         void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
 
-        // ИСПРАВЛЕНО: методы для работы с игровым временем
-        double GetGameTime() const noexcept { return game_time_; }
-
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
@@ -381,16 +522,26 @@ namespace model {
         size_t bag_capacity_;
         std::vector<int> loot_values_;
         std::chrono::milliseconds retirement_time_;
-        double game_time_ = 0.0;  // ИСПРАВЛЕНО: добавляем игровое время
     };
 
     class Game {
     public:
         using Maps = std::vector<Map>;
 
-        Game() : retired_repo_(""), default_dog_speed_(1.0), default_bag_capacity_(3) {}
+        Game() : default_dog_speed_(1.0), default_bag_capacity_(3) {}
+
         explicit Game(const std::string& db_url, double default_dog_speed, size_t default_bag_capacity = 3)
-            : retired_repo_(db_url), default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {}
+            : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {
+            if (!db_url.empty()) {
+                retired_repo_ = std::make_unique<RetiredPlayersRepository>(db_url);
+            }
+        }
+
+        void SetDatabaseUrl(const std::string& db_url) {
+            if (!db_url.empty()) {
+                retired_repo_ = std::make_unique<RetiredPlayersRepository>(db_url);
+            }
+        }
 
         void AddMap(Map map);
         void SetDefaultDogSpeed(double speed) noexcept { default_dog_speed_ = speed; }
@@ -497,11 +648,17 @@ namespace model {
 
         void AddRetiredPlayer(std::shared_ptr<Player> player) {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+            if (!retired_repo_) {
+                std::cerr << "RetiredPlayersRepository not initialized" << std::endl;
+                return;
+            }
+
             auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 player->GetRetirementTime() - player->GetJoinTime());
             double play_time_seconds = play_time.count() / 1000.0;
 
-            retired_repo_.AddRetiredPlayer(
+            retired_repo_->AddRetiredPlayer(
                 player->GetDog().GetName(),
                 player->GetScore(),
                 play_time_seconds
@@ -511,7 +668,11 @@ namespace model {
         }
 
         std::vector<RetiredPlayerRecord> GetRetiredPlayers(int start = 0, int max_items = 100) {
-            auto db_records = retired_repo_.GetRecords(start, max_items);
+            if (!retired_repo_) {
+                return {};
+            }
+
+            auto db_records = retired_repo_->GetRecords(start, max_items);
             std::vector<RetiredPlayerRecord> records;
 
             for (const auto& [name, score, play_time] : db_records) {
@@ -556,7 +717,7 @@ namespace model {
         using MapIdHasher = util::TaggedHasher<Map::Id>;
         using MapIdToIndex = std::unordered_map<Map::Id, size_t, MapIdHasher>;
 
-        RetiredPlayersRepository retired_repo_;
+        std::unique_ptr<RetiredPlayersRepository> retired_repo_;
         std::vector<Map> maps_;
         MapIdToIndex map_id_to_index_;
         std::unordered_map<Map::Id, std::shared_ptr<GameSession>, MapIdHasher> map_id_to_session_;

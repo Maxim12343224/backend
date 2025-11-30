@@ -175,8 +175,6 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
-        // ИСПРАВЛЕНО: обновляем время последнего движения в игровом времени
-        dog.UpdateLastMoveTime(game_time_);
         break;
     }
 }
@@ -254,9 +252,7 @@ std::vector<std::shared_ptr<Player>> GameSession::GetActivePlayers() const {
 std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     std::vector<std::shared_ptr<Player>> newly_retired_players;
     
-    // ИСПРАВЛЕНО: используем конфигурируемое время из JSON (15.0 секунд) вместо хардкода
-    double retirement_time_seconds = retirement_time_.count() / 1000.0;
-    double current_game_time = game_time_;
+    auto current_time = std::chrono::steady_clock::now();
     
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
@@ -277,26 +273,14 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
         if (is_zero_speed) {
             // СОБАКА НЕ ДВИЖЕТСЯ - проверяем время бездействия
             
-            double last_move_time = dog.GetLastMoveGameTime();
-            double inactivity_duration = current_game_time - last_move_time;
+            auto last_move_time = dog.GetLastMoveTime();
+            auto inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                current_time - last_move_time);
             
             // ПРЯМОЕ СРАВНЕНИЕ: превышено ли максимальное допустимое время бездействия?
-            bool should_retire = (inactivity_duration >= retirement_time_seconds);
-            
-            std::cout << "=== INACTIVITY CHECK ===" << std::endl;
-            std::cout << "Player: " << dog.GetName() << std::endl;
-            std::cout << "Current speed: (" << dog.GetSpeed().x << ", " << dog.GetSpeed().y << ")" << std::endl;
-            std::cout << "Current game time: " << current_game_time << "s" << std::endl;
-            std::cout << "Last move time: " << last_move_time << "s" << std::endl;
-            std::cout << "Inactivity duration: " << inactivity_duration << "s" << std::endl;
-            std::cout << "Max allowed inactivity: " << retirement_time_seconds << "s" << std::endl;
-            std::cout << "Should retire: " << (should_retire ? "YES" : "NO") << std::endl;
+            bool should_retire = (inactivity_duration >= retirement_time_);
             
             if (should_retire) {
-                std::cout << "*** RETIRING PLAYER: " << dog.GetName() << " ***" << std::endl;
-                std::cout << "Reason: Inactivity time " << inactivity_duration 
-                          << "s >= max allowed " << retirement_time_seconds << "s" << std::endl;
-                
                 player->Retire();
                 newly_retired_players.push_back(player);
                 // НЕ добавляем в active_players - этот игрок будет удален
@@ -307,8 +291,7 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
             
         } else {
             // СОБАКА ДВИЖЕТСЯ - сбрасываем таймер бездействия
-            dog.UpdateLastMoveTime(current_game_time);
-            std::cout << "DEBUG: " << dog.GetName() << " is moving - resetting inactivity timer" << std::endl;
+            dog.UpdateLastMoveTime();
             
             // Добавляем активного игрока
             active_players.push_back(player);
@@ -317,9 +300,6 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     
     // ЗАМЕНЯЕМ players_ на active_players (удаляем retired игроков)
     players_ = std::move(active_players);
-    
-    std::cout << "DEBUG: Found " << newly_retired_players.size() << " players to retire" << std::endl;
-    std::cout << "DEBUG: Active players count: " << players_.size() << std::endl;
     
     return newly_retired_players;
 }
@@ -368,9 +348,6 @@ struct Event {
 
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    
-    // ИСПРАВЛЕНО: увеличиваем игровое время
-    game_time_ += delta_time;
     
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;

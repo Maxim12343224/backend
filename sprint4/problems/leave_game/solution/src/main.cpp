@@ -63,7 +63,7 @@ namespace {
 
         void OnTick(boost::system::error_code ec) {  
             using namespace std::chrono;
-            assert(strrand_.running_in_this_thread());
+            assert(strand_.running_in_this_thread());
 
             if (!ec) {
                 auto this_tick = Clock::now();
@@ -161,9 +161,17 @@ int main(int argc, const char* argv[]) {
 
         std::cout << "Using database: " << db_url << std::endl;
 
-        // Создаем игру с подключением к БД и значениями по умолчанию
-        model::Game game(db_url, 1.0, 3); // db_url, default_dog_speed, default_bag_capacity
-        json_loader::LoadGame(config_path, game);
+        // Создаем игру с подключением к БД
+        model::Game game;
+        game.SetDatabaseUrl(db_url);
+        
+        try {
+            json_loader::LoadGame(config_path, game);
+        } catch (const std::exception& e) {
+            std::cerr << "Error loading game config: " << e.what() << std::endl;
+            return EXIT_FAILURE;
+        }
+        
         game.SetRandomizeSpawnPoints(randomize_spawn);
 
         StateManager state_manager(game, state_file, save_state_period);
@@ -177,10 +185,7 @@ int main(int argc, const char* argv[]) {
                     std::cout << "Game state loaded successfully" << std::endl;
                 }
             } catch (const std::exception& e) {
-                // ВАЖНО: Не завершаем работу при ошибке загрузки состояния
-                // Продолжаем с чистым состоянием вместо завершения работы
                 std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
-                // НЕ возвращаем EXIT_FAILURE - продолжаем работу!
             }
         }
 
@@ -217,6 +222,11 @@ int main(int argc, const char* argv[]) {
 
         const auto address = net::ip::make_address("0.0.0.0");
         constexpr net::ip::port_type port = 8080;
+        
+        std::cout << "Server starting on " << address << ":" << port << std::endl;
+        std::cout << "Static files path: " << static_path << std::endl;
+        std::cout << "Config file: " << config_path << std::endl;
+        
         http_server::ServeHttp(ioc, { address, port }, [&handler](auto&& req, auto&& addr, auto&& send) {
             handler(std::forward<decltype(req)>(req),
                 std::forward<decltype(addr)>(addr),
