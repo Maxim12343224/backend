@@ -38,4 +38,4 @@ COPY --from=build /app/data /app/data
 COPY --from=build /app/static /app/static
 
 
-ENTRYPOINT["/app/game_server", "--config-file", "/app/data/config.json", "--www-root", "/app/static"]
+ENTRYPOINT ["/app/game_server", "--config-file", "/app/data/config.json", "--www-root", "/app/static"]
