@@ -1,42 +1,41 @@
+
 FROM gcc:11.3 as build
 
 RUN apt update && \
-    apt install -y python3-pip cmake && \
+    apt install -y \
+      python3-pip \
+      cmake \
+    && \
     pip3 install conan==1.*
 
-WORKDIR /app
-COPY conanfile.txt ./
-RUN mkdir -p build && cd build && \
+
+COPY conanfile.txt /app/
+RUN mkdir -p /app/build && cd /app/build && \
     conan install .. --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Release
 
-COPY . .
-RUN cd build && \
-    cmake -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release .. && \
-    cmake --build . --target game_server && \
-    ls -la /app/build/bin/game_server  # проверка
+# Копируем все исходные файлы
+COPY . /app/
 
+# основной сервер
+RUN cd /app/build && \
+    cmake -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release .. && \
+    cmake --build . --target game_server
+
+# Финальный образ для запуска
 FROM ubuntu:22.04 as run
 
-# Устанавливаем ВСЕ необходимые библиотеки
-RUN apt update && \
-    apt install -y \
-      libstdc++6 \
-      libpq5 \
-      libpqxx-7.7 \
-      libpqxx-dev && \
-    rm -rf /var/lib/apt/lists/*
-
+# Создаем пользователя и рабочие директории
 RUN groupadd -r app && useradd -r -g app app
+USER app
+WORKDIR /app
+
+# Создаем директорию для файлов состояния
 RUN mkdir -p /app/state
 
-# Копируем ВСЕ необходимое
+# Копируем бинарник из стадии сборки
 COPY --from=build /app/build/bin/game_server /app/
 COPY --from=build /app/data /app/data
 COPY --from=build /app/static /app/static
 
-# Даем права и переключаем пользователя
-RUN chown -R app:app /app && chmod +x /app/game_server
-USER app
-WORKDIR /app
 
-CMD ["/app/game_server", "--config-file", "/app/data/config.json", "--www-root", "/app/static"]
+ENTRYPOINT["/app/game_server", "--config-file", "/app/data/config.json", "--www-root", "/app/static"]
