@@ -30,7 +30,7 @@ USER app
 WORKDIR /app
 
 # Создаем директорию для файлов состояния
-RUN mkdir -p /app/state
+# RUN mkdir -p /app/state
 
 # Копируем бинарник из стадии сборки
 COPY --from=build /app/build/bin/game_server /app/
