@@ -16,6 +16,7 @@ RUN mkdir -p /app/build && cd /app/build && \
 # Копируем все исходные файлы
 
 COPY ./src /app/src
+
 COPY CMakeLists.txt /app/
 
 
@@ -23,22 +24,22 @@ COPY CMakeLists.txt /app/
 RUN cd /app/build && \
     cmake -DBUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release .. && \
     cmake --build . --target game_server
+    
 
 # Финальный образ для запуска
 FROM ubuntu:22.04 as run
 
-# Создаем пользователя и рабочие директории
+
 RUN groupadd -r app && useradd -r -g app app
 USER app
 WORKDIR /app
 
-# Создаем директорию для файлов состояния
-# RUN mkdir -p /app/state
 
-# Копируем бинарник из стадии сборки
 COPY --from=build /app/build/bin/game_server /app/
-COPY --from=build /app/data /app/data
-COPY --from=build /app/static /app/static
+COPY ./data /app/data
+COPY ./static /app/static
+#COPY --from=build /app/data /app/data
+#COPY --from=build /app/static /app/static
 
 
 ENTRYPOINT ["/app/game_server", "--config-file", "/app/data/config.json", "--www-root", "/app/static"]
