@@ -43,5 +43,3 @@ target_link_libraries(game_server PRIVATE
 set_target_properties(game_server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
-
-# Тесты УДАЛЕНЫ - они не нужны для решения задачи

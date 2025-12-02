@@ -14,8 +14,10 @@ RUN mkdir -p /app/build && cd /app/build && \
     conan install .. --build=missing -g cmake -s compiler.libcxx=libstdc++11 -s build_type=Release
 
 # Копируем все исходные файлы
+
 COPY ./src /app/src
 COPY CMakeLists.txt /app/
+
 
 # основной сервер
 RUN cd /app/build && \
@@ -29,6 +31,9 @@ FROM ubuntu:22.04 as run
 RUN groupadd -r app && useradd -r -g app app
 USER app
 WORKDIR /app
+
+# Создаем директорию для файлов состояния
+# RUN mkdir -p /app/state
 
 # Копируем бинарник из стадии сборки
 COPY --from=build /app/build/bin/game_server /app/
