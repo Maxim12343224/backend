@@ -355,20 +355,30 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
         }
 
         auto time_delta = json_body.as_object()["timeDelta"];
-        if (!time_delta.is_int64()) {
+        if (!time_delta.is_number()) {
             return MakeErrorResponse(http::status::bad_request,
-                "invalidArgument", "timeDelta must be integer", req);
+                "invalidArgument", "timeDelta must be a number", req);
         }
 
-        auto delta = time_delta.as_int64();
-        if (delta < 0) {
+        double delta_seconds = 0.0;
+        if (time_delta.is_int64()) {
+            delta_seconds = static_cast<double>(time_delta.as_int64()) / 1000.0;
+        } else if (time_delta.is_double()) {
+            delta_seconds = time_delta.as_double() / 1000.0;
+        } else if (time_delta.is_uint64()) {
+            delta_seconds = static_cast<double>(time_delta.as_uint64()) / 1000.0;
+        }
+        
+        if (delta_seconds < 0) {
             return MakeErrorResponse(http::status::bad_request,
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        auto delta_ms = std::chrono::milliseconds(delta);
-        game_.Tick(static_cast<double>(delta) / 1000.0);
-        state_manager_.OnTick(delta_ms);
+        // Выполняем тик игры с заданной дельтой времени
+        game_.Tick(delta_seconds);
+        
+        // Сохраняем состояние, если это необходимо
+        state_manager_.OnTick(std::chrono::milliseconds(static_cast<int>(delta_seconds * 1000)));
 
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {

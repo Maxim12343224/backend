@@ -227,6 +227,10 @@ json::value GameSerializer::SerializeGame(const model::Game& game) {
     }
     state["token_to_player"] = token_map;
     
+    // Сохраняем время выхода на пенсию
+    auto retirement_time = std::chrono::duration_cast<std::chrono::milliseconds>(game.GetRetirementTime());
+    state["retirement_time_ms"] = retirement_time.count();
+    
     return state;
 }
 
@@ -241,13 +245,6 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
     const auto& obj = data.as_object();
     std::cout << "DEBUG: JSON object has " << obj.size() << " fields" << std::endl;
 
-    // Выводим все ключи для отладки
-    std::cout << "DEBUG: JSON keys: ";
-    for (const auto& field : obj) {
-        std::cout << field.key() << " ";
-    }
-    std::cout << std::endl;
-
     try {
         if (obj.contains("default_dog_speed")) {
             game.SetDefaultDogSpeed(obj.at("default_dog_speed").as_double());
@@ -257,6 +254,13 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
         if (obj.contains("default_bag_capacity")) {
             game.SetDefaultBagCapacity(SafeGetUint64(obj.at("default_bag_capacity")));
             std::cout << "DEBUG: Set default_bag_capacity: " << SafeGetUint64(obj.at("default_bag_capacity")) << std::endl;
+        }
+
+        // Восстанавливаем время выхода на пенсию
+        if (obj.contains("retirement_time_ms")) {
+            auto retirement_time = std::chrono::milliseconds(SafeGetUint64(obj.at("retirement_time_ms")));
+            game.SetRetirementTime(retirement_time);
+            std::cout << "DEBUG: Set retirement_time: " << retirement_time.count() << "ms" << std::endl;
         }
 
         // Создаем временный mapping для восстановления токенов
@@ -282,18 +286,25 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                     throw std::runtime_error("Map not found: " + ser_session.map_id);
                 }
 
-                // ИСПРАВЛЕНИЕ: Добавляем retirement_time как седьмой параметр
+                // Создаем сессию с временем выхода на пенсию
                 auto session = std::make_shared<model::GameSession>(
                     *map, ser_session.id, ser_session.dog_speed, false, 
                     game.GetLootGenerator(), game.GetMapBagCapacity(model::Map::Id{ser_session.map_id}),
-                    game.GetRetirementTime()  // Добавлен седьмой параметр
+                    game.GetRetirementTime()
+                );
+
+                // Настраиваем callback для уведомления об ушедших игроках
+                session->SetRetiredPlayersCallback(
+                    [&game](const auto& retired_players) {
+                        game.HandlePlayerRetirement(retired_players);
+                    }
                 );
 
                 session->SetLootTypesCount(game.GetMapLootTypesCount(model::Map::Id{ser_session.map_id}));
                 session->SetLootValues(game.GetMapLootValues(model::Map::Id{ser_session.map_id}));
                 session->SetNextLostObjectId(ser_session.next_lost_object_id);
 
-                // Восстанавливаем игроков и сохраняем их в mapping
+                // Восстанавливаем игроков
                 std::cout << "DEBUG: Restoring " << ser_session.players.size() << " players" << std::endl;
                 for (size_t player_idx = 0; player_idx < ser_session.players.size(); ++player_idx) {
                     const auto& ser_player = ser_session.players[player_idx];
@@ -305,6 +316,10 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                         session, std::move(dog), ser_player.id, ser_player.token, ser_player.bag_capacity
                     );
 
+                    // Устанавливаем временные метки
+                    player->SetJoinTime(0.0);  // Время входа будет установлено позже
+                    player->SetLastMoveTime(0.0);  // Время последнего движения
+                    
                     player->AddScore(ser_player.score);
 
                     for (const auto& ser_item : ser_player.bag) {

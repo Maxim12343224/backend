@@ -55,6 +55,8 @@ namespace serializer {
         int score;
         size_t bag_capacity;
         std::vector<SerLostObject> bag;
+        double join_time;
+        double last_move_time;
 
         static SerPlayer FromModel(const std::shared_ptr<model::Player>& player) {
             std::vector<SerLostObject> ser_bag;
@@ -68,7 +70,9 @@ namespace serializer {
                 SerDog::FromModel(player->GetDog()),
                 player->GetScore(),
                 player->GetBagCapacity(),
-                ser_bag
+                ser_bag,
+                player->GetJoinTime(),
+                player->GetLastMoveTime()
             };
         }
     };

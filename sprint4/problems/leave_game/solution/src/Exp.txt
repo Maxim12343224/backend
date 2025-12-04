@@ -1589,19 +1589,22 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
         
         const auto& dog = player->GetDog();
         
-        // РџСЂРѕРІРµСЂСЏРµРј, РґРІРёРіР°РµС‚СЃСЏ Р»Рё СЃРѕР±Р°РєР° СЃРµР№С‡Р°СЃ
         bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
         if (is_moving) {
-            // РЎРѕР±Р°РєР° РґРІРёРіР°РµС‚СЃСЏ - РґРѕР±Р°РІР»СЏРµРј РІ Р°РєС‚РёРІРЅС‹Рµ
             active_players.push_back(player);
         } else {
-            // РЎРѕР±Р°РєР° РќР• РґРІРёРіР°РµС‚СЃСЏ - РїСЂРѕРІРµСЂСЏРµРј РІСЂРµРјСЏ СЃ РјРѕРјРµРЅС‚Р° РѕСЃС‚Р°РЅРѕРІРєРё
-            auto last_zero_speed_time = dog.GetLastZeroSpeedTime();
-            auto inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                current_time - last_zero_speed_time);
+            std::chrono::steady_clock::time_point start_time;
             
-            // РРіСЂРѕРє РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ retired РµСЃР»Рё СЃРѕР±Р°РєР° РЅРµ РґРІРёРіР°Р»Р°СЃСЊ РґРѕР»СЊС€Рµ retirement_time_
+            if (dog.HasEverMoved()) {
+                start_time = dog.GetLastZeroSpeedTime();
+            } else {
+                start_time = player->GetJoinTime();
+            }
+            
+            auto inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                current_time - start_time);
+            
             bool should_retire = (inactivity_duration >= retirement_time_);
             
             if (should_retire) {
@@ -1613,7 +1616,6 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
         }
     }
     
-    // Р—Р°РјРµРЅСЏРµРј СЃРїРёСЃРѕРє РёРіСЂРѕРєРѕРІ РЅР° Р°РєС‚РёРІРЅС‹С… (СѓРґР°Р»СЏРµРј retired)
     players_ = std::move(active_players);
     
     return newly_retired_players;
@@ -1682,7 +1684,6 @@ void GameSession::Tick(double delta_time) {
     
     GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
     
-    // РћР±РЅРѕРІР»СЏРµРј РїРѕР·РёС†РёРё СЃРѕР±Р°Рє
     size_t active_index = 0;
     for (auto& player : players_) {
         if (player->IsRetired()) continue;
@@ -2013,7 +2014,7 @@ namespace model {
             speed_{ 0.0, 0.0 },
             direction_(start_dir),
             last_zero_speed_time_(std::chrono::steady_clock::now()),
-            last_move_time_(std::chrono::steady_clock::now()) {
+            has_ever_moved_(false) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -2025,13 +2026,15 @@ namespace model {
             Point old_speed = speed_;
             speed_ = speed;
 
-            // Обновляем время последнего движения
-            if (speed.x != 0.0 || speed.y != 0.0) {
-                last_move_time_ = std::chrono::steady_clock::now();
+            // Если начали двигаться впервые
+            if ((old_speed.x == 0.0 && old_speed.y == 0.0) &&
+                (speed.x != 0.0 || speed.y != 0.0)) {
+                has_ever_moved_ = true;
             }
 
-            // Если скорость стала нулевой (остановились) - обновляем время остановки
-            if ((old_speed.x != 0.0 || old_speed.y != 0.0) &&
+            // Если остановились после движения
+            if (has_ever_moved_ &&
+                (old_speed.x != 0.0 || old_speed.y != 0.0) &&
                 (speed.x == 0.0 && speed.y == 0.0)) {
                 last_zero_speed_time_ = std::chrono::steady_clock::now();
             }
@@ -2041,19 +2044,14 @@ namespace model {
 
         void SetPosition(Point p) noexcept {
             position_ = p;
-            // Если двигаемся, обновляем время движения
-            if (speed_.x != 0.0 || speed_.y != 0.0) {
-                last_move_time_ = std::chrono::steady_clock::now();
-            }
-        }
-
-        std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
-            return last_move_time_;
+            // Не обновляем время при изменении позиции!
         }
 
         std::chrono::steady_clock::time_point GetLastZeroSpeedTime() const noexcept {
             return last_zero_speed_time_;
         }
+
+        bool HasEverMoved() const noexcept { return has_ever_moved_; }
 
     private:
         std::string name_;
@@ -2061,7 +2059,7 @@ namespace model {
         Point speed_;
         Direction direction_;
         std::chrono::steady_clock::time_point last_zero_speed_time_;
-        std::chrono::steady_clock::time_point last_move_time_;
+        bool has_ever_moved_;
     };
 
     struct LostObject {
@@ -2126,7 +2124,6 @@ namespace model {
         bool is_retired_ = false;
     };
 
-    // Класс пула соединений
     class ConnectionPool {
         using PoolType = ConnectionPool;
         using ConnectionPtr = std::shared_ptr<pqxx::connection>;
@@ -2271,13 +2268,11 @@ namespace model {
             }
 
             try {
-                // Создаем пул из 5 соединений
                 pool_ = std::make_unique<ConnectionPool>(5, [this] {
                     auto conn = std::make_shared<pqxx::connection>(db_url_);
                     return conn;
                     });
 
-                // Создаем таблицу
                 auto conn = pool_->GetConnection();
                 pqxx::work txn(*conn);
                 txn.exec(
@@ -2294,11 +2289,9 @@ namespace model {
                 );
                 txn.commit();
 
-                std::cout << "SUCCESS: PostgreSQL connection pool initialized" << std::endl;
             }
             catch (const std::exception& e) {
                 std::cerr << "Failed to initialize PostgreSQL connection pool: " << e.what() << std::endl;
-                std::cerr << "Using in-memory storage" << std::endl;
                 use_memory_ = true;
             }
         }
@@ -2307,14 +2300,13 @@ namespace model {
             std::lock_guard lock(memory_mutex_);
             memory_records_.emplace_back(name, score, play_time);
 
-            // Сортируем при каждом добавлении для простоты
             std::sort(memory_records_.begin(), memory_records_.end(),
                 [](const auto& a, const auto& b) {
                     if (std::get<1>(a) != std::get<1>(b))
-                        return std::get<1>(a) > std::get<1>(b); // по score убыванию
+                        return std::get<1>(a) > std::get<1>(b);
                     if (std::get<2>(a) != std::get<2>(b))
-                        return std::get<2>(a) < std::get<2>(b); // по play_time возрастанию
-                    return std::get<0>(a) < std::get<0>(b);     // по name алфавиту
+                        return std::get<2>(a) < std::get<2>(b);
+                    return std::get<0>(a) < std::get<0>(b);
                 });
         }
 
@@ -2525,8 +2517,6 @@ namespace model {
 
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 auto player = it->second;
-                // НЕ обновляем время активности при запросе!
-                // Только проверяем retired статус
                 if (!player->IsRetired()) {
                     return player;
                 }
@@ -2540,13 +2530,17 @@ namespace model {
             std::lock_guard<std::recursive_mutex> lock(mutex_);
 
             if (!retired_repo_) {
-                // Если репозиторий не инициализирован, создаем in-memory
                 retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
             }
 
+            auto retirement_time = player->GetRetirementTime();
+            auto join_time = player->GetJoinTime();
+
             auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                player->GetRetirementTime() - player->GetJoinTime());
+                retirement_time - join_time);
             double play_time_seconds = play_time.count() / 1000.0;
+
+            play_time_seconds = std::round(play_time_seconds * 1000.0) / 1000.0;
 
             retired_repo_->AddRetiredPlayer(
                 player->GetDog().GetName(),
@@ -2554,7 +2548,6 @@ namespace model {
                 play_time_seconds
             );
 
-            // Удаляем из token_to_player_
             token_to_player_.erase(player->GetToken());
         }
 
@@ -2594,7 +2587,6 @@ namespace model {
             for (auto& session : sessions) {
                 session->Tick(delta_time);
 
-                // Проверяем и обрабатываем retired игроков
                 auto retired_players = session->CheckRetiredPlayers();
                 for (auto& player : retired_players) {
                     AddRetiredPlayer(player);
@@ -2623,7 +2615,7 @@ namespace model {
         bool randomize_spawn_points_ = false;
         mutable std::recursive_mutex mutex_;
         std::atomic<uint32_t> next_session_id_{ 0 };
-        std::chrono::milliseconds retirement_time_{ 60000 }; // 60 секунд по умолчанию
+        std::chrono::milliseconds retirement_time_{ 60000 };
     };
 
     std::string DirectionToString(Direction dir);

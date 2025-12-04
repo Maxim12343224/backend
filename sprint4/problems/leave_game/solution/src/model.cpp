@@ -175,6 +175,8 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
+        // Обновляем время последнего движения при любой команде
+        player->SetLastMoveTime(current_game_time_);
         break;
     }
 }
@@ -250,14 +252,14 @@ std::vector<std::shared_ptr<Player>> GameSession::GetActivePlayers() const {
     return active_players;
 }
 
-std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
-    std::vector<std::shared_ptr<Player>> newly_retired_players;
-    
-    auto current_time = std::chrono::steady_clock::now();
-    
+void GameSession::CheckRetiredPlayers(double delta_time_seconds) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
+    // Обновляем игровое время
+    current_game_time_ += delta_time_seconds;
+    
     std::vector<std::shared_ptr<Player>> active_players;
+    std::vector<std::shared_ptr<Player>> newly_retired_players;
     
     for (auto& player : players_) {
         if (player->IsRetired()) {
@@ -266,26 +268,21 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
         
         const auto& dog = player->GetDog();
         
+        // Проверяем, движется ли собака
         bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
         if (is_moving) {
+            // Собака движется - обновляем время последнего движения
+            player->SetLastMoveTime(current_game_time_);
             active_players.push_back(player);
         } else {
-            std::chrono::steady_clock::time_point start_time;
+            // Собака стоит на месте
+            double time_since_last_move = current_game_time_ - player->GetLastMoveTime();
+            double retirement_time_seconds = retirement_time_.count() / 1000.0;
             
-            if (dog.HasEverMoved()) {
-                start_time = dog.GetLastZeroSpeedTime();
-            } else {
-                start_time = player->GetJoinTime();
-            }
-            
-            auto inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                current_time - start_time);
-            
-            bool should_retire = (inactivity_duration >= retirement_time_);
-            
-            if (should_retire) {
-                player->Retire();
+            if (time_since_last_move >= retirement_time_seconds) {
+                // Игрок должен уйти на пенсию
+                player->Retire(current_game_time_);
                 newly_retired_players.push_back(player);
             } else {
                 active_players.push_back(player);
@@ -295,7 +292,26 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     
     players_ = std::move(active_players);
     
-    return newly_retired_players;
+    // Если есть новые вышедшие игроки, добавляем их в репозиторий
+    if (!newly_retired_players.empty() && retired_callback_) {
+        retired_callback_(newly_retired_players);
+    }
+}
+
+void GameSession::UpdateGameTime(double delta_time_seconds) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    current_game_time_ += delta_time_seconds;
+    
+    // Обновляем время последнего движения для всех активных игроков,
+    // если их собаки движутся
+    for (auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
+        const auto& dog = player->GetDog();
+        if (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0) {
+            player->SetLastMoveTime(current_game_time_);
+        }
+    }
 }
 
 namespace {
@@ -342,6 +358,9 @@ struct Event {
 
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    // Обновляем игровое время
+    current_game_time_ += delta_time;
     
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
@@ -485,6 +504,10 @@ size_t GameSession::GetNextLostObjectId() const {
     return next_lost_object_id_.load();
 }
 
+void GameSession::SetRetiredPlayersCallback(RetiredPlayersCallback callback) {
+    retired_callback_ = std::move(callback);
+}
+
 std::vector<std::shared_ptr<Player>> Game::GetAllPlayers() const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<std::shared_ptr<Player>> players;
@@ -511,6 +534,31 @@ void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession
 void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     token_to_player_[token] = player;
+}
+
+void Game::Tick(double delta_time) {
+    std::vector<std::shared_ptr<GameSession>> sessions;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        for (const auto& [map_id, session] : map_id_to_session_) {
+            sessions.push_back(session);
+        }
+    }
+
+    for (auto& session : sessions) {
+        session->Tick(delta_time);
+        
+        // Проверяем игроков на выход из игры
+        session->CheckRetiredPlayers(delta_time);
+    }
+}
+
+void Game::HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    for (auto& player : retired_players) {
+        AddRetiredPlayer(player);
+    }
 }
 
 std::string DirectionToString(Direction dir) {

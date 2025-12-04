@@ -160,9 +160,7 @@ namespace model {
             : name_(std::move(name)),
             position_(start_pos),
             speed_{ 0.0, 0.0 },
-            direction_(start_dir),
-            last_zero_speed_time_(std::chrono::steady_clock::now()),
-            has_ever_moved_(false) {
+            direction_(start_dir) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -171,43 +169,20 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
 
         void SetSpeed(Point speed) noexcept {
-            Point old_speed = speed_;
             speed_ = speed;
-
-            // Если начали двигаться впервые
-            if ((old_speed.x == 0.0 && old_speed.y == 0.0) &&
-                (speed.x != 0.0 || speed.y != 0.0)) {
-                has_ever_moved_ = true;
-            }
-
-            // Если остановились после движения
-            if (has_ever_moved_ &&
-                (old_speed.x != 0.0 || old_speed.y != 0.0) &&
-                (speed.x == 0.0 && speed.y == 0.0)) {
-                last_zero_speed_time_ = std::chrono::steady_clock::now();
-            }
         }
 
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
 
         void SetPosition(Point p) noexcept {
             position_ = p;
-            // Не обновляем время при изменении позиции!
         }
-
-        std::chrono::steady_clock::time_point GetLastZeroSpeedTime() const noexcept {
-            return last_zero_speed_time_;
-        }
-
-        bool HasEverMoved() const noexcept { return has_ever_moved_; }
 
     private:
         std::string name_;
         Point position_;
         Point speed_;
         Direction direction_;
-        std::chrono::steady_clock::time_point last_zero_speed_time_;
-        bool has_ever_moved_;
     };
 
     struct LostObject {
@@ -227,7 +202,7 @@ namespace model {
         Player(std::shared_ptr<GameSession> session, Dog dog, uint32_t id, std::string token, size_t bag_capacity)
             : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)),
             session_(std::move(session)), bag_capacity_(bag_capacity),
-            join_time_(std::chrono::steady_clock::now()) {
+            join_time_(0.0), last_move_time_(0.0), retirement_time_(0.0), is_retired_(false) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -240,14 +215,19 @@ namespace model {
         bool IsBagFull() const noexcept { return bag_.size() >= bag_capacity_; }
         int GetScore() const noexcept { return score_; }
 
-        std::chrono::steady_clock::time_point GetJoinTime() const noexcept { return join_time_; }
-        std::chrono::steady_clock::time_point GetRetirementTime() const noexcept { return retirement_time_; }
-        void SetRetirementTime(std::chrono::steady_clock::time_point time) noexcept { retirement_time_ = time; }
+        double GetJoinTime() const noexcept { return join_time_; }
+        double GetLastMoveTime() const noexcept { return last_move_time_; }
+        double GetRetirementTime() const noexcept { return retirement_time_; }
+
+        void SetJoinTime(double time) noexcept { join_time_ = time; }
+        void SetLastMoveTime(double time) noexcept { last_move_time_ = time; }
+        void SetRetirementTime(double time) noexcept { retirement_time_ = time; }
+
         bool IsRetired() const noexcept { return is_retired_; }
 
-        void Retire() noexcept {
+        void Retire(double current_time) noexcept {
             is_retired_ = true;
-            retirement_time_ = std::chrono::steady_clock::now();
+            retirement_time_ = current_time;
         }
 
         bool AddItemToBag(const LostObject& item) {
@@ -267,9 +247,10 @@ namespace model {
         std::vector<LostObject> bag_;
         size_t bag_capacity_;
         int score_ = 0;
-        std::chrono::steady_clock::time_point join_time_;
-        std::chrono::steady_clock::time_point retirement_time_;
-        bool is_retired_ = false;
+        double join_time_;
+        double last_move_time_;
+        double retirement_time_;
+        bool is_retired_;
     };
 
     class ConnectionPool {
@@ -502,13 +483,14 @@ namespace model {
     class GameSession : public std::enable_shared_from_this<GameSession> {
     public:
         using Id = util::Tagged<uint32_t, GameSession>;
+        using RetiredPlayersCallback = std::function<void(const std::vector<std::shared_ptr<Player>>&)>;
 
         explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
             std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity,
             std::chrono::milliseconds retirement_time)
             : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
             randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)),
-            bag_capacity_(bag_capacity), retirement_time_(retirement_time) {
+            bag_capacity_(bag_capacity), retirement_time_(retirement_time), current_game_time_(0.0) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -518,18 +500,20 @@ namespace model {
         const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
         std::chrono::milliseconds GetRetirementTime() const noexcept { return retirement_time_; }
+        double GetCurrentGameTime() const noexcept { return current_game_time_; }
 
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
         void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
+        void SetRetiredPlayersCallback(RetiredPlayersCallback callback);
 
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
         void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
-
-        std::vector<std::shared_ptr<Player>> CheckRetiredPlayers();
+        void UpdateGameTime(double delta_time_seconds);
+        void CheckRetiredPlayers(double delta_time_seconds);
 
         void AddRestoredPlayer(std::shared_ptr<Player> player);
         void AddRestoredLostObject(const LostObject& obj);
@@ -550,18 +534,25 @@ namespace model {
         size_t bag_capacity_;
         std::vector<int> loot_values_;
         std::chrono::milliseconds retirement_time_;
+        double current_game_time_;
+        RetiredPlayersCallback retired_callback_;
     };
 
     class Game {
     public:
         using Maps = std::vector<Map>;
 
-        Game() : default_dog_speed_(1.0), default_bag_capacity_(3) {}
+        Game() : default_dog_speed_(1.0), default_bag_capacity_(3) {
+            retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
+        }
 
         explicit Game(const std::string& db_url, double default_dog_speed, size_t default_bag_capacity = 3)
             : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {
             if (!db_url.empty()) {
                 retired_repo_ = std::make_unique<RetiredPlayersRepository>(db_url);
+            }
+            else {
+                retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
             }
         }
 
@@ -681,13 +672,9 @@ namespace model {
                 retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
             }
 
-            auto retirement_time = player->GetRetirementTime();
-            auto join_time = player->GetJoinTime();
+            double play_time_seconds = player->GetRetirementTime() - player->GetJoinTime();
 
-            auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                retirement_time - join_time);
-            double play_time_seconds = play_time.count() / 1000.0;
-
+            // Округляем до 3 знаков после запятой
             play_time_seconds = std::round(play_time_seconds * 1000.0) / 1000.0;
 
             retired_repo_->AddRetiredPlayer(
@@ -698,6 +685,8 @@ namespace model {
 
             token_to_player_.erase(player->GetToken());
         }
+
+        void HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players);
 
         std::vector<RetiredPlayerRecord> GetRetiredPlayers(int start = 0, int max_items = 100) {
             if (!retired_repo_) {
@@ -723,24 +712,7 @@ namespace model {
             }
         }
 
-        void Tick(double delta_time) {
-            std::vector<std::shared_ptr<GameSession>> sessions;
-            {
-                std::lock_guard<std::recursive_mutex> lock(mutex_);
-                for (const auto& [map_id, session] : map_id_to_session_) {
-                    sessions.push_back(session);
-                }
-            }
-
-            for (auto& session : sessions) {
-                session->Tick(delta_time);
-
-                auto retired_players = session->CheckRetiredPlayers();
-                for (auto& player : retired_players) {
-                    AddRetiredPlayer(player);
-                }
-            }
-        }
+        void Tick(double delta_time);
 
         void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
         void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
