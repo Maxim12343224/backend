@@ -154,44 +154,87 @@ StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
     }
 }
 
-StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
+StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
     if (req.method() != http::verb::get && req.method() != http::verb::head) {
         auto response = MakeErrorResponse(http::status::method_not_allowed,
-                                        "invalidMethod",
-                                        "Invalid method", req);
+            "invalidMethod", "Only GET and HEAD methods are allowed", req);
         response.set(http::field::allow, "GET, HEAD");
         return response;
     }
 
-    auto token = GetTokenFromRequest(req);
-    if (!token) {
-        return MakeErrorResponse(http::status::unauthorized,
-                               "invalidToken",
-                               "Authorization header is missing", req);
+    int start = 0;
+    int max_items = 100;
+    
+    // Парсим URL с query-параметрами
+    std::string target = req.target().to_string();
+    
+    // Убираем путь до records
+    if (target.starts_with("/api/v1/game/records")) {
+        target = target.substr(std::string("/api/v1/game/records").length());
+    }
+    
+    // Парсим query-параметры
+    size_t query_start = target.find('?');
+    if (query_start != std::string::npos) {
+        std::string query_str = target.substr(query_start + 1);
+        std::istringstream query_stream(query_str);
+        std::string param;
+        
+        while (std::getline(query_stream, param, '&')) {
+            size_t eq_pos = param.find('=');
+            if (eq_pos != std::string::npos) {
+                std::string key = param.substr(0, eq_pos);
+                std::string value = param.substr(eq_pos + 1);
+                
+                if (key == "start") {
+                    try {
+                        start = std::stoi(value);
+                        if (start < 0) start = 0;
+                    } catch (...) {
+                        // Используем значение по умолчанию
+                    }
+                } else if (key == "maxItems") {
+                    try {
+                        max_items = std::stoi(value);
+                        if (max_items < 1) max_items = 1;
+                        if (max_items > 100) {
+                            return MakeErrorResponse(http::status::bad_request,
+                                "badRequest", "Max items cannot exceed 100", req);
+                        }
+                    } catch (...) {
+                        // Используем значение по умолчанию
+                    }
+                }
+            }
+        }
     }
 
-    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
-    if (!player) {
-        return MakeErrorResponse(http::status::unauthorized,
-                               "unknownToken",
-                               "Player token has not been found", req);
+    try {
+        auto records = game_.GetRetiredPlayers(start, max_items);
+        
+        json::array records_json;
+        for (const auto& record : records) {
+            // Форматируем playTime с 3 знаками после запятой
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(3) << record.play_time;
+            std::string play_time_str = oss.str();
+            
+            records_json.push_back({
+                {"name", record.name},
+                {"score", record.score},
+                {"playTime", std::stod(play_time_str)}
+            });
+        }
+        
+        auto response = MakeStringResponse(http::status::ok, json::serialize(records_json), req);
+        response.set(http::field::cache_control, "no-cache");
+        response.set(http::field::content_length, std::to_string(response.body().size()));
+        return response;
+        
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::internal_server_error,
+            "internalError", "Failed to retrieve records", req);
     }
-
-    if (player->IsRetired()) {
-        return MakeErrorResponse(http::status::unauthorized,
-                               "invalidToken",
-                               "Player has retired", req);
-    }
-
-    auto session = player->GetSession();
-    json::value players_json = json::object();
-    for (const auto& p : session->GetActivePlayers()) {
-        players_json.as_object()[std::to_string(*p->GetId())] = {
-            {"name", p->GetDog().GetName()}
-        };
-    }
-
-    return MakeStringResponse(http::status::ok, json::serialize(players_json), req);
 }
 
 StringResponse RequestHandler::HandleGameState(StringRequest&& req) {

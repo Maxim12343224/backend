@@ -799,19 +799,29 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
             continue;
         }
         
-        // Проверяем время бездействия игрока
-        auto last_activity_time = player->GetLastActivityTime();
-        auto inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            current_time - last_activity_time);
+        const auto& dog = player->GetDog();
         
-        // Игрок должен быть retired если время бездействия превышает retirement_time
-        bool should_retire = (inactivity_duration >= retirement_time_);
+        // Проверяем, двигается ли собака сейчас
+        bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
-        if (should_retire) {
-            player->Retire();
-            newly_retired_players.push_back(player);
-        } else {
+        if (is_moving) {
+            // Собака двигается - добавляем в активные
             active_players.push_back(player);
+        } else {
+            // Собака НЕ двигается - проверяем время с момента остановки
+            auto last_zero_speed_time = dog.GetLastZeroSpeedTime();
+            auto inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                current_time - last_zero_speed_time);
+            
+            // Игрок должен быть retired если собака не двигалась дольше retirement_time
+            bool should_retire = (inactivity_duration >= retirement_time_);
+            
+            if (should_retire) {
+                player->Retire();
+                newly_retired_players.push_back(player);
+            } else {
+                active_players.push_back(player);
+            }
         }
     }
     
@@ -865,13 +875,6 @@ struct Event {
 
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
-    
-    // Обновляем время активности всех игроков при каждом тике
-    for (auto& player : players_) {
-        if (!player->IsRetired()) {
-            player->UpdateActivityTime();
-        }
-    }
     
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
@@ -1052,6 +1055,58 @@ std::string DirectionToString(Direction dir) {
         case Direction::East:  return "R";
     }
     return "U";
+}
+
+// Реализация метода Tick для класса Game
+void Game::Tick(double delta_time) {
+    std::vector<std::shared_ptr<GameSession>> sessions;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        for (const auto& [map_id, session] : map_id_to_session_) {
+            sessions.push_back(session);
+        }
+    }
+
+    for (auto& session : sessions) {
+        session->Tick(delta_time);
+
+        // Проверяем и обрабатываем retired игроков
+        auto retired_players = session->CheckRetiredPlayers();
+        for (auto& player : retired_players) {
+            AddRetiredPlayer(player);
+        }
+    }
+}
+
+// Реализация метода AddRetiredPlayer для класса Game
+void Game::AddRetiredPlayer(std::shared_ptr<Player> player) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    if (!retired_repo_) {
+        // Если репозиторий не инициализирован, создаем in-memory
+        retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
+    }
+
+    auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+        player->GetRetirementTime() - player->GetJoinTime());
+    double play_time_seconds = play_time.count() / 1000.0;
+
+    // Форматируем время для вывода
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(3) << play_time_seconds;
+    std::string time_str = oss.str();
+    // Убираем лишние нули
+    time_str.erase(time_str.find_last_not_of('0') + 1, std::string::npos);
+    if (time_str.back() == '.') time_str.pop_back();
+
+    retired_repo_->AddRetiredPlayer(
+        player->GetDog().GetName(),
+        player->GetScore(),
+        play_time_seconds
+    );
+
+    // Удаляем из token_to_player_
+    token_to_player_.erase(player->GetToken());
 }
 
 }  // namespace model
