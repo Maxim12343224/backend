@@ -829,18 +829,28 @@ int main(int argc, const char* argv[]) {
         logger::InitLogging();
         
         // Получаем URL базы данных из переменной окружения
-        const char* db_url = std::getenv("GAME_DB_URL");
+        /*const char* db_url = std::getenv("GAME_DB_URL");
         if (!db_url) {
             std::cerr << "Error: GAME_DB_URL environment variable is not set" << std::endl;
             std::cerr << "Please set it with: export GAME_DB_URL=postgresql://username:password@localhost:5432/game_db" << std::endl;
             return EXIT_FAILURE;
+        }*/
+
+        const char* db_url = std::getenv("GAME_DB_URL");
+        if (!db_url) {
+            std::cout << "Warning: GAME_DB_URL environment variable is not set" << std::endl;
+            std::cout << "Using in-memory storage for retired players" << std::endl;
+        } else {
+            std::cout << "Using database: " << db_url << std::endl;
         }
 
         std::cout << "Using database: " << db_url << std::endl;
 
         // Создаем игру с подключением к БД
         model::Game game;
+        if (db_url) {
         game.SetDatabaseUrl(db_url);
+        }
         
         try {
             json_loader::LoadGame(config_path, game);
