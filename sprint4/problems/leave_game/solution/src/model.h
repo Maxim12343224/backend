@@ -665,26 +665,7 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
-        void AddRetiredPlayer(std::shared_ptr<Player> player) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-            if (!retired_repo_) {
-                retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
-            }
-
-            double play_time_seconds = player->GetRetirementTime() - player->GetJoinTime();
-
-            // Округляем до 3 знаков после запятой
-            play_time_seconds = std::round(play_time_seconds * 1000.0) / 1000.0;
-
-            retired_repo_->AddRetiredPlayer(
-                player->GetDog().GetName(),
-                player->GetScore(),
-                play_time_seconds
-            );
-
-            token_to_player_.erase(player->GetToken());
-        }
+        void AddRetiredPlayer(std::shared_ptr<Player> player);
 
         void HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players);
 
