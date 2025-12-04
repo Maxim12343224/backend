@@ -11,6 +11,7 @@
 #include <random>
 #include <chrono>
 #include <cmath>
+#include <regex>
 
 namespace http_handler {
 namespace beast = boost::beast;
@@ -154,87 +155,44 @@ StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
     }
 }
 
-StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
+StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
     if (req.method() != http::verb::get && req.method() != http::verb::head) {
         auto response = MakeErrorResponse(http::status::method_not_allowed,
-            "invalidMethod", "Only GET and HEAD methods are allowed", req);
+                                        "invalidMethod",
+                                        "Invalid method", req);
         response.set(http::field::allow, "GET, HEAD");
         return response;
     }
 
-    int start = 0;
-    int max_items = 100;
-    
-    // Парсим URL с query-параметрами
-    std::string target = req.target().to_string();
-    
-    // Убираем путь до records
-    if (target.starts_with("/api/v1/game/records")) {
-        target = target.substr(std::string("/api/v1/game/records").length());
-    }
-    
-    // Парсим query-параметры
-    size_t query_start = target.find('?');
-    if (query_start != std::string::npos) {
-        std::string query_str = target.substr(query_start + 1);
-        std::istringstream query_stream(query_str);
-        std::string param;
-        
-        while (std::getline(query_stream, param, '&')) {
-            size_t eq_pos = param.find('=');
-            if (eq_pos != std::string::npos) {
-                std::string key = param.substr(0, eq_pos);
-                std::string value = param.substr(eq_pos + 1);
-                
-                if (key == "start") {
-                    try {
-                        start = std::stoi(value);
-                        if (start < 0) start = 0;
-                    } catch (...) {
-                        // Используем значение по умолчанию
-                    }
-                } else if (key == "maxItems") {
-                    try {
-                        max_items = std::stoi(value);
-                        if (max_items < 1) max_items = 1;
-                        if (max_items > 100) {
-                            return MakeErrorResponse(http::status::bad_request,
-                                "badRequest", "Max items cannot exceed 100", req);
-                        }
-                    } catch (...) {
-                        // Используем значение по умолчанию
-                    }
-                }
-            }
-        }
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Authorization header is missing", req);
     }
 
-    try {
-        auto records = game_.GetRetiredPlayers(start, max_items);
-        
-        json::array records_json;
-        for (const auto& record : records) {
-            // Форматируем playTime с 3 знаками после запятой
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(3) << record.play_time;
-            std::string play_time_str = oss.str();
-            
-            records_json.push_back({
-                {"name", record.name},
-                {"score", record.score},
-                {"playTime", std::stod(play_time_str)}
-            });
-        }
-        
-        auto response = MakeStringResponse(http::status::ok, json::serialize(records_json), req);
-        response.set(http::field::cache_control, "no-cache");
-        response.set(http::field::content_length, std::to_string(response.body().size()));
-        return response;
-        
-    } catch (const std::exception& e) {
-        return MakeErrorResponse(http::status::internal_server_error,
-            "internalError", "Failed to retrieve records", req);
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "unknownToken",
+                               "Player token has not been found", req);
     }
+
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
+    auto session = player->GetSession();
+    json::value players_json = json::object();
+    for (const auto& p : session->GetActivePlayers()) {
+        players_json.as_object()[std::to_string(*p->GetId())] = {
+            {"name", p->GetDog().GetName()}
+        };
+    }
+
+    return MakeStringResponse(http::status::ok, json::serialize(players_json), req);
 }
 
 StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
@@ -430,10 +388,18 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
     int start = 0;
     int max_items = 100;
     
-    std::string target_str = req.target().to_string();
-    size_t query_start = target_str.find('?');
+    // Парсим URL с query-параметрами
+    std::string target = req.target().to_string();
+    
+    // Убираем путь до records
+    if (target.starts_with("/api/v1/game/records")) {
+        target = target.substr(std::string("/api/v1/game/records").length());
+    }
+    
+    // Парсим query-параметры
+    size_t query_start = target.find('?');
     if (query_start != std::string::npos) {
-        std::string query_str = target_str.substr(query_start + 1);
+        std::string query_str = target.substr(query_start + 1);
         std::istringstream query_stream(query_str);
         std::string param;
         
@@ -448,18 +414,18 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
                         start = std::stoi(value);
                         if (start < 0) start = 0;
                     } catch (...) {
-                        // Игнорируем невалидные значения, используем значение по умолчанию
+                        // Используем значение по умолчанию
                     }
                 } else if (key == "maxItems") {
                     try {
                         max_items = std::stoi(value);
-                        if (max_items < 0) max_items = 100;
+                        if (max_items < 1) max_items = 1;
                         if (max_items > 100) {
                             return MakeErrorResponse(http::status::bad_request,
                                 "badRequest", "Max items cannot exceed 100", req);
                         }
                     } catch (...) {
-                        // Игнорируем невалидные значения, используем значение по умолчанию
+                        // Используем значение по умолчанию
                     }
                 }
             }
@@ -471,10 +437,15 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
         
         json::array records_json;
         for (const auto& record : records) {
+            // Форматируем playTime с 3 знаками после запятой
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(3) << record.play_time;
+            std::string play_time_str = oss.str();
+            
             records_json.push_back({
                 {"name", record.name},
                 {"score", record.score},
-                {"playTime", serialize_number(record.play_time)}
+                {"playTime", std::stod(play_time_str)}
             });
         }
         
@@ -490,7 +461,14 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
 }
 
 StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
-    if (req.target() == "/api/v1/maps") {
+    std::string target_str = req.target().to_string();
+    
+    // Проверяем, запрашиваются ли records
+    if (target_str.starts_with("/api/v1/game/records")) {
+        return HandleGetRecords(std::move(req));
+    }
+    
+    if (target_str == "/api/v1/maps") {
         if (req.method() != http::verb::get && req.method() != http::verb::head) {
             auto response = MakeErrorResponse(http::status::method_not_allowed,
                                            "invalidMethod",
@@ -510,7 +488,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
                                 json::serialize(maps_json), req);
     }
 
-    if (req.target().starts_with("/api/v1/maps/")) {
+    if (target_str.starts_with("/api/v1/maps/")) {
         if (req.method() != http::verb::get && req.method() != http::verb::head) {
             auto response = MakeErrorResponse(http::status::method_not_allowed,
                                            "invalidMethod",
@@ -519,7 +497,7 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
             return response;
         }
 
-        std::string target = req.target().to_string();
+        std::string target = target_str;
         size_t last_slash_pos = target.find_last_of('/');
         if (last_slash_pos == std::string::npos || last_slash_pos == target.size() - 1) {
             return MakeErrorResponse(http::status::bad_request,
@@ -598,10 +576,6 @@ StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
         return MakeErrorResponse(http::status::not_found,
                                "mapNotFound",
                                "Map not found", req);
-    }
-
-    if (req.target() == "/api/v1/game/records") {
-        return HandleGetRecords(std::move(req));
     }
 
     return MakeErrorResponse(http::status::bad_request,

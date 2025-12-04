@@ -903,8 +903,8 @@ namespace model {
             position_(start_pos),
             speed_{ 0.0, 0.0 },
             direction_(start_dir),
-            last_move_time_(std::chrono::steady_clock::now()),
-            last_activity_time_(std::chrono::steady_clock::now()) {
+            last_zero_speed_time_(std::chrono::steady_clock::now()),
+            last_move_time_(std::chrono::steady_clock::now()) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -913,10 +913,18 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
 
         void SetSpeed(Point speed) noexcept {
+            Point old_speed = speed_;
             speed_ = speed;
-            UpdateActivityTime();
+
+            // Обновляем время последнего движения
             if (speed.x != 0.0 || speed.y != 0.0) {
                 last_move_time_ = std::chrono::steady_clock::now();
+            }
+
+            // Если скорость стала нулевой (остановились) - обновляем время остановки
+            if ((old_speed.x != 0.0 || old_speed.y != 0.0) &&
+                (speed.x == 0.0 && speed.y == 0.0)) {
+                last_zero_speed_time_ = std::chrono::steady_clock::now();
             }
         }
 
@@ -924,24 +932,18 @@ namespace model {
 
         void SetPosition(Point p) noexcept {
             position_ = p;
-            UpdateActivityTime();
+            // Если двигаемся, обновляем время движения
+            if (speed_.x != 0.0 || speed_.y != 0.0) {
+                last_move_time_ = std::chrono::steady_clock::now();
+            }
         }
 
         std::chrono::steady_clock::time_point GetLastMoveTime() const noexcept {
             return last_move_time_;
         }
 
-        std::chrono::steady_clock::time_point GetLastActivityTime() const noexcept {
-            return last_activity_time_;
-        }
-
-        void UpdateLastMoveTime() noexcept {
-            last_move_time_ = std::chrono::steady_clock::now();
-            UpdateActivityTime();
-        }
-
-        void UpdateActivityTime() noexcept {
-            last_activity_time_ = std::chrono::steady_clock::now();
+        std::chrono::steady_clock::time_point GetLastZeroSpeedTime() const noexcept {
+            return last_zero_speed_time_;
         }
 
     private:
@@ -949,8 +951,8 @@ namespace model {
         Point position_;
         Point speed_;
         Direction direction_;
+        std::chrono::steady_clock::time_point last_zero_speed_time_;
         std::chrono::steady_clock::time_point last_move_time_;
-        std::chrono::steady_clock::time_point last_activity_time_;
     };
 
     struct LostObject {
@@ -970,8 +972,7 @@ namespace model {
         Player(std::shared_ptr<GameSession> session, Dog dog, uint32_t id, std::string token, size_t bag_capacity)
             : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)),
             session_(std::move(session)), bag_capacity_(bag_capacity),
-            join_time_(std::chrono::steady_clock::now()),
-            last_activity_time_(std::chrono::steady_clock::now()) {
+            join_time_(std::chrono::steady_clock::now()) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -986,13 +987,6 @@ namespace model {
 
         std::chrono::steady_clock::time_point GetJoinTime() const noexcept { return join_time_; }
         std::chrono::steady_clock::time_point GetRetirementTime() const noexcept { return retirement_time_; }
-        std::chrono::steady_clock::time_point GetLastActivityTime() const noexcept { return last_activity_time_; }
-
-        void UpdateActivityTime() noexcept {
-            last_activity_time_ = std::chrono::steady_clock::now();
-            dog_.UpdateActivityTime();
-        }
-
         void SetRetirementTime(std::chrono::steady_clock::time_point time) noexcept { retirement_time_ = time; }
         bool IsRetired() const noexcept { return is_retired_; }
 
@@ -1020,7 +1014,6 @@ namespace model {
         int score_ = 0;
         std::chrono::steady_clock::time_point join_time_;
         std::chrono::steady_clock::time_point retirement_time_;
-        std::chrono::steady_clock::time_point last_activity_time_;
         bool is_retired_ = false;
     };
 
@@ -1423,8 +1416,8 @@ namespace model {
 
             if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
                 auto player = it->second;
-                // Обновляем время активности при каждом запросе
-                player->UpdateActivityTime();
+                // НЕ обновляем время активности при запросе!
+                // Только проверяем retired статус
                 if (!player->IsRetired()) {
                     return player;
                 }
@@ -1445,14 +1438,6 @@ namespace model {
             auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
                 player->GetRetirementTime() - player->GetJoinTime());
             double play_time_seconds = play_time.count() / 1000.0;
-
-            // Форматируем время для вывода
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(3) << play_time_seconds;
-            std::string time_str = oss.str();
-            // Убираем лишние нули
-            time_str.erase(time_str.find_last_not_of('0') + 1, std::string::npos);
-            if (time_str.back() == '.') time_str.pop_back();
 
             retired_repo_->AddRetiredPlayer(
                 player->GetDog().GetName(),
