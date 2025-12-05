@@ -1,0 +1,4180 @@
+===== boost_json.cpp =====
+// Этот файл служит для подключения реализации библиотеки Boost.Json
+#include <boost/json/src.hpp>
+
+
+
+===== collision_detector.cpp =====
+#include "collision_detector.h"
+#include <cassert>
+#include <algorithm>
+#include <cmath>
+#include <vector>
+
+namespace collision_detector {
+
+CollectionResult TryCollectPoint(geom::Point2D a, geom::Point2D b, geom::Point2D c) {
+    // РџСЂРѕРІРµСЂРёРј, С‡С‚Рѕ РїРµСЂРµРјРµС‰РµРЅРёРµ РЅРµРЅСѓР»РµРІРѕРµ.
+    // РўСѓС‚ РїСЂРёС…РѕРґРёС‚СЃСЏ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ СЃС‚СЂРѕРіРѕРµ СЂР°РІРµРЅСЃС‚РІРѕ, Р° РЅРµ РїСЂРёР±Р»РёР¶С‘РЅРЅРѕРµ,
+    // РїСЃРєРѕР»СЊРєСѓ РїСЂРё СЃР±РѕСЂРµ Р·Р°РєР°Р·РѕРІ РїСЂРёРґС‘С‚СЃСЏ СѓС‡РёС‚С‹РІР°С‚СЊ РїРµСЂРµРјРµС‰РµРЅРёРµ РґР°Р¶Рµ РЅР° РЅРµР±РѕР»СЊС€РѕРµ
+    // СЂР°СЃСЃС‚РѕСЏРЅРёРµ.
+    assert(b.x != a.x || b.y != a.y);
+    const double u_x = c.x - a.x;
+    const double u_y = c.y - a.y;
+    const double v_x = b.x - a.x;
+    const double v_y = b.y - a.y;
+    const double u_dot_v = u_x * v_x + u_y * v_y;
+    const double u_len2 = u_x * u_x + u_y * u_y;
+    const double v_len2 = v_x * v_x + v_y * v_y;
+    const double proj_ratio = u_dot_v / v_len2;
+    const double sq_distance = u_len2 - (u_dot_v * u_dot_v) / v_len2;
+
+    return CollectionResult(sq_distance, proj_ratio);
+}
+
+std::vector<GatheringEvent> FindGatherEvents(const ItemGathererProvider& provider) {
+    std::vector<GatheringEvent> events;
+    
+    
+    for (size_t gatherer_idx = 0; gatherer_idx < provider.GatherersCount(); ++gatherer_idx) {
+        auto gatherer = provider.GetGatherer(gatherer_idx);
+        
+        
+        if (gatherer.start_pos.x == gatherer.end_pos.x && 
+            gatherer.start_pos.y == gatherer.end_pos.y) {
+            continue;
+        }
+        
+        
+        for (size_t item_idx = 0; item_idx < provider.ItemsCount(); ++item_idx) {
+            auto item = provider.GetItem(item_idx);
+            
+            
+            double collect_radius = gatherer.width + item.width;
+            
+            
+            auto collection_result = TryCollectPoint(gatherer.start_pos, 
+                                                    gatherer.end_pos, 
+                                                    item.position);
+            
+            if (collection_result.IsCollected(collect_radius)) {
+                events.push_back({
+                    item_idx,
+                    gatherer_idx,
+                    collection_result.sq_distance,
+                    collection_result.proj_ratio
+                });
+            }
+        }
+    }
+    
+    
+    std::sort(events.begin(), events.end(), 
+              [](const GatheringEvent& a, const GatheringEvent& b) {
+                  return a.time < b.time;
+              });
+    
+    return events;
+}
+
+}
+
+
+===== collision_detector.h =====
+#pragma once
+
+#include "geom.h"
+
+#include <algorithm>
+#include <vector>
+
+namespace collision_detector {
+
+    struct CollectionResult {
+        bool IsCollected(double collect_radius) const {
+            return proj_ratio >= 0 && proj_ratio <= 1 && sq_distance <= collect_radius * collect_radius;
+        }
+
+        // РєРІР°РґСЂР°С‚ СЂР°СЃСЃС‚РѕСЏРЅРёСЏ РґРѕ С‚РѕС‡РєРё
+        double sq_distance;
+
+        // РґРѕР»СЏ РїСЂРѕР№РґРµРЅРЅРѕРіРѕ РѕС‚СЂРµР·РєР°
+        double proj_ratio;
+    };
+
+    // Р”РІРёР¶РµРјСЃСЏ РёР· С‚РѕС‡РєРё a РІ С‚РѕС‡РєСѓ b Рё РїС‹С‚Р°РµРјСЃСЏ РїРѕРґРѕР±СЂР°С‚СЊ С‚РѕС‡РєСѓ c.
+    // Р­С‚Р° С„СѓРЅРєС†РёСЏ СЂРµР°Р»РёР·РѕРІР°РЅР° РІ СѓСЂРѕРєРµ.
+    CollectionResult TryCollectPoint(geom::Point2D a, geom::Point2D b, geom::Point2D c);
+
+    struct Item {
+        geom::Point2D position;
+        double width;
+    };
+
+    struct Gatherer {
+        geom::Point2D start_pos;
+        geom::Point2D end_pos;
+        double width;
+    };
+
+    class ItemGathererProvider {
+    protected:
+        ~ItemGathererProvider() = default;
+
+    public:
+        virtual size_t ItemsCount() const = 0;
+        virtual Item GetItem(size_t idx) const = 0;
+        virtual size_t GatherersCount() const = 0;
+        virtual Gatherer GetGatherer(size_t idx) const = 0;
+    };
+
+    struct GatheringEvent {
+        size_t item_id;
+        size_t gatherer_id;
+        double sq_distance;
+        double time;
+    };
+
+    // Р­С‚Сѓ С„СѓРЅРєС†РёСЋ РІР°Рј РЅСѓР¶РЅРѕ Р±СѓРґРµС‚ СЂРµР°Р»РёР·РѕРІР°С‚СЊ РІ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰РµРј Р·Р°РґР°РЅРёРё.
+    // РџСЂРё РїСЂРѕРІРµСЂРєРµ РІР°С€РёС… С‚РµСЃС‚РѕРІ РѕРЅР° РЅРµ РЅСѓР¶РЅР° - С„СѓРЅРєС†РёСЏ Р±СѓРґРµС‚ Р»РёРЅРєРѕРІР°С‚СЊСЃСЏ СЃРЅР°СЂСѓР¶Рё.
+    std::vector<GatheringEvent> FindGatherEvents(const ItemGathererProvider& provider);
+
+}  // namespace collision_detector
+
+
+===== geom.h =====
+// geom.h
+#pragma once
+
+namespace geom {
+
+    struct Point2D {
+        double x;
+        double y;
+    };
+
+}  // namespace geom
+
+
+===== http_server.cpp =====
+#include "http_server.h"
+#include <boost/json.hpp>
+
+namespace http_server {
+    namespace beast = boost::beast;
+    namespace http = beast::http;
+    namespace json = boost::json;
+
+    void Session::Run() {
+        net::dispatch(stream_.get_executor(),
+            beast::bind_front_handler(&Session::Read, shared_from_this()));
+    }
+
+    
+    void Session::Read() {
+        request_ = {};
+        stream_.expires_after(std::chrono::seconds(30));
+        http::async_read(stream_, buffer_, request_,
+            beast::bind_front_handler(&Session::OnRead, shared_from_this()));
+    }
+
+    void Session::OnRead(beast::error_code ec, std::size_t bytes_read) {
+        if (ec == http::error::end_of_stream) {
+            return Close();
+        }
+        if (ec) {
+            return ReportError(ec, "read");
+        }
+
+        request_handler_(std::move(request_), remote_address_,
+            [self = shared_from_this()](auto&& response) {
+                auto safe_response = std::make_shared<http::response<http::string_body>>(
+                    std::forward<decltype(response)>(response));
+                http::async_write(self->stream_, *safe_response,
+                    [self, safe_response](beast::error_code ec, std::size_t bytes_written) {
+                        self->OnWrite(safe_response->need_eof(), ec, bytes_written);
+                    });
+            });
+    }
+
+    void Session::OnWrite(bool close, beast::error_code ec, std::size_t bytes_written) {
+        if (ec) {
+            return ReportError(ec, "write");
+        }
+        if (close) {
+            return Close();
+        }
+        Read();
+    }
+
+    void Session::Close() {
+        beast::error_code ec;
+        stream_.socket().shutdown(tcp::socket::shutdown_send, ec);
+    }
+
+    void Session::ReportError(beast::error_code ec, std::string_view where) {
+        json::value data{
+            {"code", ec.value()},
+            {"text", ec.message()},
+            {"where", std::string(where)}
+        };
+        BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, data)
+            << "error";
+    }
+
+}  // namespace http_server
+
+
+===== http_server.h =====
+#pragma once
+#include "sdk.h"
+#include "logger.h"
+#include <iostream>
+#include <memory>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/strand.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+
+namespace http_server {
+
+    namespace net = boost::asio;
+    namespace beast = boost::beast;
+    namespace http = beast::http;
+    using tcp = net::ip::tcp;
+
+    using RequestHandler = std::function<void(
+        http::request<http::string_body>&& req,
+        std::string remote_address,
+        std::function<void(http::response<http::string_body>&&)>&& send)>;
+
+    class Session : public std::enable_shared_from_this<Session> {
+    public:
+        template <typename Handler>
+        Session(tcp::socket&& socket, Handler&& handler)
+            : stream_(std::move(socket))
+            , request_handler_(std::forward<Handler>(handler))
+            , remote_address_(stream_.socket().remote_endpoint().address().to_string()) {
+        }
+
+        void Run();
+
+    private:
+        void Read();
+        void OnRead(beast::error_code ec, std::size_t bytes_read);
+        void OnWrite(bool close, beast::error_code ec, std::size_t bytes_written);
+        void Close();
+        void ReportError(beast::error_code ec, std::string_view where);
+
+        beast::tcp_stream stream_;
+        beast::flat_buffer buffer_;
+        http::request<http::string_body> request_;
+        RequestHandler request_handler_;
+        std::string remote_address_;
+    };
+
+    template <typename RequestHandler>
+    class Listener : public std::enable_shared_from_this<Listener<RequestHandler>> {
+    public:
+        template <typename Handler>
+        Listener(net::io_context& ioc, const tcp::endpoint& endpoint, Handler&& handler)
+            : ioc_(ioc)
+            , acceptor_(net::make_strand(ioc))
+            , request_handler_(std::forward<Handler>(handler)) {
+            acceptor_.open(endpoint.protocol());
+            acceptor_.set_option(net::socket_base::reuse_address(true));
+            acceptor_.bind(endpoint);
+            acceptor_.listen(net::socket_base::max_listen_connections);
+        }
+
+        void Run() {
+            DoAccept();
+        }
+
+    private:
+        void DoAccept() {
+            acceptor_.async_accept(
+                net::make_strand(ioc_),
+                beast::bind_front_handler(&Listener::OnAccept, this->shared_from_this()));
+        }
+
+        void OnAccept(beast::error_code ec, tcp::socket socket) {
+            if (ec) {
+                boost::json::value data{
+                    {"code", ec.value()},
+                    {"text", ec.message()},
+                    {"where", "accept"}
+                };
+                BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, data)
+                    << "error";
+                return;
+            }
+
+            std::make_shared<Session>(std::move(socket), request_handler_)->Run();
+            DoAccept();
+        }
+
+        net::io_context& ioc_;
+        tcp::acceptor acceptor_;
+        RequestHandler request_handler_;
+    };
+
+    template <typename RequestHandler>
+    void ServeHttp(net::io_context& ioc, const tcp::endpoint& endpoint, RequestHandler&& handler) {
+        std::make_shared<Listener<std::decay_t<RequestHandler>>>(
+            ioc, endpoint, std::forward<RequestHandler>(handler))->Run();
+    }
+
+}  // namespace http_server
+
+
+===== json_loader.cpp =====
+#include "json_loader.h"
+#include <fstream>
+#include <sstream>
+#include <boost/json.hpp>
+#include <string>
+
+using namespace std::literals;
+
+namespace json_loader {
+    namespace json = boost::json;
+
+    namespace {
+
+        model::Road ParseRoad(const json::object& road_obj) {
+            if (road_obj.contains("x1")) {
+                model::Point start{
+                    static_cast<model::Coord>(road_obj.at("x0").as_int64()),
+                    static_cast<model::Coord>(road_obj.at("y0").as_int64())
+                };
+                return model::Road(model::Road::HORIZONTAL, start,
+                    static_cast<model::Coord>(road_obj.at("x1").as_int64()));
+            }
+            model::Point start{
+                static_cast<model::Coord>(road_obj.at("x0").as_int64()),
+                static_cast<model::Coord>(road_obj.at("y0").as_int64())
+            };
+            return model::Road(model::Road::VERTICAL, start,
+                static_cast<model::Coord>(road_obj.at("y1").as_int64()));
+        }
+
+        model::Building ParseBuilding(const json::object& building_obj) {
+            model::Rectangle rect{
+                {
+                    static_cast<model::Coord>(building_obj.at("x").as_int64()),
+                    static_cast<model::Coord>(building_obj.at("y").as_int64())
+                },
+                {
+                    static_cast<model::Dimension>(building_obj.at("w").as_int64()),
+                    static_cast<model::Dimension>(building_obj.at("h").as_int64())
+                }
+            };
+            return model::Building(rect);
+        }
+
+        model::Office ParseOffice(const json::object& office_obj) {
+            model::Office::Id id{ std::string(office_obj.at("id").as_string().c_str()) };
+            model::Point pos{
+                static_cast<model::Coord>(office_obj.at("x").as_int64()),
+                static_cast<model::Coord>(office_obj.at("y").as_int64())
+            };
+            model::Offset offset{
+                static_cast<model::Dimension>(office_obj.at("offsetX").as_int64()),
+                static_cast<model::Dimension>(office_obj.at("offsetY").as_int64())
+            };
+            return model::Office(std::move(id), pos, offset);
+        }
+
+        void ParseLootGeneratorConfig(const json::object& config_obj, model::Game& game) {
+            if (!config_obj.contains("lootGeneratorConfig")) {
+                return;
+            }
+
+            auto& loot_config = config_obj.at("lootGeneratorConfig").as_object();
+            double period_seconds = loot_config.at("period").as_double();
+            double probability = loot_config.at("probability").as_double();
+
+            auto period_ms = std::chrono::milliseconds(static_cast<int>(period_seconds * 1000));
+            game.SetLootGeneratorConfig(period_ms, probability);
+        }
+
+        void ParseDogRetirementTime(const json::object& config_obj, model::Game& game) {
+            if (!config_obj.contains("dogRetirementTime")) {
+                return;
+            }
+
+            double retirement_seconds = config_obj.at("dogRetirementTime").as_double();
+            auto retirement_ms = std::chrono::milliseconds(static_cast<int>(retirement_seconds * 1000));
+            game.SetRetirementTime(retirement_ms);
+        }
+
+        void ParseMapLootTypes(const json::object& map_obj, model::Game& game, const model::Map::Id& map_id) {
+            if (!map_obj.contains("lootTypes")) {
+                return;
+            }
+
+            auto& loot_types = map_obj.at("lootTypes").as_array();
+            game.SetMapLootTypesCount(map_id, loot_types.size());
+            
+            // Извлекаем значения предметов
+            std::vector<int> loot_values;
+            for (const auto& loot_type : loot_types) {
+                auto& loot_obj = loot_type.as_object();
+                if (loot_obj.contains("value")) {
+                    loot_values.push_back(static_cast<int>(loot_obj.at("value").as_int64()));
+                } else {
+                    loot_values.push_back(0);  // Значение по умолчанию
+                }
+            }
+            
+            game.SetMapLootValues(map_id, loot_values);
+        }
+
+        void ParseMapBagCapacity(const json::object& map_obj, model::Game& game, const model::Map::Id& map_id) {
+            if (!map_obj.contains("bagCapacity")) {
+                return;
+            }
+
+            size_t bag_capacity = static_cast<size_t>(map_obj.at("bagCapacity").as_int64());
+            game.SetMapBagCapacity(map_id, bag_capacity);
+        }
+
+        model::Map ParseMap(const json::object& map_obj, model::Game& game) {
+            model::Map::Id id{ std::string(map_obj.at("id").as_string().c_str()) };
+            std::string name = std::string(map_obj.at("name").as_string().c_str());
+            model::Map map(std::move(id), std::move(name));
+
+            if (map_obj.contains("dogSpeed")) {
+                map.SetDogSpeed(map_obj.at("dogSpeed").as_double());
+            }
+
+            for (const auto& road_val : map_obj.at("roads").as_array()) {
+                map.AddRoad(ParseRoad(road_val.as_object()));
+            }
+
+            for (const auto& building_val : map_obj.at("buildings").as_array()) {
+                map.AddBuilding(ParseBuilding(building_val.as_object()));
+            }
+
+            for (const auto& office_val : map_obj.at("offices").as_array()) {
+                map.AddOffice(ParseOffice(office_val.as_object()));
+            }
+
+            ParseMapLootTypes(map_obj, game, map.GetId());
+            ParseMapBagCapacity(map_obj, game, map.GetId());
+
+            return map;
+        }
+
+    } // namespace
+
+    void LoadGame(const std::filesystem::path& json_path, model::Game& game) {
+        std::ifstream file(json_path);
+        if (!file) {
+            throw std::runtime_error("Failed to open json file");
+        }
+
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        std::string json_str = buffer.str();
+
+        try {
+            auto value = json::parse(json_str);
+            auto& root = value.as_object();
+            
+            ParseLootGeneratorConfig(root, game);
+            ParseDogRetirementTime(root, game);
+            
+            if (root.contains("defaultDogSpeed")) {
+                game.SetDefaultDogSpeed(root.at("defaultDogSpeed").as_double());
+            }
+
+            if (root.contains("defaultBagCapacity")) {
+                game.SetDefaultBagCapacity(static_cast<size_t>(root.at("defaultBagCapacity").as_int64()));
+            }
+
+            auto& maps = root.at("maps").as_array();
+            for (const auto& map_val : maps) {
+                game.AddMap(ParseMap(map_val.as_object(), game));
+            }
+        }
+        catch (const std::exception& e) {
+            throw std::runtime_error("JSON parsing error: "s + e.what());
+        }
+    }
+}  // namespace json_loader
+
+
+===== json_loader.h =====
+#pragma once
+
+#include <filesystem>
+#include <string>
+#include <boost/json.hpp>
+#include <chrono>
+
+#include "model.h"
+
+namespace json_loader {
+
+	void LoadGame(const std::filesystem::path& json_path, model::Game& game);
+
+}
+
+
+===== logger.h =====
+#pragma once
+
+#define BOOST_LOG_NO_WCHAR_T
+#define BOOST_LOG_WITHOUT_WCHAR_T
+
+#include <boost/log/trivial.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/utility/setup/common_attributes.hpp>
+#include <boost/log/support/date_time.hpp>
+#include <boost/json.hpp>
+#include <boost/log/attributes/value_extraction.hpp>
+#include <boost/log/utility/manipulators/add_value.hpp>
+#include <boost/log/sources/record_ostream.hpp>
+#include <boost/log/utility/setup/console.hpp>
+#include <boost/log/sinks/sync_frontend.hpp>
+#include <boost/log/sinks/text_ostream_backend.hpp>
+#include <boost/core/null_deleter.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/make_shared.hpp>
+
+namespace logger {
+    namespace logging = boost::log;
+    namespace sinks = boost::log::sinks;
+    namespace json = boost::json;
+    namespace keywords = boost::log::keywords;
+
+    BOOST_LOG_ATTRIBUTE_KEYWORD(additional_data, "AdditionalData", json::value)
+
+        class JsonFormatter {
+        public:
+            void operator()(logging::record_view const& rec, logging::formatting_ostream& strm) const {
+                json::object obj;
+
+
+                auto ts = logging::extract<boost::posix_time::ptime>("TimeStamp", rec);
+                if (ts) {
+                    obj["timestamp"] = boost::posix_time::to_iso_extended_string(ts.get());
+                }
+
+
+                auto msg = logging::extract<std::string>("Message", rec);
+                if (msg) {
+                    obj["message"] = msg.get();
+                }
+
+
+                if (auto data = rec[additional_data]; data) {
+                    obj["data"] = data.get();
+                }
+
+                strm << json::serialize(obj);
+            }
+    };
+
+    inline void InitLogging() {
+        logging::add_common_attributes();
+
+        auto core = logging::core::get();
+        core->remove_all_sinks();
+
+
+        auto sink = boost::make_shared<sinks::synchronous_sink<sinks::text_ostream_backend>>();
+
+        boost::shared_ptr<std::ostream> stream(&std::clog, boost::null_deleter());
+        sink->locked_backend()->add_stream(stream);
+
+        sink->set_formatter(JsonFormatter());
+        sink->locked_backend()->auto_flush(true);
+
+        core->add_sink(sink);
+    }
+} // namespace logger
+
+
+===== loot_generator.cpp =====
+#include "loot_generator.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace loot_gen {
+
+unsigned LootGenerator::Generate(TimeInterval time_delta, unsigned loot_count,
+                                 unsigned looter_count) {
+    time_without_loot_ += time_delta;
+    const unsigned loot_shortage = loot_count > looter_count ? 0u : looter_count - loot_count;
+    const double ratio = std::chrono::duration<double>{time_without_loot_} / base_interval_;
+    const double probability
+        = std::clamp((1.0 - std::pow(1.0 - probability_, ratio)) * random_generator_(), 0.0, 1.0);
+    const unsigned generated_loot = static_cast<unsigned>(std::round(loot_shortage * probability));
+    if (generated_loot > 0) {
+        time_without_loot_ = {};
+    }
+    return generated_loot;
+}
+
+} // namespace loot_gen
+
+
+===== loot_generator.h =====
+#pragma once
+#include <chrono>
+#include <functional>
+
+namespace loot_gen {
+
+    /*
+     *  Р“РµРЅРµСЂР°С‚РѕСЂ С‚СЂРѕС„РµРµРІ
+     */
+    class LootGenerator {
+    public:
+        using RandomGenerator = std::function<double()>;
+        using TimeInterval = std::chrono::milliseconds;
+
+        /*
+         * base_interval - Р±Р°Р·РѕРІС‹Р№ РѕС‚СЂРµР·РѕРє РІСЂРµРјРµРЅРё > 0
+         * probability - РІРµСЂРѕСЏС‚РЅРѕСЃС‚СЊ РїРѕСЏРІР»РµРЅРёСЏ С‚СЂРѕС„РµСЏ РІ С‚РµС‡РµРЅРёРµ Р±Р°Р·РѕРІРѕРіРѕ РёРЅС‚РµСЂРІР°Р»Р° РІСЂРµРјРµРЅРё
+         * random_generator - РіРµРЅРµСЂР°С‚РѕСЂ РїСЃРµРІРґРѕСЃР»СѓС‡Р°Р№РЅС‹С… С‡РёСЃРµР» РІ РґРёР°РїР°Р·РѕРЅРµ РѕС‚ [0 РґРѕ 1]
+         */
+        LootGenerator(TimeInterval base_interval, double probability,
+            RandomGenerator random_gen = DefaultGenerator)
+            : base_interval_{ base_interval }
+            , probability_{ probability }
+            , random_generator_{ std::move(random_gen) } {
+        }
+
+        /*
+         * Р’РѕР·РІСЂР°С‰Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ С‚СЂРѕС„РµРµРІ, РєРѕС‚РѕСЂС‹Рµ РґРѕР»Р¶РЅС‹ РїРѕСЏРІРёС‚СЊСЃСЏ РЅР° РєР°СЂС‚Рµ СЃРїСѓСЃС‚СЏ
+         * Р·Р°РґР°РЅРЅС‹Р№ РїСЂРѕРјРµР¶СѓС‚РѕРє РІСЂРµРјРµРЅРё.
+         * РљРѕР»РёС‡РµСЃС‚РІРѕ С‚СЂРѕС„РµРµРІ, РїРѕСЏРІР»СЏСЋС‰РёС…СЃСЏ РЅР° РєР°СЂС‚Рµ РЅРµ РїСЂРµРІС‹С€Р°РµС‚ РєРѕР»РёС‡РµСЃС‚РІРѕ РјР°СЂРѕРґС‘СЂРѕРІ.
+         *
+         * time_delta - РѕС‚СЂРµР·РѕРє РІСЂРµРјРµРЅРё, РїСЂРѕС€РµРґС€РёР№ СЃ РјРѕРјРµРЅС‚Р° РїСЂРµРґС‹РґСѓС‰РµРіРѕ РІС‹Р·РѕРІР° Generate
+         * loot_count - РєРѕР»РёС‡РµСЃС‚РІРѕ С‚СЂРѕС„РµРµРІ РЅР° РєР°СЂС‚Рµ РґРѕ РІС‹Р·РѕРІР° Generate
+         * looter_count - РєРѕР»РёС‡РµСЃС‚РІРѕ РјР°СЂРѕРґС‘СЂРѕРІ РЅР° РєР°СЂС‚Рµ
+         */
+        unsigned Generate(TimeInterval time_delta, unsigned loot_count, unsigned looter_count);
+
+    private:
+        static double DefaultGenerator() noexcept {
+            return 1.0;
+        };
+        TimeInterval base_interval_;
+        double probability_;
+        TimeInterval time_without_loot_{};
+        RandomGenerator random_generator_;
+    };
+
+}  // namespace loot_gen
+
+
+===== main.cpp =====
+#include "sdk.h"
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/signal_set.hpp>
+#include <iostream>
+#include <thread>
+#include <boost/log/trivial.hpp>
+#include "json_loader.h"
+#include "request_handler.h"
+#include "logger.h"
+#include <boost/program_options.hpp>
+#include <filesystem>
+#include <boost/system/error_code.hpp>
+#include "state_manager.h"
+#include <pqxx/pqxx>
+#include <chrono>
+
+using namespace std::literals;
+namespace net = boost::asio;
+namespace json = boost::json;
+namespace po = boost::program_options;
+namespace fs = std::filesystem;
+
+namespace {
+
+    template <typename Fn>
+    void RunWorkers(unsigned n, const Fn& fn) {
+        n = std::max(1u, n);
+        std::vector<std::jthread> workers;
+        workers.reserve(n - 1);
+        while (--n) {
+            workers.emplace_back(fn);
+        }
+        fn();
+    }
+
+    class Ticker : public std::enable_shared_from_this<Ticker> {
+    public:
+        using Strand = net::strand<net::io_context::executor_type>;
+        using Handler = std::function<void(std::chrono::milliseconds delta)>;
+
+        Ticker(Strand strand, std::chrono::milliseconds period, Handler handler)
+            : strand_(strand)
+            , period_(period)
+            , handler_(std::move(handler)) {
+        }
+
+        void Start() {
+            net::dispatch(strand_, [self = shared_from_this()] {
+                self->last_tick_ = Clock::now();
+                self->ScheduleTick();
+            });
+        }
+
+    private:
+        void ScheduleTick() {
+            assert(strand_.running_in_this_thread());
+            timer_.expires_after(period_);
+            timer_.async_wait(net::bind_executor(
+                strand_, 
+                [self = shared_from_this()](boost::system::error_code ec) {  
+                    self->OnTick(ec);
+                }
+            ));
+        }
+
+        void OnTick(boost::system::error_code ec) {  
+            using namespace std::chrono;
+            assert(strand_.running_in_this_thread());
+
+            if (!ec) {
+                auto this_tick = Clock::now();
+                auto delta = duration_cast<milliseconds>(this_tick - last_tick_);
+                last_tick_ = this_tick;
+                try {
+                    handler_(delta);
+                } catch (...) {
+                }
+                ScheduleTick();
+            }
+        }
+
+        using Clock = std::chrono::steady_clock;
+
+        Strand strand_;
+        std::chrono::milliseconds period_;
+        net::steady_timer timer_{strand_};
+        Handler handler_;
+        std::chrono::steady_clock::time_point last_tick_;
+    };
+
+    // Функция для получения URL базы данных
+     std::string GetDatabaseUrl() {
+        // 1. Проверяем переменную окружения GAME_DB_URL (основная для тестов)
+        const char* env_url = std::getenv("GAME_DB_URL");
+        if (env_url && strlen(env_url) > 0) {
+            std::string url(env_url);
+            
+            // Тесты могут использовать postgres:// вместо postgresql://
+            if (url.find("postgres://") == 0) {
+                url = "postgresql://" + url.substr(11);
+                std::cout << "INFO: Fixed URL format: " << url << std::endl;
+            }
+            
+            std::cout << "INFO: Using database URL from GAME_DB_URL: " << url << std::endl;
+            return url;
+        }
+        
+        // 2. Проверяем другие переменные тестов
+        const char* postgres_host = std::getenv("POSTGRES_HOST");
+        const char* postgres_user = std::getenv("POSTGRES_USER");
+        const char* postgres_password = std::getenv("POSTGRES_PASSWORD");
+        const char* postgres_port = std::getenv("POSTGRES_PORT");
+        const char* postgres_db = std::getenv("POSTGRES_DB");
+        
+        if (postgres_host && postgres_user && postgres_password && postgres_port) {
+            std::string db_name = postgres_db ? postgres_db : "game_db";
+            std::string url = "postgresql://" + std::string(postgres_user) + ":" +
+                             std::string(postgres_password) + "@" +
+                             std::string(postgres_host) + ":" +
+                             std::string(postgres_port) + "/" + db_name;
+            
+            std::cout << "INFO: Constructed database URL from test environment: " << url << std::endl;
+            return url;
+        }
+        
+        // 3. Для локальной разработки - используем in-memory
+        std::cout << "INFO: No PostgreSQL URL found. Using in-memory storage for retired players." << std::endl;
+        return "";
+    }
+    
+    // Функция для проверки подключения к PostgreSQL с повторными попытками
+    bool WaitForPostgreSQL(const std::string& db_url, int max_attempts = 30) {
+        if (db_url.empty()) {
+            std::cout << "INFO: No database URL provided, skipping PostgreSQL connection." << std::endl;
+            return false;
+        }
+        
+        std::cout << "INFO: Waiting for PostgreSQL to be ready..." << std::endl;
+        
+        for (int attempt = 1; attempt <= max_attempts; ++attempt) {
+            try {
+                std::cout << "Attempt " << attempt << "/" << max_attempts << " to connect to PostgreSQL..." << std::endl;
+                pqxx::connection conn(db_url);
+                
+                if (conn.is_open()) {
+                    std::cout << "SUCCESS: Connected to PostgreSQL" << std::endl;
+                    return true;
+                }
+            } catch (const std::exception& e) {
+                std::cout << "WARNING: PostgreSQL not ready yet: " << e.what() << std::endl;
+                
+                // Ждем перед следующей попыткой
+                if (attempt < max_attempts) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
+            }
+        }
+        
+        std::cout << "ERROR: Failed to connect to PostgreSQL after " << max_attempts << " attempts" << std::endl;
+        return false;
+    }
+
+}  // namespace
+
+int main(int argc, const char* argv[]) {
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help,h", "produce help message")
+        ("tick-period,t", po::value<int>(), "set tick period in milliseconds")
+        ("config-file,c", po::value<std::string>()->required(), "set config file path")
+        ("www-root,w", po::value<std::string>()->required(), "set static files root")
+        ("randomize-spawn-points", "spawn dogs at random positions")
+        ("state-file", po::value<std::string>(), "set state file path")
+        ("save-state-period", po::value<int>(), "set save state period in milliseconds");
+
+    po::variables_map vm;
+    try {
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        
+        if (vm.count("help")) {
+            std::cout << desc << "\n";
+            return 0;
+        }
+        
+        po::notify(vm);
+    } catch (const po::error& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        std::cout << desc << "\n";
+        return EXIT_FAILURE;
+    }
+
+    try {
+        if (!vm.count("config-file") || !vm.count("www-root")) {
+            std::cerr << "Error: config-file and www-root are required" << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        const fs::path config_path(vm["config-file"].as<std::string>());
+        const fs::path static_path(vm["www-root"].as<std::string>());
+        
+        if (!fs::exists(config_path)) {
+            std::cerr << "Error: config file not found: " << config_path << std::endl;
+            return EXIT_FAILURE;
+        }
+        
+        if (!fs::exists(static_path)) {
+            std::cerr << "Error: static path not found: " << static_path << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        const bool randomize_spawn = vm.count("randomize-spawn-points") > 0;
+        const int tick_period = vm.count("tick-period") ? vm["tick-period"].as<int>() : 0;
+        const bool is_tick_automatic = tick_period > 0;
+        
+        fs::path state_file;
+        std::chrono::milliseconds save_state_period(0);
+        
+        if (vm.count("state-file")) {
+            state_file = vm["state-file"].as<std::string>();
+        }
+        
+        if (vm.count("save-state-period")) {
+            save_state_period = std::chrono::milliseconds(vm["save-state-period"].as<int>());
+        }
+
+        logger::InitLogging();
+        
+        // Получаем URL базы данных
+        std::string db_url = GetDatabaseUrl();
+        std::cout << "INFO: Final database URL: " << db_url << std::endl;
+        
+        // Ждем пока PostgreSQL будет готов (особенно важно для тестов)
+        bool db_connected = WaitForPostgreSQL(db_url);
+        
+        if (!db_connected) {
+            std::cout << "WARNING: Could not connect to PostgreSQL" << std::endl;
+            std::cout << "WARNING: Retired players will be stored in memory only" << std::endl;
+            std::cout << "WARNING: Records will not persist between server restarts" << std::endl;
+        }
+
+        // Создаем игру
+        model::Game game;
+        if (db_connected) {
+            game.SetDatabaseUrl(db_url);
+            std::cout << "INFO: PostgreSQL storage enabled for retired players" << std::endl;
+        } else {
+            std::cout << "INFO: Using in-memory storage for retired players" << std::endl;
+        }
+        
+        try {
+            json_loader::LoadGame(config_path, game);
+        } catch (const std::exception& e) {
+            std::cerr << "Error loading game config: " << e.what() << std::endl;
+            return EXIT_FAILURE;
+        }
+        
+        game.SetRandomizeSpawnPoints(randomize_spawn);
+
+        StateManager state_manager(game, state_file, save_state_period);
+        
+        // Загружаем состояние, если указан файл состояния
+        if (!state_file.empty()) {
+            try {
+                if (!state_manager.LoadState()) {
+                    std::cout << "INFO: Starting with clean state" << std::endl;
+                } else {
+                    std::cout << "INFO: Game state loaded successfully" << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
+            }
+        }
+
+        const unsigned num_threads = std::thread::hardware_concurrency();
+        net::io_context ioc(num_threads);
+        auto api_strand = net::make_strand(ioc);
+
+        auto tick_handler = [&game, &state_manager](std::chrono::milliseconds delta) {
+            game.Tick(static_cast<double>(delta.count()) / 1000.0);
+            state_manager.OnTick(delta);
+        };
+
+        if (is_tick_automatic) {
+            auto ticker = std::make_shared<Ticker>(
+                api_strand, 
+                std::chrono::milliseconds(tick_period),
+                tick_handler
+            );
+            ticker->Start();
+        }
+
+        net::signal_set signals(ioc, SIGINT, SIGTERM);
+        signals.async_wait([&ioc, &state_manager](const boost::system::error_code& ec, int) {
+            if (!ec) {
+                state_manager.OnShutdown();
+                ioc.stop();
+            }
+        });
+
+        http_handler::RequestHandler base_handler{ 
+            game, static_path, is_tick_automatic, config_path, state_manager 
+        };
+        http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
+
+        const auto address = net::ip::make_address("0.0.0.0");
+        constexpr net::ip::port_type port = 8080;
+        
+        std::cout << "========================================" << std::endl;
+        std::cout << "Server starting on " << address << ":" << port << std::endl;
+        std::cout << "Static files path: " << static_path << std::endl;
+        std::cout << "Config file: " << config_path << std::endl;
+        std::cout << "Database: " << (db_connected ? "PostgreSQL" : "In-memory") << std::endl;
+        if (db_connected) {
+            std::cout << "Database URL: " << db_url << std::endl;
+        }
+        std::cout << "========================================" << std::endl;
+        
+        http_server::ServeHttp(ioc, { address, port }, [&handler](auto&& req, auto&& addr, auto&& send) {
+            handler(std::forward<decltype(req)>(req),
+                std::forward<decltype(addr)>(addr),
+                std::forward<decltype(send)>(send));
+        });
+
+        json::value start_data{
+            {"port", port},
+            {"address", address.to_string()},
+            {"static_path", static_path.string()},
+            {"config_path", config_path.string()},
+            {"randomize_spawn_points", randomize_spawn},
+            {"tick_period_ms", tick_period},
+            {"state_file", state_file.string()},
+            {"save_state_period_ms", save_state_period.count()},
+            {"database_url", db_url},
+            {"database_connected", db_connected}
+        };
+        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, start_data)
+            << "server started";
+
+        RunWorkers(std::max(1u, num_threads), [&ioc] { ioc.run(); });
+
+        json::value exit_data{ {"code", 0} };
+        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, exit_data)
+            << "server exited";
+        return EXIT_SUCCESS;
+    }
+    catch (const std::exception& ex) {
+        json::value exit_data{
+            {"code", EXIT_FAILURE},
+            {"exception", ex.what()}
+        };
+        BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, exit_data)
+            << "server exited";
+        return EXIT_FAILURE;
+    }
+}
+
+
+===== model.cpp =====
+#include "model.h"
+#include <stdexcept>
+#include <random>
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <limits>
+#include <variant>
+
+namespace model {
+using namespace std::literals;
+
+void Map::AddOffice(Office office) {
+    if (warehouse_id_to_index_.contains(office.GetId())) {
+        throw std::invalid_argument("Duplicate warehouse");
+    }
+
+    const size_t index = offices_.size();
+    Office& o = offices_.emplace_back(std::move(office));
+    try {
+        warehouse_id_to_index_.emplace(o.GetId(), index);
+    } catch (...) {
+        offices_.pop_back();
+        throw;
+    }
+}
+
+void Game::AddMap(Map map) {
+    const size_t index = maps_.size();
+    if (auto [it, inserted] = map_id_to_index_.emplace(map.GetId(), index); !inserted) {
+        throw std::invalid_argument("Map with id "s + *map.GetId() + " already exists"s);
+    } else {
+        try {
+            maps_.emplace_back(std::move(map));
+        } catch (...) {
+            map_id_to_index_.erase(it);
+            throw;
+        }
+    }
+}
+
+std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_name) {
+    const Map* map_ptr = nullptr;
+    size_t loot_types_count = 0;
+    size_t bag_capacity = 0;
+    std::vector<int> loot_values;
+    
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        
+        map_ptr = FindMap(map_id);
+        if (!map_ptr) {
+            return nullptr;
+        }
+        
+        loot_types_count = GetMapLootTypesCount(map_id);
+        bag_capacity = GetMapBagCapacity(map_id);
+        loot_values = GetMapLootValues(map_id);
+    }
+    
+    std::shared_ptr<GameSession> session;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        
+        if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+            session = it->second;
+        } else {
+            double dog_speed = map_ptr->GetDogSpeed().value_or(default_dog_speed_);
+            session = std::make_shared<GameSession>(*map_ptr, next_session_id_++, dog_speed,
+                randomize_spawn_points_, loot_generator_, bag_capacity, retirement_time_);
+            session->SetLootTypesCount(loot_types_count);
+            session->SetLootValues(loot_values);
+            
+            // Настраиваем callback для уведомления об ушедших игроках
+            session->SetRetiredPlayersCallback(
+                [this](const auto& retired_players) {
+                    HandlePlayerRetirement(retired_players);
+                }
+            );
+            
+            map_id_to_session_[map_id] = session;
+        }
+    }
+    
+    auto player = session->AddPlayer(std::move(dog_name));
+    if (!player) {
+        return nullptr;
+    }
+    
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        token_to_player_[player->GetToken()] = player;
+    }
+    
+    return player;
+}
+
+Point GameSession::GenerateRandomPosition() const {
+    const auto& roads = map_.GetRoads();
+    if (roads.empty()) return {0.0, 0.0};
+    
+    if (!randomize_spawn_points_) {
+        const auto& road = roads[0];
+        return {
+            static_cast<double>(road.GetStart().x),
+            static_cast<double>(road.GetStart().y)
+        };
+    }
+
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> road_dist(0, roads.size() - 1);
+    const auto& road = roads[road_dist(gen)];
+
+    if (road.IsHorizontal()) {
+        std::uniform_real_distribution<double> x_dist(
+            std::min(road.GetStart().x, road.GetEnd().x),
+            std::max(road.GetStart().x, road.GetEnd().x)
+        );
+        return {x_dist(gen), static_cast<double>(road.GetStart().y)};
+    } else {
+        std::uniform_real_distribution<double> y_dist(
+            std::min(road.GetStart().y, road.GetEnd().y),
+            std::max(road.GetStart().y, road.GetEnd().y)
+        );
+        return {static_cast<double>(road.GetStart().x), y_dist(gen)};
+    }
+}
+
+std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
+    try {
+        Point start_pos = GenerateRandomPosition();
+        Dog dog(std::move(dog_name), start_pos, Direction::North);
+
+        static std::atomic<uint32_t> next_player_id_{0};
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static std::uniform_int_distribution<> dis(0, 15);
+        
+        const char* hex_digits = "0123456789abcdef";
+        std::string token;
+        token.reserve(32);
+        for (int i = 0; i < 32; ++i) {
+            token += hex_digits[dis(gen)];
+        }
+
+        auto player = std::make_shared<Player>(
+            shared_from_this(), 
+            std::move(dog),
+            next_player_id_++, 
+            std::move(token),
+            bag_capacity_
+        );
+
+        // Устанавливаем временные метки
+        player->SetJoinTime(current_game_time_);
+        player->SetLastMoveTime(current_game_time_);
+
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        players_.push_back(player);
+        return player;
+    } catch (const std::exception& e) {
+        return nullptr;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+void GameSession::SetPlayerAction(const Player::Token& token, const std::string& move) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    for (auto& player : players_) {
+        if (player->GetToken() != token) continue;
+        
+        auto& dog = player->GetDog();
+        if (move == "L") {
+            dog.SetSpeed({-dog_speed_, 0.0});
+            dog.SetDirection(Direction::West);
+        } else if (move == "R") {
+            dog.SetSpeed({dog_speed_, 0.0});
+            dog.SetDirection(Direction::East);
+        } else if (move == "U") {
+            dog.SetSpeed({0.0, -dog_speed_});
+            dog.SetDirection(Direction::North);
+        } else if (move == "D") {
+            dog.SetSpeed({0.0, dog_speed_});
+            dog.SetDirection(Direction::South);
+        } else if (move == "") {
+            dog.SetSpeed({0.0, 0.0});
+        }
+        // Обновляем время последнего движения при любой команде
+        player->SetLastMoveTime(current_game_time_);
+        break;
+    }
+}
+
+void GameSession::GenerateLoot(std::chrono::milliseconds delta_time) {
+    if (loot_types_count_ == 0) return;
+
+    unsigned looters_count = 0;
+    for (const auto& player : players_) {
+        if (!player->IsRetired()) {
+            looters_count++;
+        }
+    }
+    
+    unsigned current_loot_count = lost_objects_.size();
+    
+    unsigned new_loot_count = loot_generator_->Generate(delta_time, current_loot_count, looters_count);
+    
+    if (new_loot_count > 0) {
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        std::uniform_int_distribution<size_t> type_dist(0, loot_types_count_ - 1);
+        
+        const auto& roads = map_.GetRoads();
+        if (roads.empty()) return;
+        
+        std::uniform_int_distribution<size_t> road_dist(0, roads.size() - 1);
+        
+        for (unsigned i = 0; i < new_loot_count; ++i) {
+            const auto& road = roads[road_dist(gen)];
+            
+            double x, y;
+            if (road.IsHorizontal()) {
+                std::uniform_real_distribution<double> x_dist(
+                    std::min(road.GetStart().x, road.GetEnd().x),
+                    std::max(road.GetStart().x, road.GetEnd().x)
+                );
+                x = x_dist(gen);
+                y = road.GetStart().y;
+            } else {
+                x = road.GetStart().x;
+                std::uniform_real_distribution<double> y_dist(
+                    std::min(road.GetStart().y, road.GetEnd().y),
+                    std::max(road.GetStart().y, road.GetEnd().y)
+                );
+                y = y_dist(gen);
+            }
+            
+            size_t type = type_dist(gen);
+            int value = 0;
+            if (type < loot_values_.size()) {
+                value = loot_values_[type];
+            }
+            
+            lost_objects_.push_back({
+                next_lost_object_id_++,
+                type,
+                {x, y},
+                value
+            });
+        }
+    }
+}
+
+std::vector<std::shared_ptr<Player>> GameSession::GetActivePlayers() const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::shared_ptr<Player>> active_players;
+    for (const auto& player : players_) {
+        if (!player->IsRetired()) {
+            active_players.push_back(player);
+        }
+    }
+    return active_players;
+}
+
+void GameSession::CheckRetiredPlayers(double delta_time_seconds) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    // Обновляем игровое время
+    current_game_time_ += delta_time_seconds;
+    
+    std::vector<std::shared_ptr<Player>> active_players;
+    std::vector<std::shared_ptr<Player>> newly_retired_players;
+    
+    for (auto& player : players_) {
+        if (player->IsRetired()) {
+            continue;
+        }
+        
+        const auto& dog = player->GetDog();
+        
+        // Проверяем, движется ли собака
+        bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
+        
+        if (is_moving) {
+            // Собака движется - обновляем время последнего движения
+            player->SetLastMoveTime(current_game_time_);
+            active_players.push_back(player);
+        } else {
+            // Собака стоит на месте
+            double time_since_last_move = current_game_time_ - player->GetLastMoveTime();
+            double retirement_time_seconds = retirement_time_.count() / 1000.0;
+            
+            if (time_since_last_move >= retirement_time_seconds) {
+                // Игрок должен уйти на пенсию
+                player->Retire(current_game_time_);
+                newly_retired_players.push_back(player);
+            } else {
+                active_players.push_back(player);
+            }
+        }
+    }
+    
+    players_ = std::move(active_players);
+    
+    // Если есть новые вышедшие игроки, добавляем их в репозиторий
+    if (!newly_retired_players.empty() && retired_callback_) {
+        retired_callback_(newly_retired_players);
+    }
+}
+
+namespace {
+
+struct ItemGathererProviderImpl : public collision_detector::ItemGathererProvider {
+    struct ItemInfo {
+        geom::Point2D position;
+        double width;
+        size_t id;
+    };
+
+    struct GathererInfo {
+        geom::Point2D start_pos;
+        geom::Point2D end_pos;
+        double width;
+        size_t id;
+        std::shared_ptr<Player> player;
+    };
+
+    std::vector<ItemInfo> items;
+    std::vector<GathererInfo> gatherers;
+
+    size_t ItemsCount() const override { return items.size(); }
+    collision_detector::Item GetItem(size_t idx) const override {
+        const auto& item = items[idx];
+        return {item.position, item.width};
+    }
+    size_t GatherersCount() const override { return gatherers.size(); }
+    collision_detector::Gatherer GetGatherer(size_t idx) const override {
+        const auto& gatherer = gatherers[idx];
+        return {gatherer.start_pos, gatherer.end_pos, gatherer.width};
+    }
+};
+
+struct Event {
+    enum Type { GATHER, RETURN } type;
+    double time;
+    size_t gatherer_id;
+    size_t item_id;
+    double sq_distance;
+};
+
+}  // namespace
+
+void GameSession::Tick(double delta_time) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    // Обновляем игровое время (но CheckRetiredPlayers тоже это делает,
+    // поэтому может быть двойное обновление. Лучше убрать отсюда)
+    // current_game_time_ += delta_time;
+    
+    std::vector<Point> start_positions;
+    std::vector<Point> end_positions;
+    
+    for (const auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
+        const auto& dog = player->GetDog();
+        start_positions.push_back(dog.GetPosition());
+        
+        Point end_pos = {
+            dog.GetPosition().x + dog.GetSpeed().x * delta_time,
+            dog.GetPosition().y + dog.GetSpeed().y * delta_time
+        };
+        end_positions.push_back(end_pos);
+    }
+    
+    GenerateLoot(std::chrono::milliseconds(static_cast<int>(delta_time * 1000)));
+    
+    size_t active_index = 0;
+    for (auto& player : players_) {
+        if (player->IsRetired()) continue;
+        
+        auto& dog = player->GetDog();
+        if (active_index < end_positions.size()) {
+            dog.SetPosition(end_positions[active_index]);
+            active_index++;
+        }
+    }
+    
+    auto active_players = GetActivePlayers();
+    
+    ItemGathererProviderImpl provider;
+    
+    for (const auto& obj : lost_objects_) {
+        provider.items.push_back({
+            {obj.position.x, obj.position.y},
+            0.0,
+            obj.id
+        });
+    }
+    
+    for (size_t i = 0; i < active_players.size(); ++i) {
+        const auto& player = active_players[i];
+        const auto& dog = player->GetDog();
+        
+        Point start_pos = dog.GetPosition();
+        Point end_pos = {
+            dog.GetPosition().x + dog.GetSpeed().x * delta_time,
+            dog.GetPosition().y + dog.GetSpeed().y * delta_time
+        };
+        
+        provider.gatherers.push_back({
+            {start_pos.x, start_pos.y},
+            {end_pos.x, end_pos.y},
+            0.3,
+            i,
+            player
+        });
+    }
+    
+    const auto& offices = map_.GetOffices();
+    for (const auto& office : offices) {
+        provider.items.push_back({
+            {office.GetPosition().x, office.GetPosition().y},
+            0.25,
+            std::numeric_limits<size_t>::max()
+        });
+    }
+    
+    auto gather_events = collision_detector::FindGatherEvents(provider);
+    
+    std::vector<Event> events;
+    for (const auto& e : gather_events) {
+        bool is_office = provider.items[e.item_id].id == std::numeric_limits<size_t>::max();
+        
+        events.push_back({
+            is_office ? Event::RETURN : Event::GATHER,
+            e.time,
+            e.gatherer_id,
+            e.item_id,
+            e.sq_distance
+        });
+    }
+    
+    std::sort(events.begin(), events.end(), [](const Event& a, const Event& b) {
+        return a.time < b.time;
+    });
+    
+    std::vector<LostObject> collected_items;
+    std::vector<bool> item_processed(lost_objects_.size(), false);
+    
+    for (const auto& event : events) {
+        auto& gatherer = provider.gatherers[event.gatherer_id];
+        auto& player = gatherer.player;
+        
+        if (player->IsRetired()) continue;
+        
+        if (event.type == Event::GATHER) {
+            size_t item_idx = event.item_id;
+            if (item_idx >= lost_objects_.size()) continue;
+            
+            if (!item_processed[item_idx] && !player->IsBagFull()) {
+                if (player->AddItemToBag(lost_objects_[item_idx])) {
+                    item_processed[item_idx] = true;
+                    collected_items.push_back(lost_objects_[item_idx]);
+                }
+            }
+        } else if (event.type == Event::RETURN) {
+            for (const auto& item : player->GetBag()) {
+                player->AddScore(item.value);
+            }
+            player->ClearBag();
+        }
+    }
+    
+    auto new_end = std::remove_if(lost_objects_.begin(), lost_objects_.end(),
+        [&](const LostObject& obj) {
+            auto it = std::find_if(collected_items.begin(), collected_items.end(),
+                [&](const LostObject& collected) { return collected.id == obj.id; });
+            return it != collected_items.end();
+        });
+    lost_objects_.erase(new_end, lost_objects_.end());
+}
+
+void GameSession::AddRestoredPlayer(std::shared_ptr<Player> player) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    players_.push_back(player);
+}
+
+void GameSession::AddRestoredLostObject(const LostObject& obj) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    lost_objects_.push_back(obj);
+}
+
+void GameSession::SetNextLostObjectId(size_t id) {
+    next_lost_object_id_.store(id);
+}
+
+size_t GameSession::GetNextLostObjectId() const {
+    return next_lost_object_id_.load();
+}
+
+void GameSession::SetRetiredPlayersCallback(RetiredPlayersCallback callback) {
+    retired_callback_ = std::move(callback);
+}
+
+std::vector<std::shared_ptr<Player>> Game::GetAllPlayers() const {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    std::vector<std::shared_ptr<Player>> players;
+    for (const auto& [token, player] : token_to_player_) {
+        players.push_back(player);
+    }
+    return players;
+}
+
+void Game::AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    map_id_to_session_[map_id] = session;
+    
+    for (const auto& player : session->GetPlayers()) {
+        token_to_player_[player->GetToken()] = player;
+    }
+    
+    uint32_t session_id = *session->GetId();
+    if (session_id >= next_session_id_.load()) {
+        next_session_id_.store(session_id + 1);
+    }
+}
+
+void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    token_to_player_[token] = player;
+}
+
+void Game::Tick(double delta_time) {
+    std::vector<std::shared_ptr<GameSession>> sessions;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        for (const auto& [map_id, session] : map_id_to_session_) {
+            sessions.push_back(session);
+        }
+    }
+
+    for (auto& session : sessions) {
+        session->Tick(delta_time);
+        
+        // Проверяем игроков на выход из игры
+        session->CheckRetiredPlayers(delta_time);
+    }
+}
+
+void Game::HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    for (auto& player : retired_players) {
+        AddRetiredPlayer(player);
+    }
+}
+
+void Game::AddRetiredPlayer(std::shared_ptr<Player> player) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    if (!retired_repo_) {
+        retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
+    }
+
+    // Игровое время уже в секундах (double)
+    double play_time_seconds = player->GetRetirementTime() - player->GetJoinTime();
+
+    // Округляем до 3 знаков после запятой
+    play_time_seconds = std::round(play_time_seconds * 1000.0) / 1000.0;
+
+    retired_repo_->AddRetiredPlayer(
+        player->GetDog().GetName(),
+        player->GetScore(),
+        play_time_seconds
+    );
+
+    token_to_player_.erase(player->GetToken());
+}
+
+std::string DirectionToString(Direction dir) {
+    switch (dir) {
+        case Direction::North: return "U";
+        case Direction::South: return "D";
+        case Direction::West:  return "L";
+        case Direction::East:  return "R";
+    }
+    return "U";
+}
+}
+
+
+===== model.h =====
+#pragma once
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include <memory>
+#include <random>
+#include <atomic>
+#include <cmath>
+#include <mutex>
+#include <optional>
+#include <chrono>
+#include <iostream>
+#include <pqxx/pqxx>
+#include <condition_variable>
+#include <iomanip>
+#include <sstream>
+
+#include "tagged.h"
+#include "loot_generator.h"
+#include "collision_detector.h"
+
+namespace model {
+
+    using Dimension = double;
+    using Coord = double;
+
+    struct Point {
+        Coord x, y;
+    };
+
+    struct Size {
+        Dimension width, height;
+    };
+
+    struct Rectangle {
+        Point position;
+        Size size;
+    };
+
+    struct Offset {
+        Dimension dx, dy;
+    };
+
+    enum class Direction {
+        North,
+        South,
+        West,
+        East
+    };
+
+    class Road {
+        struct HorizontalTag {
+            HorizontalTag() = default;
+        };
+        struct VerticalTag {
+            VerticalTag() = default;
+        };
+
+    public:
+        constexpr static HorizontalTag HORIZONTAL{};
+        constexpr static VerticalTag VERTICAL{};
+
+        Road(HorizontalTag, Point start, Coord end_x) noexcept
+            : start_{ start }, end_{ end_x, start.y } {
+        }
+
+        Road(VerticalTag, Point start, Coord end_y) noexcept
+            : start_{ start }, end_{ start.x, end_y } {
+        }
+
+        bool IsHorizontal() const noexcept { return start_.y == end_.y; }
+        bool IsVertical() const noexcept { return start_.x == end_.x; }
+        Point GetStart() const noexcept { return start_; }
+        Point GetEnd() const noexcept { return end_; }
+
+        Rectangle GetBoundingBox() const noexcept {
+            if (IsHorizontal()) {
+                Coord x0 = std::min(start_.x, end_.x);
+                Coord x1 = std::max(start_.x, end_.x);
+                return { {x0, start_.y - 0.4}, {x1 - x0, 0.8} };
+            }
+            else {
+                Coord y0 = std::min(start_.y, end_.y);
+                Coord y1 = std::max(start_.y, end_.y);
+                return { {start_.x - 0.4, y0}, {0.8, y1 - y0} };
+            }
+        }
+
+    private:
+        Point start_;
+        Point end_;
+    };
+
+    class Building {
+    public:
+        explicit Building(Rectangle bounds) noexcept : bounds_{ bounds } {}
+        const Rectangle& GetBounds() const noexcept { return bounds_; }
+
+    private:
+        Rectangle bounds_;
+    };
+
+    class Office {
+    public:
+        using Id = util::Tagged<std::string, Office>;
+
+        Office(Id id, Point position, Offset offset) noexcept
+            : id_{ std::move(id) }, position_{ position }, offset_{ offset } {
+        }
+
+        const Id& GetId() const noexcept { return id_; }
+        Point GetPosition() const noexcept { return position_; }
+        Offset GetOffset() const noexcept { return offset_; }
+
+    private:
+        Id id_;
+        Point position_;
+        Offset offset_;
+    };
+
+    class Map {
+    public:
+        using Id = util::Tagged<std::string, Map>;
+        using Roads = std::vector<Road>;
+        using Buildings = std::vector<Building>;
+        using Offices = std::vector<Office>;
+
+        Map(Id id, std::string name) noexcept
+            : id_(std::move(id)), name_(std::move(name)) {
+        }
+
+        const Id& GetId() const noexcept { return id_; }
+        const std::string& GetName() const noexcept { return name_; }
+        const Buildings& GetBuildings() const noexcept { return buildings_; }
+        const Roads& GetRoads() const noexcept { return roads_; }
+        const Offices& GetOffices() const noexcept { return offices_; }
+        const std::optional<double>& GetDogSpeed() const noexcept { return dog_speed_; }
+
+        void AddRoad(const Road& road) { roads_.emplace_back(road); }
+        void AddBuilding(const Building& building) { buildings_.emplace_back(building); }
+        void AddOffice(Office office);
+
+        void SetDogSpeed(double speed) noexcept { dog_speed_ = speed; }
+
+    private:
+        using OfficeIdToIndex = std::unordered_map<Office::Id, size_t, util::TaggedHasher<Office::Id>>;
+
+        Id id_;
+        std::string name_;
+        Roads roads_;
+        Buildings buildings_;
+        OfficeIdToIndex warehouse_id_to_index_;
+        Offices offices_;
+        std::optional<double> dog_speed_;
+    };
+
+    class Dog {
+    public:
+        Dog(std::string name, Point start_pos, Direction start_dir = Direction::North)
+            : name_(std::move(name)),
+            position_(start_pos),
+            speed_{ 0.0, 0.0 },
+            direction_(start_dir) {
+        }
+
+        const std::string& GetName() const noexcept { return name_; }
+        Point GetPosition() const noexcept { return position_; }
+        Point GetSpeed() const noexcept { return speed_; }
+        Direction GetDirection() const noexcept { return direction_; }
+
+        void SetSpeed(Point speed) noexcept {
+            speed_ = speed;
+        }
+
+        void SetDirection(Direction dir) noexcept { direction_ = dir; }
+
+        void SetPosition(Point p) noexcept {
+            position_ = p;
+        }
+
+    private:
+        std::string name_;
+        Point position_;
+        Point speed_;
+        Direction direction_;
+    };
+
+    struct LostObject {
+        size_t id;
+        size_t type;
+        Point position;
+        int value;
+    };
+
+    class GameSession;
+
+    class Player {
+    public:
+        using Id = util::Tagged<uint32_t, Player>;
+        using Token = util::Tagged<std::string, Player>;
+
+        Player(std::shared_ptr<GameSession> session, Dog dog, uint32_t id, std::string token, size_t bag_capacity)
+            : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)),
+            session_(std::move(session)), bag_capacity_(bag_capacity),
+            join_time_(0.0), last_move_time_(0.0), retirement_time_(0.0), is_retired_(false) {
+        }
+
+        const Id& GetId() const noexcept { return id_; }
+        const Token& GetToken() const noexcept { return token_; }
+        const Dog& GetDog() const noexcept { return dog_; }
+        Dog& GetDog() noexcept { return dog_; }
+        const std::shared_ptr<GameSession>& GetSession() const noexcept { return session_; }
+        const std::vector<LostObject>& GetBag() const noexcept { return bag_; }
+        size_t GetBagCapacity() const noexcept { return bag_capacity_; }
+        bool IsBagFull() const noexcept { return bag_.size() >= bag_capacity_; }
+        int GetScore() const noexcept { return score_; }
+
+        double GetJoinTime() const noexcept { return join_time_; }
+        double GetLastMoveTime() const noexcept { return last_move_time_; }
+        double GetRetirementTime() const noexcept { return retirement_time_; }
+
+        void SetJoinTime(double time) noexcept { join_time_ = time; }
+        void SetLastMoveTime(double time) noexcept { last_move_time_ = time; }
+        void SetRetirementTime(double time) noexcept { retirement_time_ = time; }
+
+        bool IsRetired() const noexcept { return is_retired_; }
+
+        void Retire(double current_time) noexcept {
+            is_retired_ = true;
+            retirement_time_ = current_time;
+        }
+
+        bool AddItemToBag(const LostObject& item) {
+            if (IsBagFull()) return false;
+            bag_.push_back(item);
+            return true;
+        }
+
+        void ClearBag() { bag_.clear(); }
+        void AddScore(int points) { score_ += points; }
+
+    private:
+        Id id_;
+        Token token_;
+        Dog dog_;
+        std::shared_ptr<GameSession> session_;
+        std::vector<LostObject> bag_;
+        size_t bag_capacity_;
+        int score_ = 0;
+        double join_time_;
+        double last_move_time_;
+        double retirement_time_;
+        bool is_retired_;
+    };
+
+    class ConnectionPool {
+        using PoolType = ConnectionPool;
+        using ConnectionPtr = std::shared_ptr<pqxx::connection>;
+
+    public:
+        class ConnectionWrapper {
+        public:
+            ConnectionWrapper(std::shared_ptr<pqxx::connection>&& conn, PoolType& pool) noexcept
+                : conn_{ std::move(conn) }
+                , pool_{ &pool } {
+            }
+
+            ConnectionWrapper(const ConnectionWrapper&) = delete;
+            ConnectionWrapper& operator=(const ConnectionWrapper&) = delete;
+
+            ConnectionWrapper(ConnectionWrapper&&) = default;
+            ConnectionWrapper& operator=(ConnectionWrapper&&) = default;
+
+            pqxx::connection& operator*() const& noexcept {
+                return *conn_;
+            }
+
+            pqxx::connection* operator->() const& noexcept {
+                return conn_.get();
+            }
+
+            ~ConnectionWrapper() {
+                if (conn_) {
+                    pool_->ReturnConnection(std::move(conn_));
+                }
+            }
+
+        private:
+            std::shared_ptr<pqxx::connection> conn_;
+            PoolType* pool_;
+        };
+
+        template <typename ConnectionFactory>
+        ConnectionPool(size_t capacity, ConnectionFactory&& connection_factory) {
+            pool_.reserve(capacity);
+            for (size_t i = 0; i < capacity; ++i) {
+                pool_.emplace_back(connection_factory());
+            }
+        }
+
+        ConnectionWrapper GetConnection() {
+            std::unique_lock lock{ mutex_ };
+            cond_var_.wait(lock, [this] {
+                return used_connections_ < pool_.size();
+                });
+            return { std::move(pool_[used_connections_++]), *this };
+        }
+
+        bool IsInitialized() const {
+            return !pool_.empty();
+        }
+
+    private:
+        void ReturnConnection(ConnectionPtr&& conn) {
+            {
+                std::lock_guard lock{ mutex_ };
+                pool_[--used_connections_] = std::move(conn);
+            }
+            cond_var_.notify_one();
+        }
+
+        std::mutex mutex_;
+        std::condition_variable cond_var_;
+        std::vector<ConnectionPtr> pool_;
+        size_t used_connections_ = 0;
+    };
+
+    class RetiredPlayersRepository {
+    public:
+        RetiredPlayersRepository(const std::string& db_url) : db_url_(db_url) {
+            Initialize();
+        }
+
+        void AddRetiredPlayer(const std::string& name, int score, double play_time) {
+            if (use_memory_) {
+                AddToMemory(name, score, play_time);
+                return;
+            }
+
+            try {
+                auto conn = pool_->GetConnection();
+                pqxx::work txn(*conn);
+                txn.exec_params(
+                    "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
+                    name, score, play_time
+                );
+                txn.commit();
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
+                use_memory_ = true;
+                AddToMemory(name, score, play_time);
+            }
+        }
+
+        std::vector<std::tuple<std::string, int, double>> GetRecords(int start = 0, int max_items = 100) {
+            if (max_items > 100) max_items = 100;
+            if (max_items < 0) max_items = 100;
+            if (start < 0) start = 0;
+
+            if (use_memory_) {
+                return GetFromMemory(start, max_items);
+            }
+
+            try {
+                auto conn = pool_->GetConnection();
+                pqxx::work txn(*conn);
+                auto result = txn.exec_params(
+                    "SELECT name, score, play_time FROM retired_players "
+                    "ORDER BY score DESC, play_time ASC, name ASC "
+                    "LIMIT $1 OFFSET $2",
+                    max_items, start
+                );
+
+                std::vector<std::tuple<std::string, int, double>> records;
+                for (const auto& row : result) {
+                    records.emplace_back(
+                        row["name"].as<std::string>(),
+                        row["score"].as<int>(),
+                        row["play_time"].as<double>()
+                    );
+                }
+                return records;
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to get records from PostgreSQL: " << e.what() << std::endl;
+                use_memory_ = true;
+                return GetFromMemory(start, max_items);
+            }
+        }
+
+    private:
+        void Initialize() {
+            if (db_url_.empty()) {
+                use_memory_ = true;
+                return;
+            }
+
+            try {
+                pool_ = std::make_unique<ConnectionPool>(5, [this] {
+                    auto conn = std::make_shared<pqxx::connection>(db_url_);
+                    return conn;
+                    });
+
+                auto conn = pool_->GetConnection();
+                pqxx::work txn(*conn);
+                txn.exec(
+                    "CREATE TABLE IF NOT EXISTS retired_players ("
+                    "id SERIAL PRIMARY KEY,"
+                    "name TEXT NOT NULL,"
+                    "score INTEGER NOT NULL,"
+                    "play_time DOUBLE PRECISION NOT NULL,"
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                    ")"
+                );
+                txn.exec(
+                    "CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players (score DESC, play_time ASC, name ASC)"
+                );
+                txn.commit();
+
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to initialize PostgreSQL connection pool: " << e.what() << std::endl;
+                use_memory_ = true;
+            }
+        }
+
+        void AddToMemory(const std::string& name, int score, double play_time) {
+            std::lock_guard lock(memory_mutex_);
+            memory_records_.emplace_back(name, score, play_time);
+
+            std::sort(memory_records_.begin(), memory_records_.end(),
+                [](const auto& a, const auto& b) {
+                    if (std::get<1>(a) != std::get<1>(b))
+                        return std::get<1>(a) > std::get<1>(b);
+                    if (std::get<2>(a) != std::get<2>(b))
+                        return std::get<2>(a) < std::get<2>(b);
+                    return std::get<0>(a) < std::get<0>(b);
+                });
+        }
+
+        std::vector<std::tuple<std::string, int, double>> GetFromMemory(int start, int max_items) {
+            std::lock_guard lock(memory_mutex_);
+
+            if (start < 0) start = 0;
+            size_t start_idx = static_cast<size_t>(start);
+
+            if (start_idx >= memory_records_.size()) {
+                return {};
+            }
+
+            size_t end_idx = start_idx + static_cast<size_t>(max_items);
+            if (end_idx > memory_records_.size()) {
+                end_idx = memory_records_.size();
+            }
+
+            std::vector<std::tuple<std::string, int, double>> result;
+            result.reserve(end_idx - start_idx);
+
+            for (size_t i = start_idx; i < end_idx; ++i) {
+                result.push_back(memory_records_[i]);
+            }
+
+            return result;
+        }
+
+        std::string db_url_;
+        std::unique_ptr<ConnectionPool> pool_;
+        bool use_memory_ = false;
+        std::vector<std::tuple<std::string, int, double>> memory_records_;
+        std::mutex memory_mutex_;
+    };
+
+    struct RetiredPlayerRecord {
+        std::string name;
+        int score;
+        double play_time;
+
+        RetiredPlayerRecord(std::string n, int s, double pt)
+            : name(std::move(n)), score(s), play_time(pt) {}
+    };
+
+    class GameSession : public std::enable_shared_from_this<GameSession> {
+    public:
+        using Id = util::Tagged<uint32_t, GameSession>;
+        using RetiredPlayersCallback = std::function<void(const std::vector<std::shared_ptr<Player>>&)>;
+
+        explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
+            std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity,
+            std::chrono::milliseconds retirement_time)
+            : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
+            randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)),
+            bag_capacity_(bag_capacity), retirement_time_(retirement_time), current_game_time_(0.0) {
+        }
+
+        const Id& GetId() const noexcept { return id_; }
+        const Map& GetMap() const noexcept { return map_; }
+        const std::vector<std::shared_ptr<Player>>& GetPlayers() const noexcept { return players_; }
+        std::vector<std::shared_ptr<Player>> GetActivePlayers() const;
+        const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
+        double GetDogSpeed() const noexcept { return dog_speed_; }
+        std::chrono::milliseconds GetRetirementTime() const noexcept { return retirement_time_; }
+        double GetCurrentGameTime() const noexcept { return current_game_time_; }
+
+        size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
+        void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
+        void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
+        void SetRetiredPlayersCallback(RetiredPlayersCallback callback);
+
+        Point GenerateRandomPosition() const;
+        std::shared_ptr<Player> AddPlayer(std::string dog_name);
+        void SetPlayerAction(const Player::Token& token, const std::string& move);
+        void GenerateLoot(std::chrono::milliseconds delta_time);
+        void Tick(double delta_time);
+        void UpdateGameTime(double delta_time_seconds);
+        void CheckRetiredPlayers(double delta_time_seconds);
+
+        void AddRestoredPlayer(std::shared_ptr<Player> player);
+        void AddRestoredLostObject(const LostObject& obj);
+        void SetNextLostObjectId(size_t id);
+        size_t GetNextLostObjectId() const;
+
+    private:
+        Id id_;
+        Map map_;
+        std::vector<std::shared_ptr<Player>> players_;
+        std::vector<LostObject> lost_objects_;
+        double dog_speed_;
+        bool randomize_spawn_points_;
+        size_t loot_types_count_ = 0;
+        std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
+        std::atomic<size_t> next_lost_object_id_{ 0 };
+        mutable std::recursive_mutex mutex_;
+        size_t bag_capacity_;
+        std::vector<int> loot_values_;
+        std::chrono::milliseconds retirement_time_;
+        double current_game_time_;
+        RetiredPlayersCallback retired_callback_;
+    };
+
+    class Game {
+    public:
+        using Maps = std::vector<Map>;
+
+        Game() : default_dog_speed_(1.0), default_bag_capacity_(3) {
+            retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
+        }
+
+        explicit Game(const std::string& db_url, double default_dog_speed, size_t default_bag_capacity = 3)
+            : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {
+            if (!db_url.empty()) {
+                retired_repo_ = std::make_unique<RetiredPlayersRepository>(db_url);
+            }
+            else {
+                retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
+            }
+        }
+
+        void SetDatabaseUrl(const std::string& db_url) {
+            if (!db_url.empty()) {
+                retired_repo_ = std::make_unique<RetiredPlayersRepository>(db_url);
+            }
+        }
+
+        void AddMap(Map map);
+        void SetDefaultDogSpeed(double speed) noexcept { default_dog_speed_ = speed; }
+        double GetDefaultDogSpeed() const noexcept { return default_dog_speed_; }
+        void SetDefaultBagCapacity(size_t capacity) noexcept { default_bag_capacity_ = capacity; }
+        size_t GetDefaultBagCapacity() const noexcept { return default_bag_capacity_; }
+        void SetRandomizeSpawnPoints(bool randomize) noexcept {
+            randomize_spawn_points_ = randomize;
+        }
+
+        void SetRetirementTime(std::chrono::milliseconds time) noexcept {
+            retirement_time_ = time;
+        }
+        std::chrono::milliseconds GetRetirementTime() const noexcept {
+            return retirement_time_;
+        }
+
+        void SetLootGeneratorConfig(std::chrono::milliseconds period, double probability) {
+            loot_generator_ = std::make_shared<loot_gen::LootGenerator>(period, probability);
+        }
+
+        std::shared_ptr<loot_gen::LootGenerator> GetLootGenerator() const noexcept {
+            return loot_generator_;
+        }
+
+        void SetMapLootTypesCount(const Map::Id& map_id, size_t count) {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            map_loot_types_count_[map_id] = count;
+        }
+
+        size_t GetMapLootTypesCount(const Map::Id& map_id) const {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            if (auto it = map_loot_types_count_.find(map_id); it != map_loot_types_count_.end()) {
+                return it->second;
+            }
+            return 0;
+        }
+
+        void SetMapBagCapacity(const Map::Id& map_id, size_t capacity) {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            map_bag_capacity_[map_id] = capacity;
+        }
+
+        size_t GetMapBagCapacity(const Map::Id& map_id) const {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            if (auto it = map_bag_capacity_.find(map_id); it != map_bag_capacity_.end()) {
+                return it->second;
+            }
+            return default_bag_capacity_;
+        }
+
+        void SetMapLootValues(const Map::Id& map_id, const std::vector<int>& values) {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            map_loot_values_[map_id] = values;
+        }
+
+        std::vector<int> GetMapLootValues(const Map::Id& map_id) const {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            if (auto it = map_loot_values_.find(map_id); it != map_loot_values_.end()) {
+                return it->second;
+            }
+            return {};
+        }
+
+        const Maps& GetMaps() const noexcept { return maps_; }
+        const Map* FindMap(const Map::Id& id) const noexcept {
+            if (auto it = map_id_to_index_.find(id); it != map_id_to_index_.end()) {
+                return &maps_.at(it->second);
+            }
+            return nullptr;
+        }
+
+        std::shared_ptr<const GameSession> FindSession(const Map::Id& map_id) const {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+                return it->second;
+            }
+            return nullptr;
+        }
+
+        std::shared_ptr<GameSession> FindSession(const Map::Id& map_id) {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+            if (auto it = map_id_to_session_.find(map_id); it != map_id_to_session_.end()) {
+                return it->second;
+            }
+            return nullptr;
+        }
+
+        std::shared_ptr<Player> JoinGame(const Map::Id& map_id, std::string dog_name);
+
+        std::shared_ptr<Player> FindPlayerByToken(const Player::Token& token) {
+            std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+            if (auto it = token_to_player_.find(token); it != token_to_player_.end()) {
+                auto player = it->second;
+                if (!player->IsRetired()) {
+                    return player;
+                }
+            }
+            return nullptr;
+        }
+
+        std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
+
+        void AddRetiredPlayer(std::shared_ptr<Player> player);
+
+        void HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players);
+
+        std::vector<RetiredPlayerRecord> GetRetiredPlayers(int start = 0, int max_items = 100) {
+            if (!retired_repo_) {
+                return {};
+            }
+
+            auto db_records = retired_repo_->GetRecords(start, max_items);
+            std::vector<RetiredPlayerRecord> records;
+
+            for (const auto& [name, score, play_time] : db_records) {
+                records.emplace_back(name, score, play_time);
+            }
+
+            return records;
+        }
+
+        void SetPlayerAction(const Player::Token& token, const std::string& move) {
+            auto player = FindPlayerByToken(token);
+            if (!player) return;
+            auto session = player->GetSession();
+            if (session) {
+                session->SetPlayerAction(token, move);
+            }
+        }
+
+        void Tick(double delta_time);
+
+        void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
+        void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
+
+    private:
+        using MapIdHasher = util::TaggedHasher<Map::Id>;
+        using MapIdToIndex = std::unordered_map<Map::Id, size_t, MapIdHasher>;
+
+        std::unique_ptr<RetiredPlayersRepository> retired_repo_;
+        std::vector<Map> maps_;
+        MapIdToIndex map_id_to_index_;
+        std::unordered_map<Map::Id, std::shared_ptr<GameSession>, MapIdHasher> map_id_to_session_;
+        std::unordered_map<Player::Token, std::shared_ptr<Player>, util::TaggedHasher<Player::Token>> token_to_player_;
+        std::unordered_map<Map::Id, size_t, MapIdHasher> map_loot_types_count_;
+        std::unordered_map<Map::Id, size_t, MapIdHasher> map_bag_capacity_;
+        std::unordered_map<Map::Id, std::vector<int>, MapIdHasher> map_loot_values_;
+        std::shared_ptr<loot_gen::LootGenerator> loot_generator_;
+        double default_dog_speed_ = 1.0;
+        size_t default_bag_capacity_ = 3;
+        bool randomize_spawn_points_ = false;
+        mutable std::recursive_mutex mutex_;
+        std::atomic<uint32_t> next_session_id_{ 0 };
+        std::chrono::milliseconds retirement_time_{ 60000 };
+    };
+
+    std::string DirectionToString(Direction dir);
+
+}  // namespace model
+
+
+===== request_handler.cpp =====
+#include "request_handler.h"
+#include <fstream>
+#include <sstream>
+#include <algorithm>
+#include <cctype>
+#include <iomanip>
+#include <stdexcept>
+#include <iterator>
+#include <filesystem>
+#include <optional>
+#include <random>
+#include <chrono>
+#include <cmath>
+#include <regex>
+
+namespace http_handler {
+namespace beast = boost::beast;
+namespace http = beast::http;
+namespace json = boost::json;
+namespace fs = std::filesystem;
+
+namespace {
+    json::value serialize_number(double value) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(3) << value;
+        std::string str = oss.str();
+        
+        if (str.find('.') != std::string::npos) {
+            str = str.substr(0, str.find_last_not_of('0') + 1);
+            if (str.back() == '.') {
+                str.pop_back();
+            }
+        }
+        
+        return json::value(std::stod(str));
+    }
+
+    json::value SerializeRoad(const model::Road& road) {
+        if (road.IsHorizontal()) {
+            return {
+                {"x0", serialize_number(road.GetStart().x)},
+                {"y0", serialize_number(road.GetStart().y)},
+                {"x1", serialize_number(road.GetEnd().x)}
+            };
+        }
+        return {
+            {"x0", serialize_number(road.GetStart().x)},
+            {"y0", serialize_number(road.GetStart().y)},
+            {"y1", serialize_number(road.GetEnd().y)}
+        };
+    }
+
+    json::value SerializeBuilding(const model::Building& building) {
+        const auto& bounds = building.GetBounds();
+        return {
+            {"x", serialize_number(bounds.position.x)},
+            {"y", serialize_number(bounds.position.y)},
+            {"w", serialize_number(bounds.size.width)},
+            {"h", serialize_number(bounds.size.height)}
+        };
+    }
+
+    json::value SerializeOffice(const model::Office& office) {
+        return {
+            {"id", *office.GetId()},
+            {"x", serialize_number(office.GetPosition().x)},
+            {"y", serialize_number(office.GetPosition().y)},
+            {"offsetX", serialize_number(office.GetOffset().dx)},
+            {"offsetY", serialize_number(office.GetOffset().dy)}
+        };
+    }
+} // namespace
+
+StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
+                                                const StringRequest& req, 
+                                                beast::string_view content_type) {
+    StringResponse response(status, req.version());
+    response.set(http::field::content_type, std::string(content_type));
+    response.set(http::field::cache_control, "no-cache");
+    response.content_length(body.size());
+    response.body() = body;
+    response.prepare_payload();
+    response.keep_alive(req.keep_alive());
+    return response;
+}
+
+StringResponse RequestHandler::MakeErrorResponse(http::status status, beast::string_view code,
+                                               beast::string_view message, const StringRequest& req) {
+    json::value json_res{
+        {"code", std::string(code)},
+        {"message", std::string(message)}
+    };
+    auto response = MakeStringResponse(status, json::serialize(json_res), req);
+    response.set(http::field::cache_control, "no-cache");
+    return response;
+}
+
+StringResponse RequestHandler::HandleJoinGame(StringRequest&& req) {
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Invalid content type", req);
+    }
+
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object()) {
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Request body must be JSON object", req);
+        }
+
+        auto& obj = json_body.as_object();
+        if (!obj.contains("userName") || !obj.contains("mapId")) {
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Missing required fields", req);
+        }
+
+        auto user_name = obj["userName"].as_string();
+        auto map_id = obj["mapId"].as_string();
+
+        if (user_name.empty()) {
+            return MakeErrorResponse(http::status::bad_request,
+                                   "invalidArgument",
+                                   "Invalid name", req);
+        }
+
+        auto player = game_.JoinGame(model::Map::Id{std::string(map_id)}, std::string(user_name));
+        if (!player) {
+            return MakeErrorResponse(http::status::not_found,
+                                   "mapNotFound",
+                                   "Map not found", req);
+        }
+
+        json::value response_json{
+            {"authToken", *player->GetToken()},
+            {"playerId", *player->GetId()}
+        };
+
+        return MakeStringResponse(http::status::ok, json::serialize(response_json), req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Join game request parse error", req);
+    }
+}
+
+StringResponse RequestHandler::HandleGetPlayers(StringRequest&& req) {
+    if (req.method() != http::verb::get && req.method() != http::verb::head) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Invalid method", req);
+        response.set(http::field::allow, "GET, HEAD");
+        return response;
+    }
+
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Authorization header is missing", req);
+    }
+
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "unknownToken",
+                               "Player token has not been found", req);
+    }
+
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
+    auto session = player->GetSession();
+    json::value players_json = json::object();
+    for (const auto& p : session->GetActivePlayers()) {
+        players_json.as_object()[std::to_string(*p->GetId())] = {
+            {"name", p->GetDog().GetName()}
+        };
+    }
+
+    return MakeStringResponse(http::status::ok, json::serialize(players_json), req);
+}
+
+StringResponse RequestHandler::HandleGameState(StringRequest&& req) {
+    if (req.method() != http::verb::get && req.method() != http::verb::head) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Invalid method", req);
+        response.set(http::field::allow, "GET, HEAD");
+        return response;
+    }
+
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Authorization header is required", req);
+    }
+
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "unknownToken",
+                               "Player token has not been found", req);
+    }
+
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
+    auto session = player->GetSession();
+    json::value players_json = json::object();
+    
+    for (const auto& p : session->GetActivePlayers()) {
+        const auto& dog = p->GetDog();
+        
+        json::array bag_json;
+        for (const auto& item : p->GetBag()) {
+            bag_json.push_back({
+                {"id", item.id},
+                {"type", item.type}
+            });
+        }
+        
+        players_json.as_object()[std::to_string(*p->GetId())] = {
+            {"pos", json::array({dog.GetPosition().x, dog.GetPosition().y})},
+            {"speed", json::array({dog.GetSpeed().x, dog.GetSpeed().y})},
+            {"dir", model::DirectionToString(dog.GetDirection())},
+            {"bag", std::move(bag_json)},
+            {"score", p->GetScore()}
+        };
+    }
+
+    json::value lost_objects_json = json::object();
+    const auto& lost_objects = session->GetLostObjects();
+    for (const auto& obj : lost_objects) {
+        lost_objects_json.as_object()[std::to_string(obj.id)] = {
+            {"type", obj.type},
+            {"pos", json::array({obj.position.x, obj.position.y})}
+        };
+    }
+
+    return MakeStringResponse(
+        http::status::ok,
+        json::serialize(json::value{
+            {"players", players_json},
+            {"lostObjects", lost_objects_json}
+        }),
+        req
+    );
+}
+
+StringResponse RequestHandler::HandlePlayerAction(StringRequest&& req) {
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                        "invalidMethod",
+                                        "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Invalid content type", req);
+    }
+
+    auto token = GetTokenFromRequest(req);
+    if (!token) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Authorization header is required", req);
+    }
+
+    auto player = game_.FindPlayerByToken(model::Player::Token{*token});
+    if (!player) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "unknownToken",
+                               "Player token has not been found", req);
+    }
+
+    if (player->IsRetired()) {
+        return MakeErrorResponse(http::status::unauthorized,
+                               "invalidToken",
+                               "Player has retired", req);
+    }
+
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object() || !json_body.as_object().contains("move")) {
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Failed to parse action", req);
+        }
+
+        auto move = json_body.as_object()["move"].as_string();
+        std::string move_str = std::string(move);
+        if (move_str != "L" && move_str != "R" && move_str != "U" && move_str != "D" && move_str != "") {
+            return MakeErrorResponse(http::status::bad_request,
+                                  "invalidArgument",
+                                  "Invalid move value", req);
+        }
+
+        game_.SetPlayerAction(model::Player::Token{*token}, move_str);
+
+        return MakeStringResponse(http::status::ok, "{}", req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+                               "invalidArgument",
+                               "Failed to parse action", req);
+    }
+}
+
+StringResponse RequestHandler::HandleTick(StringRequest&& req) {
+    if (is_tick_automatic_) {
+        return MakeErrorResponse(http::status::bad_request,
+            "badRequest", "Tick command is disabled in automatic mode", req);
+    }
+
+    if (req.method() != http::verb::post) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+            "invalidMethod", "Only POST method is expected", req);
+        response.set(http::field::allow, "POST");
+        return response;
+    }
+
+    if (req.find(http::field::content_type) == req.end() || 
+        req[http::field::content_type] != "application/json") {
+        return MakeErrorResponse(http::status::bad_request,
+            "invalidArgument", "Invalid content type", req);
+    }
+
+    try {
+        auto json_body = json::parse(req.body());
+        if (!json_body.is_object() || !json_body.as_object().contains("timeDelta")) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "Failed to parse tick request JSON", req);
+        }
+
+        auto time_delta = json_body.as_object()["timeDelta"];
+        if (!time_delta.is_number()) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "timeDelta must be a number", req);
+        }
+
+        double delta_seconds = 0.0;
+        if (time_delta.is_int64()) {
+            delta_seconds = static_cast<double>(time_delta.as_int64()) / 1000.0;
+        } else if (time_delta.is_double()) {
+            delta_seconds = time_delta.as_double() / 1000.0;
+        } else if (time_delta.is_uint64()) {
+            delta_seconds = static_cast<double>(time_delta.as_uint64()) / 1000.0;
+        }
+        
+        if (delta_seconds < 0) {
+            return MakeErrorResponse(http::status::bad_request,
+                "invalidArgument", "timeDelta must be non-negative", req);
+        }
+
+        // Выполняем тик игры с заданной дельтой времени
+        game_.Tick(delta_seconds);
+        
+        // Сохраняем состояние, если это необходимо
+        state_manager_.OnTick(std::chrono::milliseconds(static_cast<int>(delta_seconds * 1000)));
+
+        return MakeStringResponse(http::status::ok, "{}", req);
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::bad_request,
+            "invalidArgument", "Failed to parse tick request JSON", req);
+    }
+}
+
+StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
+    if (req.method() != http::verb::get && req.method() != http::verb::head) {
+        auto response = MakeErrorResponse(http::status::method_not_allowed,
+            "invalidMethod", "Only GET and HEAD methods are allowed", req);
+        response.set(http::field::allow, "GET, HEAD");
+        return response;
+    }
+
+    int start = 0;
+    int max_items = 100;
+    
+    // Парсим URL с query-параметрами
+    std::string target = req.target().to_string();
+    
+    // Убираем путь до records
+    if (target.starts_with("/api/v1/game/records")) {
+        target = target.substr(std::string("/api/v1/game/records").length());
+    }
+    
+    // Парсим query-параметры
+    size_t query_start = target.find('?');
+    if (query_start != std::string::npos) {
+        std::string query_str = target.substr(query_start + 1);
+        std::istringstream query_stream(query_str);
+        std::string param;
+        
+        while (std::getline(query_stream, param, '&')) {
+            size_t eq_pos = param.find('=');
+            if (eq_pos != std::string::npos) {
+                std::string key = param.substr(0, eq_pos);
+                std::string value = param.substr(eq_pos + 1);
+                
+                if (key == "start") {
+                    try {
+                        start = std::stoi(value);
+                        if (start < 0) start = 0;
+                    } catch (...) {
+                        // Используем значение по умолчанию
+                    }
+                } else if (key == "maxItems") {
+                    try {
+                        max_items = std::stoi(value);
+                        if (max_items < 1) max_items = 1;
+                        if (max_items > 100) {
+                            return MakeErrorResponse(http::status::bad_request,
+                                "badRequest", "Max items cannot exceed 100", req);
+                        }
+                    } catch (...) {
+                        // Используем значение по умолчанию
+                    }
+                }
+            }
+        }
+    }
+
+    try {
+        auto records = game_.GetRetiredPlayers(start, max_items);
+        
+        json::array records_json;
+        for (const auto& record : records) {
+            // Форматируем playTime с 3 знаками после запятой
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(3) << record.play_time;
+            std::string play_time_str = oss.str();
+            
+            records_json.push_back({
+                {"name", record.name},
+                {"score", record.score},
+                {"playTime", std::stod(play_time_str)}
+            });
+        }
+        
+        auto response = MakeStringResponse(http::status::ok, json::serialize(records_json), req);
+        response.set(http::field::cache_control, "no-cache");
+        response.set(http::field::content_length, std::to_string(response.body().size()));
+        return response;
+        
+    } catch (const std::exception& e) {
+        return MakeErrorResponse(http::status::internal_server_error,
+            "internalError", "Failed to retrieve records", req);
+    }
+}
+
+StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
+    std::string target_str = req.target().to_string();
+    
+    // Проверяем, запрашиваются ли records
+    if (target_str.starts_with("/api/v1/game/records")) {
+        return HandleGetRecords(std::move(req));
+    }
+    
+    if (target_str == "/api/v1/maps") {
+        if (req.method() != http::verb::get && req.method() != http::verb::head) {
+            auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                           "invalidMethod",
+                                           "Only GET and HEAD methods are allowed", req);
+            response.set(http::field::allow, "GET, HEAD");
+            return response;
+        }
+
+        json::array maps_json;
+        for (const auto& map : game_.GetMaps()) {
+            maps_json.push_back({
+                {"id", *map.GetId()},
+                {"name", map.GetName()}
+            });
+        }
+        return MakeStringResponse(http::status::ok,
+                                json::serialize(maps_json), req);
+    }
+
+    if (target_str.starts_with("/api/v1/maps/")) {
+        if (req.method() != http::verb::get && req.method() != http::verb::head) {
+            auto response = MakeErrorResponse(http::status::method_not_allowed,
+                                           "invalidMethod",
+                                           "Only GET and HEAD methods are allowed", req);
+            response.set(http::field::allow, "GET, HEAD");
+            return response;
+        }
+
+        std::string target = target_str;
+        size_t last_slash_pos = target.find_last_of('/');
+        if (last_slash_pos == std::string::npos || last_slash_pos == target.size() - 1) {
+            return MakeErrorResponse(http::status::bad_request,
+                                   "badRequest",
+                                   "Invalid map ID format", req);
+        }
+
+        std::string map_id = target.substr(last_slash_pos + 1);
+        size_t question_pos = map_id.find('?');
+        if (question_pos != std::string::npos) {
+            map_id = map_id.substr(0, question_pos);
+        }
+
+        if (!map_id.empty() && map_id.back() == '/') {
+            map_id.pop_back();
+        }
+
+        if (const auto* map = game_.FindMap(model::Map::Id{map_id})) {
+            std::ifstream file(config_path_);
+            if (!file) {
+                return MakeErrorResponse(http::status::internal_server_error,
+                                       "internalError",
+                                       "Failed to load config", req);
+            }
+
+            std::stringstream buffer;
+            buffer << file.rdbuf();
+            auto config_json = json::parse(buffer.str());
+
+            json::value map_json;
+            for (const auto& map_val : config_json.as_object()["maps"].as_array()) {
+                if (map_val.as_object().at("id").as_string() == map_id) {
+                    map_json = map_val;
+                    break;
+                }
+            }
+
+            if (map_json.is_null()) {
+                return MakeErrorResponse(http::status::not_found,
+                                       "mapNotFound",
+                                       "Map not found in config", req);
+            }
+
+            json::value response_json{
+                {"id", *map->GetId()},
+                {"name", map->GetName()},
+                {"roads", json::array()},
+                {"buildings", json::array()},
+                {"offices", json::array()},
+                {"lootTypes", map_json.as_object().contains("lootTypes") 
+                    ? map_json.as_object()["lootTypes"] 
+                    : json::array()}
+            };
+
+            if (map_json.as_object().contains("bagCapacity")) {
+                response_json.as_object()["bagCapacity"] = 
+                    map_json.as_object().at("bagCapacity");
+            }
+
+            for (const auto& road : map->GetRoads()) {
+                response_json.as_object()["roads"].as_array().push_back(SerializeRoad(road));
+            }
+
+            for (const auto& building : map->GetBuildings()) {
+                response_json.as_object()["buildings"].as_array().push_back(SerializeBuilding(building));
+            }
+
+            for (const auto& office : map->GetOffices()) {
+                response_json.as_object()["offices"].as_array().push_back(SerializeOffice(office));
+            }
+
+            return MakeStringResponse(http::status::ok,
+                                    json::serialize(response_json), req);
+        }
+
+        return MakeErrorResponse(http::status::not_found,
+                               "mapNotFound",
+                               "Map not found", req);
+    }
+
+    return MakeErrorResponse(http::status::bad_request,
+                           "badRequest",
+                           "Bad request", req);
+}
+
+StringResponse RequestHandler::HandleStaticRequest(StringRequest&& req) {
+    try {
+        auto path = DecodeUrl(req.target());
+
+        if (path.empty() || path[0] != '/') {
+            return MakeStringResponse(http::status::bad_request,
+                                    "Invalid path", req, "text/plain");
+        }
+        path = path.substr(1);
+
+        auto full_path = fs::weakly_canonical(static_path_ / path);
+
+        if (!IsSubPath(full_path, static_path_)) {
+            return MakeStringResponse(http::status::bad_request,
+                                    "Invalid path: attempted directory traversal",
+                                    req, "text/plain");
+        }
+
+        if (fs::is_directory(full_path)) {
+            full_path /= "index.html";
+        }
+
+        if (!fs::exists(full_path)) {
+            return MakeStringResponse(http::status::not_found,
+                                    "File not found", req, "text/plain");
+        }
+
+        std::ifstream file(full_path, std::ios::binary);
+        if (!file) {
+            return MakeStringResponse(http::status::internal_server_error,
+                                    "Failed to open file", req, "text/plain");
+        }
+
+        std::string content((std::istreambuf_iterator<char>(file)),
+                          std::istreambuf_iterator<char>());
+
+        return MakeStringResponse(http::status::ok, content, req, GetMimeType(full_path.string()));
+    }
+    catch (const std::exception& e) {
+        return MakeStringResponse(http::status::internal_server_error,
+                                "Internal server error", req, "text/plain");
+    }
+}
+
+std::optional<std::string> RequestHandler::GetTokenFromRequest(const StringRequest& req) {
+    if (auto it = req.find(http::field::authorization); it != req.end()) {
+        auto auth_header = it->value();
+        if (auth_header.starts_with("Bearer ")) {
+            std::string token = std::string(auth_header.substr(7));
+            if (token.length() != 32) {
+                return std::nullopt;
+            }
+            return token;
+        }
+    }
+    return std::nullopt;
+}
+
+std::string RequestHandler::DecodeUrl(beast::string_view url) {
+    std::ostringstream decoded;
+    for (size_t i = 0; i < url.size(); ++i) {
+        if (url[i] == '%') {
+            if (i + 2 >= url.size()) {
+                throw std::runtime_error("Invalid URL encoding");
+            }
+            int hex;
+            std::istringstream hex_stream(std::string(url.substr(i + 1, 2)));
+            if (!(hex_stream >> std::hex >> hex)) {
+                throw std::runtime_error("Invalid URL encoding");
+            }
+            decoded << static_cast<char>(hex);
+            i += 2;
+        }
+        else if (url[i] == '+') {
+            decoded << ' ';
+        }
+        else {
+            decoded << url[i];
+        }
+    }
+    return decoded.str();
+}
+
+std::string RequestHandler::GetMimeType(beast::string_view path) {
+    static const std::unordered_map<std::string, std::string> mime_types = {
+        {".htm", "text/html"},
+        {".html", "text/html"},
+        {".css", "text/css"},
+        {".txt", "text/plain"},
+        {".js", "text/javascript"},
+        {".json", "application/json"},
+        {".xml", "application/xml"},
+        {".png", "image/png"},
+        {".jpg", "image/jpeg"},
+        {".jpe", "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".gif", "image/gif"},
+        {".bmp", "image/bmp"},
+        {".ico", "image/vnd.microsoft.icon"},
+        {".tiff", "image/tiff"},
+        {".tif", "image/tiff"},
+        {".svg", "image/svg+xml"},
+        {".svgz", "image/svg+xml"},
+        {".mp3", "audio/mpeg"},
+        {".wasm", "application/wasm"}
+    };
+
+    std::string path_str(path);
+    auto pos = path_str.rfind('.');
+    if (pos == std::string::npos) {
+        return "application/octet-stream";
+    }
+
+    std::string ext = path_str.substr(pos);
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+
+    auto it = mime_types.find(ext);
+    if (it == mime_types.end()) {
+        return "application/octet-stream";
+    }
+    return it->second;
+}
+
+bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
+    try {
+        const auto norm_path = fs::weakly_canonical(path);
+        const auto norm_base = fs::weakly_canonical(base);
+
+        auto base_it = norm_base.begin();
+        auto path_it = norm_path.begin();
+
+        for (; base_it != norm_base.end(); ++base_it, ++path_it) {
+            if (path_it == norm_path.end() || *path_it != *base_it) {
+                return false;
+            }
+        }
+        return true;
+    }
+    catch (const std::exception& e) {
+        return false;
+    }
+}
+}  // namespace http_handler
+
+
+===== request_handler.h =====
+#pragma once
+#include <optional>
+#include "http_server.h"
+#include "model.h"
+#include <filesystem>
+#include <unordered_map>
+#include <boost/beast.hpp>
+#include <boost/json.hpp>
+#include <boost/log/trivial.hpp>
+#include "logger.h"
+#include "state_manager.h"
+
+namespace http_handler {
+    namespace beast = boost::beast;
+    namespace http = beast::http;
+    namespace json = boost::json;
+    namespace fs = std::filesystem;
+
+    using StringResponse = http::response<http::string_body>;
+    using StringRequest = http::request<http::string_body>;
+
+    class RequestHandler {
+    public:
+        explicit RequestHandler(model::Game& game, const fs::path& static_path,
+            bool is_tick_automatic, const fs::path& config_path,
+            StateManager& state_manager)
+            : game_{ game }, static_path_{ static_path },
+            is_tick_automatic_{ is_tick_automatic }, config_path_{ config_path },
+            state_manager_{ state_manager } {
+        }
+
+        RequestHandler(const RequestHandler&) = delete;
+        RequestHandler& operator=(const RequestHandler&) = delete;
+
+        RequestHandler(RequestHandler&& other) noexcept
+            : game_{ other.game_ }, static_path_{ std::move(other.static_path_) },
+            is_tick_automatic_{ other.is_tick_automatic_ }, config_path_{ std::move(other.config_path_) },
+            state_manager_{ other.state_manager_ } {
+        }
+
+        template <typename Body, typename Allocator, typename Send>
+        void operator()(http::request<Body, http::basic_fields<Allocator>>&& req,
+            std::string remote_address,
+            Send&& send) {
+            StringRequest string_req(std::move(req));
+            std::string target_str = string_req.target().to_string();
+
+            if (target_str.starts_with("/api/")) {
+                if (target_str == "/api/v1/game/join") {
+                    if (string_req.method() == http::verb::post) {
+                        auto response = HandleJoinGame(std::move(string_req));
+                        return send(std::move(response));
+                    }
+                    else {
+                        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                            "invalidMethod", "Only POST method is expected", string_req);
+                        response.set(http::field::allow, "POST");
+                        return send(std::move(response));
+                    }
+                }
+                else if (target_str == "/api/v1/game/players") {
+                    auto response = HandleGetPlayers(std::move(string_req));
+                    return send(std::move(response));
+                }
+                else if (target_str == "/api/v1/game/state") {
+                    auto response = HandleGameState(std::move(string_req));
+                    return send(std::move(response));
+                }
+                else if (target_str == "/api/v1/game/player/action") {
+                    if (string_req.method() == http::verb::post) {
+                        auto response = HandlePlayerAction(std::move(string_req));
+                        return send(std::move(response));
+                    }
+                    else {
+                        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                            "invalidMethod", "Only POST method is expected", string_req);
+                        response.set(http::field::allow, "POST");
+                        return send(std::move(response));
+                    }
+                }
+                else if (target_str == "/api/v1/game/tick") {
+                    if (string_req.method() == http::verb::post) {
+                        auto response = HandleTick(std::move(string_req));
+                        return send(std::move(response));
+                    }
+                    else {
+                        auto response = MakeErrorResponse(http::status::method_not_allowed,
+                            "invalidMethod", "Only POST method is expected", string_req);
+                        response.set(http::field::allow, "POST");
+                        return send(std::move(response));
+                    }
+                }
+                else if (target_str.starts_with("/api/v1/game/records")) {
+                    auto response = HandleGetRecords(std::move(string_req));
+                    return send(std::move(response));
+                }
+                else if (target_str.starts_with("/api/v1/maps")) {
+                    auto response = HandleApiRequest(std::move(string_req));
+                    return send(std::move(response));
+                }
+                else {
+                    auto response = MakeErrorResponse(http::status::bad_request,
+                        "badRequest", "Invalid API endpoint", string_req);
+                    return send(std::move(response));
+                }
+            }
+
+            auto response = HandleStaticRequest(std::move(string_req));
+            return send(std::move(response));
+        }
+
+    private:
+        model::Game& game_;
+        fs::path static_path_;
+        bool is_tick_automatic_;
+        fs::path config_path_;
+        StateManager& state_manager_;
+
+        StringResponse HandleApiRequest(StringRequest&& req);
+        StringResponse HandleStaticRequest(StringRequest&& req);
+        StringResponse HandleJoinGame(StringRequest&& req);
+        StringResponse HandleGetPlayers(StringRequest&& req);
+        StringResponse HandleGameState(StringRequest&& req);
+        StringResponse HandlePlayerAction(StringRequest&& req);
+        StringResponse HandleTick(StringRequest&& req);
+        StringResponse HandleGetRecords(StringRequest&& req);
+
+        std::optional<std::string> GetTokenFromRequest(const StringRequest& req);
+
+        StringResponse MakeStringResponse(http::status status, std::string_view body,
+            const StringRequest& req,
+            beast::string_view content_type = "application/json");
+
+        StringResponse MakeErrorResponse(http::status status, beast::string_view code,
+            beast::string_view message, const StringRequest& req);
+
+        std::string DecodeUrl(beast::string_view url);
+        std::string GetMimeType(beast::string_view path);
+        bool IsSubPath(const fs::path& path, const fs::path& base);
+    };
+
+    class LoggingRequestHandler {
+    public:
+        explicit LoggingRequestHandler(RequestHandler&& base_handler)
+            : base_handler_(std::move(base_handler)) {
+        }
+
+        template <typename Request, typename Send>
+        void operator()(Request&& req, std::string remote_address, Send&& send) {
+            json::value request_data{
+                {"ip", remote_address},
+                {"URI", std::string(req.target())},
+                {"method", std::string(req.method_string())}
+            };
+            BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, request_data)
+                << "request received";
+
+            auto start_time = std::chrono::steady_clock::now();
+
+            base_handler_(std::forward<Request>(req), remote_address,
+                [this, start_time, remote_address, send = std::forward<Send>(send)]
+                (auto&& response) mutable {
+                    auto response_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - start_time).count();
+
+                    std::string content_type = "null";
+                    if (auto it = response.find(http::field::content_type);
+                        it != response.end()) {
+                        content_type = std::string(it->value());
+                    }
+
+                    json::value response_data{
+                        {"ip", remote_address},
+                        {"response_time", response_time},
+                        {"code", static_cast<int>(response.result())},
+                        {"content_type", content_type}
+                    };
+                    BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, response_data)
+                        << "response sent";
+
+                    send(std::forward<decltype(response)>(response));
+                });
+        }
+
+    private:
+        RequestHandler base_handler_;
+    };
+}  // namespace http_handler
+
+
+===== sdk.h =====
+#pragma once
+#ifdef WIN32
+#include <sdkddkver.h>
+#endif
+
+
+===== serializer.cpp =====
+#include "serializer.h"
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
+namespace serializer {
+
+namespace json = boost::json;
+
+// Безопасные методы для чтения чисел из JSON
+uint32_t SafeGetUint32(const json::value& value) {
+    if (value.is_uint64()) {
+        return static_cast<uint32_t>(value.as_uint64());
+    } else if (value.is_int64()) {
+        return static_cast<uint32_t>(value.as_int64());
+    } else if (value.is_double()) {
+        return static_cast<uint32_t>(value.as_double());
+    } else {
+        throw std::runtime_error("Value is not a number");
+    }
+}
+
+size_t SafeGetUint64(const json::value& value) {
+    if (value.is_uint64()) {
+        return static_cast<size_t>(value.as_uint64());
+    } else if (value.is_int64()) {
+        return static_cast<size_t>(value.as_int64());
+    } else if (value.is_double()) {
+        return static_cast<size_t>(value.as_double());
+    } else {
+        throw std::runtime_error("Value is not a number");
+    }
+}
+
+int SafeGetInt(const json::value& value) {
+    if (value.is_int64()) {
+        return static_cast<int>(value.as_int64());
+    } else if (value.is_uint64()) {
+        return static_cast<int>(value.as_uint64());
+    } else if (value.is_double()) {
+        return static_cast<int>(value.as_double());
+    } else {
+        throw std::runtime_error("Value is not a number");
+    }
+}
+
+// Сериализация DTO классов
+json::value SerializePoint(const model::Point& point) {
+    return json::array{point.x, point.y};
+}
+
+model::Point DeserializePoint(const json::value& point_val) {
+    const auto& arr = point_val.as_array();
+    return {arr[0].as_double(), arr[1].as_double()};
+}
+
+json::value SerializeDirection(model::Direction dir) {
+    switch (dir) {
+        case model::Direction::North: return "U";
+        case model::Direction::South: return "D";
+        case model::Direction::West: return "L";
+        case model::Direction::East: return "R";
+    }
+    return "U";
+}
+
+model::Direction DeserializeDirection(const json::value& dir_val) {
+    std::string dir_str = dir_val.as_string().c_str();
+    if (dir_str == "U") return model::Direction::North;
+    if (dir_str == "D") return model::Direction::South;
+    if (dir_str == "L") return model::Direction::West;
+    if (dir_str == "R") return model::Direction::East;
+    return model::Direction::North;
+}
+
+// Сериализация DTO объектов
+json::value SerializeDog(const SerDog& dog) {
+    return {
+        {"name", dog.name},
+        {"position", SerializePoint(dog.position)},
+        {"speed", SerializePoint(dog.speed)},
+        {"direction", SerializeDirection(dog.direction)}
+    };
+}
+
+SerDog DeserializeDog(const json::value& dog_val) {
+    const auto& obj = dog_val.as_object();
+    return {
+        obj.at("name").as_string().c_str(),
+        DeserializePoint(obj.at("position")),
+        DeserializePoint(obj.at("speed")),
+        DeserializeDirection(obj.at("direction"))
+    };
+}
+
+json::value SerializeLostObject(const SerLostObject& obj) {
+    return {
+        {"id", obj.id},
+        {"type", obj.type},
+        {"position", SerializePoint(obj.position)},
+        {"value", obj.value}
+    };
+}
+
+SerLostObject DeserializeLostObject(const json::value& obj_val) {
+    const auto& obj = obj_val.as_object();
+    return {
+        SafeGetUint64(obj.at("id")),
+        SafeGetUint64(obj.at("type")),
+        DeserializePoint(obj.at("position")),
+        SafeGetInt(obj.at("value"))
+    };
+}
+
+json::value SerializePlayer(const SerPlayer& player) {
+    json::array bag_json;
+    for (const auto& item : player.bag) {
+        bag_json.push_back(SerializeLostObject(item));
+    }
+    
+    return {
+        {"id", player.id},
+        {"token", player.token},
+        {"dog", SerializeDog(player.dog)},
+        {"score", player.score},
+        {"bag_capacity", player.bag_capacity},
+        {"bag", bag_json}
+    };
+}
+
+SerPlayer DeserializePlayer(const json::value& player_val) {
+    const auto& obj = player_val.as_object();
+    
+    std::vector<SerLostObject> bag;
+    const auto& bag_arr = obj.at("bag").as_array();
+    for (const auto& item_val : bag_arr) {
+        bag.push_back(DeserializeLostObject(item_val));
+    }
+    
+    return {
+        SafeGetUint32(obj.at("id")),
+        std::string(obj.at("token").as_string()),
+        DeserializeDog(obj.at("dog")),
+        SafeGetInt(obj.at("score")),
+        SafeGetUint64(obj.at("bag_capacity")),
+        bag
+    };
+}
+
+json::value SerializeSession(const SerGameSession& session) {
+    json::array players_json;
+    for (const auto& player : session.players) {
+        players_json.push_back(SerializePlayer(player));
+    }
+    
+    json::array lost_objects_json;
+    for (const auto& obj : session.lost_objects) {
+        lost_objects_json.push_back(SerializeLostObject(obj));
+    }
+    
+    return {
+        {"id", session.id},
+        {"map_id", session.map_id},
+        {"dog_speed", session.dog_speed},
+        {"next_lost_object_id", session.next_lost_object_id},
+        {"players", players_json},
+        {"lost_objects", lost_objects_json}
+    };
+}
+
+SerGameSession DeserializeSession(const json::value& session_val) {
+    const auto& obj = session_val.as_object();
+    
+    std::vector<SerPlayer> players;
+    const auto& players_arr = obj.at("players").as_array();
+    for (const auto& player_val : players_arr) {
+        players.push_back(DeserializePlayer(player_val));
+    }
+    
+    std::vector<SerLostObject> lost_objects;
+    const auto& objects_arr = obj.at("lost_objects").as_array();
+    for (const auto& obj_val : objects_arr) {
+        lost_objects.push_back(DeserializeLostObject(obj_val));
+    }
+    
+    return {
+        SafeGetUint32(obj.at("id")),
+        std::string(obj.at("map_id").as_string()),
+        obj.at("dog_speed").as_double(),
+        SafeGetUint64(obj.at("next_lost_object_id")),
+        players,
+        lost_objects
+    };
+}
+
+// Основные методы сериализации/десериализации игры
+json::value GameSerializer::SerializeGame(const model::Game& game) {
+    json::object state;
+    
+    state["default_dog_speed"] = game.GetDefaultDogSpeed();
+    state["default_bag_capacity"] = game.GetDefaultBagCapacity();
+    
+    json::array sessions_json;
+    
+    // Получаем все сессии
+    std::vector<std::shared_ptr<model::GameSession>> all_sessions;
+    {
+        auto& mutable_game = const_cast<model::Game&>(game);
+        auto maps = game.GetMaps();
+        for (const auto& map : maps) {
+            if (auto session = mutable_game.FindSession(map.GetId())) {
+                all_sessions.push_back(session);
+            }
+        }
+    }
+    
+    for (const auto& session : all_sessions) {
+        sessions_json.push_back(SerializeSession(SerGameSession::FromModel(session)));
+    }
+    state["sessions"] = sessions_json;
+    
+    // Сериализуем mapping токенов
+    json::object token_map;
+    auto players = game.GetAllPlayers();
+    for (const auto& player : players) {
+        token_map[std::string(*player->GetToken())] = *player->GetId();
+    }
+    state["token_to_player"] = token_map;
+    
+    // Сохраняем время выхода на пенсию
+    auto retirement_time = std::chrono::duration_cast<std::chrono::milliseconds>(game.GetRetirementTime());
+    state["retirement_time_ms"] = retirement_time.count();
+    
+    return state;
+}
+
+void GameSerializer::DeserializeGame(model::Game& game, const json::value& data) {
+    std::cout << "=== DEBUG: DeserializeGame START ===" << std::endl;
+    
+    if (!data.is_object()) {
+        std::cout << "ERROR: Data is not an object" << std::endl;
+        throw std::runtime_error("Invalid state format");
+    }
+    
+    const auto& obj = data.as_object();
+    std::cout << "DEBUG: JSON object has " << obj.size() << " fields" << std::endl;
+
+    try {
+        if (obj.contains("default_dog_speed")) {
+            game.SetDefaultDogSpeed(obj.at("default_dog_speed").as_double());
+            std::cout << "DEBUG: Set default_dog_speed: " << obj.at("default_dog_speed").as_double() << std::endl;
+        }
+
+        if (obj.contains("default_bag_capacity")) {
+            game.SetDefaultBagCapacity(SafeGetUint64(obj.at("default_bag_capacity")));
+            std::cout << "DEBUG: Set default_bag_capacity: " << SafeGetUint64(obj.at("default_bag_capacity")) << std::endl;
+        }
+
+        // Восстанавливаем время выхода на пенсию
+        if (obj.contains("retirement_time_ms")) {
+            auto retirement_time = std::chrono::milliseconds(SafeGetUint64(obj.at("retirement_time_ms")));
+            game.SetRetirementTime(retirement_time);
+            std::cout << "DEBUG: Set retirement_time: " << retirement_time.count() << "ms" << std::endl;
+        }
+
+        // Создаем временный mapping для восстановления токенов
+        std::unordered_map<uint32_t, std::shared_ptr<model::Player>> player_id_to_player;
+        std::vector<std::pair<std::string, std::shared_ptr<model::GameSession>>> sessions_to_add;
+        
+        if (obj.contains("sessions")) {
+            const auto& sessions_arr = obj.at("sessions").as_array();
+            std::cout << "DEBUG: Found " << sessions_arr.size() << " sessions" << std::endl;
+            
+            for (size_t session_idx = 0; session_idx < sessions_arr.size(); ++session_idx) {
+                std::cout << "DEBUG: Processing session " << session_idx << std::endl;
+                const auto& session_val = sessions_arr[session_idx];
+                
+                auto ser_session = DeserializeSession(session_val);
+                std::cout << "DEBUG: Session ID: " << ser_session.id << ", Map ID: " << ser_session.map_id 
+                          << ", Players: " << ser_session.players.size() 
+                          << ", Lost objects: " << ser_session.lost_objects.size() << std::endl;
+
+                const auto* map = game.FindMap(model::Map::Id{ser_session.map_id});
+                if (!map) {
+                    std::cout << "ERROR: Map not found: " << ser_session.map_id << std::endl;
+                    throw std::runtime_error("Map not found: " + ser_session.map_id);
+                }
+
+                // Создаем сессию с временем выхода на пенсию
+                auto session = std::make_shared<model::GameSession>(
+                    *map, ser_session.id, ser_session.dog_speed, false, 
+                    game.GetLootGenerator(), game.GetMapBagCapacity(model::Map::Id{ser_session.map_id}),
+                    game.GetRetirementTime()
+                );
+
+                // Настраиваем callback для уведомления об ушедших игроках
+                session->SetRetiredPlayersCallback(
+                    [&game](const auto& retired_players) {
+                        game.HandlePlayerRetirement(retired_players);
+                    }
+                );
+
+                session->SetLootTypesCount(game.GetMapLootTypesCount(model::Map::Id{ser_session.map_id}));
+                session->SetLootValues(game.GetMapLootValues(model::Map::Id{ser_session.map_id}));
+                session->SetNextLostObjectId(ser_session.next_lost_object_id);
+
+                // Восстанавливаем игроков
+                std::cout << "DEBUG: Restoring " << ser_session.players.size() << " players" << std::endl;
+                for (size_t player_idx = 0; player_idx < ser_session.players.size(); ++player_idx) {
+                    const auto& ser_player = ser_session.players[player_idx];
+                    std::cout << "DEBUG: Player " << player_idx << " - ID: " << ser_player.id 
+                              << ", Token: " << ser_player.token << std::endl;
+
+                    auto dog = ser_player.dog.ToModel();
+                    auto player = std::make_shared<model::Player>(
+                        session, std::move(dog), ser_player.id, ser_player.token, ser_player.bag_capacity
+                    );
+
+                    // Устанавливаем временные метки
+                    player->SetJoinTime(0.0);  // Время входа будет установлено позже
+                    player->SetLastMoveTime(0.0);  // Время последнего движения
+                    
+                    player->AddScore(ser_player.score);
+
+                    for (const auto& ser_item : ser_player.bag) {
+                        player->AddItemToBag(ser_item.ToModel());
+                    }
+
+                    session->AddRestoredPlayer(player);
+                    player_id_to_player[ser_player.id] = player;
+                    
+                    std::cout << "DEBUG: Created player - ID: " << ser_player.id 
+                              << ", Token: " << ser_player.token 
+                              << ", Stored in mapping: " << (player_id_to_player.count(ser_player.id) > 0) << std::endl;
+                }
+
+                // Восстанавливаем потерянные предметы
+                for (const auto& ser_obj : ser_session.lost_objects) {
+                    session->AddRestoredLostObject(ser_obj.ToModel());
+                }
+
+                sessions_to_add.emplace_back(ser_session.map_id, session);
+                std::cout << "DEBUG: Session " << session_idx << " prepared for addition" << std::endl;
+            }
+        } else {
+            std::cout << "DEBUG: No sessions found in JSON" << std::endl;
+        }
+
+        // Восстанавливаем mapping токенов
+        if (obj.contains("token_to_player")) {
+            const auto& token_map = obj.at("token_to_player").as_object();
+            std::cout << "DEBUG: Found token_to_player with " << token_map.size() << " entries" << std::endl;
+            
+            size_t restored_count = 0;
+            size_t missing_count = 0;
+            
+            for (const auto& [token_str, player_id_val] : token_map) {
+                uint32_t player_id = SafeGetUint32(player_id_val);
+                auto it = player_id_to_player.find(player_id);
+                
+                if (it != player_id_to_player.end()) {
+                    game.RestoreTokenToPlayerMapping(
+                        model::Player::Token{std::string(token_str)}, 
+                        it->second
+                    );
+                    std::cout << "DEBUG: SUCCESS - Restored token: '" << token_str 
+                              << "' -> player " << player_id << std::endl;
+                    restored_count++;
+                } else {
+                    std::cout << "DEBUG: ERROR - Player not found for token: '" << token_str 
+                              << "', player ID: " << player_id << std::endl;
+                    missing_count++;
+                }
+            }
+            
+            std::cout << "DEBUG: Token mapping summary - Restored: " << restored_count 
+                      << ", Missing: " << missing_count << std::endl;
+        } else {
+            std::cout << "DEBUG: WARNING - No token_to_player found in saved state" << std::endl;
+        }
+
+        // Добавляем сессии в игру
+        std::cout << "DEBUG: Adding " << sessions_to_add.size() << " sessions to game" << std::endl;
+        for (auto& [map_id, session] : sessions_to_add) {
+            game.AddRestoredSession(model::Map::Id{map_id}, session);
+            std::cout << "DEBUG: Added session for map: " << map_id << std::endl;
+        }
+
+        std::cout << "DEBUG: DeserializeGame completed. Total players in mapping: " 
+                  << player_id_to_player.size() << std::endl;
+        std::cout << "=== DEBUG: DeserializeGame SUCCESS ===" << std::endl;
+        
+    } catch (const std::exception& e) {
+        std::cout << "DEBUG: Exception in DeserializeGame: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::path& path) {
+    std::cout << "=== DEBUG: SaveToFile START ===" << std::endl;
+    std::cout << "DEBUG: Target path: " << path << std::endl;
+    
+    try {
+        if (path.empty()) {
+            std::cout << "DEBUG: Path is empty - returning false" << std::endl;
+            return false;
+        }
+
+        // Создаем временный файл
+        auto temp_path = path;
+        temp_path += ".tmp";
+        std::cout << "DEBUG: Temp path: " << temp_path << std::endl;
+        
+        // Проверяем и создаем родительскую директорию
+        auto parent_dir = temp_path.parent_path();
+        std::cout << "DEBUG: Parent directory: " << parent_dir << std::endl;
+        
+        if (!parent_dir.empty()) {
+            if (!std::filesystem::exists(parent_dir)) {
+                std::cout << "DEBUG: Parent directory doesn't exist, creating..." << std::endl;
+                if (!std::filesystem::create_directories(parent_dir)) {
+                    std::cout << "DEBUG: Failed to create parent directory - returning false" << std::endl;
+                    return false;
+                }
+                std::cout << "DEBUG: Parent directory created successfully" << std::endl;
+            } else {
+                std::cout << "DEBUG: Parent directory exists" << std::endl;
+            }
+        }
+        
+        // Открываем временный файл для записи
+        std::cout << "DEBUG: Opening temp file for writing..." << std::endl;
+        std::ofstream file(temp_path, std::ios::binary);
+        if (!file.is_open()) {
+            std::cout << "DEBUG: Failed to open temp file - returning false" << std::endl;
+            std::cout << "DEBUG: Error: " << strerror(errno) << std::endl;
+            return false;
+        }
+        std::cout << "DEBUG: Temp file opened successfully" << std::endl;
+        
+        // Сериализуем состояние игры
+        std::cout << "DEBUG: Serializing game state..." << std::endl;
+        auto state = SerializeGame(game);
+        std::string json_str = json::serialize(state);
+        std::cout << "DEBUG: JSON data size: " << json_str.size() << " bytes" << std::endl;
+        
+        // Записываем данные во временный файл
+        std::cout << "DEBUG: Writing data to temp file..." << std::endl;
+        file.write(json_str.c_str(), json_str.size());
+        
+        // Проверяем успешность записи
+        if (!file.good()) {
+            std::cout << "DEBUG: Write operation failed - cleaning up and returning false" << std::endl;
+            file.close();
+            if (std::filesystem::exists(temp_path)) {
+                std::filesystem::remove(temp_path);
+            }
+            return false;
+        }
+        
+        file.close();
+        std::cout << "DEBUG: Data written successfully to temp file" << std::endl;
+        
+        // Проверяем, что временный файл создан
+        if (!std::filesystem::exists(temp_path)) {
+            std::cout << "DEBUG: Temp file doesn't exist after writing - returning false" << std::endl;
+            return false;
+        }
+        
+        auto temp_file_size = std::filesystem::file_size(temp_path);
+        std::cout << "DEBUG: Temp file size: " << temp_file_size << " bytes" << std::endl;
+        
+        // Атомарно переименовываем временный файл в целевой
+        std::cout << "DEBUG: Renaming temp file to target..." << std::endl;
+        std::filesystem::rename(temp_path, path);
+        std::cout << "DEBUG: File renamed successfully" << std::endl;
+        
+        // Проверяем, что целевой файл создан
+        if (!std::filesystem::exists(path)) {
+            std::cout << "DEBUG: Target file doesn't exist after rename - returning false" << std::endl;
+            return false;
+        }
+        
+        auto target_file_size = std::filesystem::file_size(path);
+        std::cout << "DEBUG: Target file size: " << target_file_size << " bytes" << std::endl;
+        
+        std::cout << "=== DEBUG: SaveToFile SUCCESS ===" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cout << "DEBUG: Exception in SaveToFile: " << e.what() << std::endl;
+        try {
+            // Пытаемся удалить временный файл в случае ошибки
+            if (std::filesystem::exists(path.string() + ".tmp")) {
+                std::filesystem::remove(path.string() + ".tmp");
+            }
+        } catch (const std::exception& remove_ex) {
+            std::cout << "DEBUG: Failed to remove temp file: " << remove_ex.what() << std::endl;
+        }
+        return false;
+    }
+}
+
+bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path& path) {
+    std::cout << "=== DEBUG: LoadFromFile START ===" << std::endl;
+    std::cout << "DEBUG: Loading from path: " << path << std::endl;
+    
+    try {
+        if (!std::filesystem::exists(path)) {
+            std::cout << "DEBUG: File does not exist - returning false" << std::endl;
+            return false;
+        }
+        
+        auto file_size = std::filesystem::file_size(path);
+        std::cout << "DEBUG: File exists, size: " << file_size << " bytes" << std::endl;
+        
+        std::ifstream file(path, std::ios::binary);
+        if (!file.is_open()) {
+            std::cout << "DEBUG: Failed to open file - returning false" << std::endl;
+            return false;
+        }
+        std::cout << "DEBUG: File opened successfully" << std::endl;
+        
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        std::string json_str = buffer.str();
+        
+        if (json_str.empty()) {
+            std::cout << "DEBUG: File is empty - returning false" << std::endl;
+            return false;
+        }
+        
+        std::cout << "DEBUG: JSON content size: " << json_str.size() << " bytes" << std::endl;
+        std::cout << "DEBUG: First 100 chars: " << json_str.substr(0, 100) << std::endl;
+        
+        auto state = json::parse(json_str);
+        DeserializeGame(game, state);
+        
+        std::cout << "=== DEBUG: LoadFromFile SUCCESS ===" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cout << "DEBUG: Exception in LoadFromFile: " << e.what() << std::endl;
+        throw std::runtime_error("Failed to load state: " + std::string(e.what()));
+    }
+}
+
+} // namespace serializer
+
+
+===== serializer.h =====
+#pragma once
+#include "model.h"
+#include <boost/json.hpp>
+#include <filesystem>
+
+namespace serializer {
+
+    namespace json = boost::json;
+
+    // DTO ������ - ������������� ���� ��� ������������
+    struct SerDog {
+        std::string name;
+        model::Point position;
+        model::Point speed;
+        model::Direction direction;
+
+        // ����������� �� model::Dog
+        static SerDog FromModel(const model::Dog& dog) {
+            return {
+                dog.GetName(),
+                dog.GetPosition(),
+                dog.GetSpeed(),
+                dog.GetDirection()
+            };
+        }
+
+        // ����������� � model::Dog
+        model::Dog ToModel() const {
+            model::Dog dog(name, position);
+            dog.SetSpeed(speed);
+            dog.SetDirection(direction);
+            return dog;
+        }
+    };
+
+    struct SerLostObject {
+        size_t id;
+        size_t type;
+        model::Point position;
+        int value;
+
+        static SerLostObject FromModel(const model::LostObject& obj) {
+            return { obj.id, obj.type, obj.position, obj.value };
+        }
+
+        model::LostObject ToModel() const {
+            return { id, type, position, value };
+        }
+    };
+
+    struct SerPlayer {
+        uint32_t id;
+        std::string token;
+        SerDog dog;
+        int score;
+        size_t bag_capacity;
+        std::vector<SerLostObject> bag;
+        double join_time;
+        double last_move_time;
+
+        static SerPlayer FromModel(const std::shared_ptr<model::Player>& player) {
+            std::vector<SerLostObject> ser_bag;
+            for (const auto& item : player->GetBag()) {
+                ser_bag.push_back(SerLostObject::FromModel(item));
+            }
+
+            return {
+                *player->GetId(),
+                *player->GetToken(),
+                SerDog::FromModel(player->GetDog()),
+                player->GetScore(),
+                player->GetBagCapacity(),
+                ser_bag,
+                player->GetJoinTime(),
+                player->GetLastMoveTime()
+            };
+        }
+    };
+
+    struct SerGameSession {
+        uint32_t id;
+        std::string map_id;
+        double dog_speed;
+        size_t next_lost_object_id;
+        std::vector<SerPlayer> players;
+        std::vector<SerLostObject> lost_objects;
+
+        static SerGameSession FromModel(const std::shared_ptr<model::GameSession>& session) {
+            std::vector<SerPlayer> ser_players;
+            for (const auto& player : session->GetPlayers()) {
+                ser_players.push_back(SerPlayer::FromModel(player));
+            }
+
+            std::vector<SerLostObject> ser_lost_objects;
+            for (const auto& obj : session->GetLostObjects()) {
+                ser_lost_objects.push_back(SerLostObject::FromModel(obj));
+            }
+
+            return {
+                *session->GetId(),
+                *session->GetMap().GetId(),
+                session->GetDogSpeed(),
+                session->GetNextLostObjectId(),
+                ser_players,
+                ser_lost_objects
+            };
+        }
+    };
+
+    class GameSerializer {
+    public:
+        static boost::json::value SerializeGame(const model::Game& game);
+        static void DeserializeGame(model::Game& game, const boost::json::value& data);
+        static bool SaveToFile(const model::Game& game, const std::filesystem::path& path);
+        static bool LoadFromFile(model::Game& game, const std::filesystem::path& path);
+    };
+
+} // namespace serializer
+
+
+===== state_manager.cpp =====
+#include "state_manager.h"
+#include <iostream>
+#include <boost/log/trivial.hpp>
+#include <boost/json.hpp>
+#include "logger.h"
+
+namespace json = boost::json;
+
+StateManager::StateManager(model::Game& game, 
+                         std::filesystem::path state_file,
+                         std::chrono::milliseconds save_period)
+    : game_(game)
+    , state_file_(std::move(state_file))
+    , save_period_(save_period) {
+    
+    enabled_ = !state_file_.empty();
+    
+    std::cout << "DEBUG: StateManager initialized - enabled: " << enabled_ 
+              << ", file: " << state_file_.string()
+              << ", period: " << save_period_.count() << "ms" << std::endl;
+    
+    if (enabled_) {
+        auto parent_path = state_file_.parent_path();
+        if (!parent_path.empty() && !std::filesystem::exists(parent_path)) {
+            std::filesystem::create_directories(parent_path);
+        }
+    }
+}
+
+void StateManager::SetSavePeriod(std::chrono::milliseconds period) {
+    save_period_ = period;
+    std::cout << "DEBUG: Save period set to: " << save_period_.count() << "ms" << std::endl;
+}
+
+void StateManager::SaveState() {
+    if (!enabled_) {
+        std::cout << "DEBUG: SaveState skipped - not enabled" << std::endl;
+        return;
+    }
+    
+    bool expected = false;
+    if (!is_saving_.compare_exchange_strong(expected, true)) {
+        std::cout << "DEBUG: SaveState skipped - already saving" << std::endl;
+        return;
+    }
+    
+    std::cout << "DEBUG: Starting SaveState to: " << state_file_.string() << std::endl;
+    
+    try {
+        bool result = serializer::GameSerializer::SaveToFile(game_, state_file_);
+        
+        if (result) {
+            std::cout << "DEBUG: SaveState SUCCESS - file created: " << state_file_.string() << std::endl;
+            BOOST_LOG_TRIVIAL(info) << "State saved successfully to: " << state_file_.string();
+        } else {
+            std::cout << "DEBUG: SaveState FAILED - serializer returned false" << std::endl;
+            BOOST_LOG_TRIVIAL(error) << "Failed to save state to: " << state_file_.string();
+        }
+            
+    } catch (const std::exception& e) {
+        std::cout << "DEBUG: SaveState EXCEPTION: " << e.what() << std::endl;
+        BOOST_LOG_TRIVIAL(error) << "State save error: " << e.what();
+    }
+    
+    is_saving_.store(false);
+}
+
+bool StateManager::LoadState() {
+    if (!enabled_) {
+        std::cout << "DEBUG: LoadState skipped - not enabled" << std::endl;
+        return false;
+    }
+    
+    std::cout << "DEBUG: Attempting LoadState from: " << state_file_.string() << std::endl;
+    
+    try {
+        if (!std::filesystem::exists(state_file_)) {
+            std::cout << "DEBUG: LoadState - file does not exist, starting fresh" << std::endl;
+            BOOST_LOG_TRIVIAL(info) << "State file does not exist, starting fresh: " << state_file_.string();
+            return false;
+        }
+        
+        bool result = serializer::GameSerializer::LoadFromFile(game_, state_file_);
+        
+        if (result) {
+            std::cout << "DEBUG: LoadState SUCCESS" << std::endl;
+            BOOST_LOG_TRIVIAL(info) << "State loaded successfully from: " << state_file_.string();
+        } else {
+            std::cout << "DEBUG: LoadState FAILED - serializer returned false" << std::endl;
+            BOOST_LOG_TRIVIAL(warning) << "Failed to load state from: " << state_file_.string();
+        }
+            
+        return result;
+        
+    } catch (const std::exception& e) {
+        std::cout << "DEBUG: LoadState EXCEPTION: " << e.what() << std::endl;
+        BOOST_LOG_TRIVIAL(error) << "State load error: " << e.what();
+        throw;
+    }
+}
+
+void StateManager::OnTick(std::chrono::milliseconds delta) {
+    if (!enabled_ || save_period_.count() == 0) {
+        return;
+    }
+    
+    time_since_last_save_ += delta;
+    
+    std::cout << "DEBUG: OnTick - time_since_last_save: " << time_since_last_save_.count() 
+              << "ms, save_period: " << save_period_.count() << "ms" << std::endl;
+    
+    if (time_since_last_save_ >= save_period_) {
+        std::cout << "DEBUG: OnTick - triggering auto-save" << std::endl;
+        SaveState();
+        time_since_last_save_ = std::chrono::milliseconds(0);
+    }
+}
+
+void StateManager::OnShutdown() {
+    std::cout << "DEBUG: OnShutdown called - saving state" << std::endl;
+    if (enabled_) {
+        SaveState();
+    }
+}
+
+
+===== state_manager.h =====
+#pragma once
+#include "model.h"
+#include "serializer.h"
+#include <chrono>
+#include <filesystem>
+#include <atomic>
+
+class StateManager {
+public:
+    StateManager(model::Game& game,
+        std::filesystem::path state_file = "",
+        std::chrono::milliseconds save_period = std::chrono::milliseconds(0));
+
+    void SetSavePeriod(std::chrono::milliseconds period);
+    void SaveState();
+    bool LoadState();
+    void OnTick(std::chrono::milliseconds delta);
+    void OnShutdown();
+    bool IsEnabled() const { return enabled_; }
+    const std::filesystem::path& GetStateFilePath() const { return state_file_; }
+
+private:
+    model::Game& game_;
+    std::filesystem::path state_file_;
+    std::chrono::milliseconds save_period_;
+    std::chrono::milliseconds time_since_last_save_{ 0 };
+    bool enabled_ = false;
+    std::atomic<bool> is_saving_{ false };
+};
+
+
+===== tagged.h =====
+#pragma once
+#include <compare>
+#include <functional>
+
+namespace util {
+
+    template <typename Value, typename Tag>
+    class Tagged {
+    public:
+        using ValueType = Value;
+        using TagType = Tag;
+
+        explicit Tagged(Value&& v)
+            : value_(std::move(v)) {
+        }
+        explicit Tagged(const Value& v)
+            : value_(v) {
+        }
+
+        const Value& operator*() const {
+            return value_;
+        }
+
+        Value& operator*() {
+            return value_;
+        }
+
+        bool operator==(const Tagged<Value, Tag>& other) const {
+            return value_ == other.value_;
+        }
+
+        bool operator!=(const Tagged<Value, Tag>& other) const {
+            return !(*this == other);
+        }
+
+        auto operator<=>(const Tagged<Value, Tag>&) const = default;
+
+    private:
+        Value value_;
+    };
+
+    template <typename TaggedValue>
+    struct TaggedHasher {
+        size_t operator()(const TaggedValue& value) const {
+            return std::hash<typename TaggedValue::ValueType>{}(*value);
+        }
+    };
+
+}  // namespace util
+
+
