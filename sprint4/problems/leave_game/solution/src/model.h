@@ -19,6 +19,7 @@
 #include "loot_generator.h"
 #include "collision_detector.h"
 
+
 namespace model {
 
     using Dimension = double;
