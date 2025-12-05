@@ -15,6 +15,7 @@ StateManager::StateManager(model::Game& game,
     
     enabled_ = !state_file_.empty();
     
+    
     std::cout << "DEBUG: StateManager initialized - enabled: " << enabled_ 
               << ", file: " << state_file_.string()
               << ", period: " << save_period_.count() << "ms" << std::endl;
