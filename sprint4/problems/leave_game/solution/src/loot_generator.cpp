@@ -16,6 +16,7 @@ unsigned LootGenerator::Generate(TimeInterval time_delta, unsigned loot_count,
     if (generated_loot > 0) {
         time_without_loot_ = {};
     }
+    
     return generated_loot;
 }
 
