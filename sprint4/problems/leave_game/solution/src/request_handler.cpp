@@ -452,6 +452,12 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
             oss << std::fixed << std::setprecision(3) << record.play_time;
             std::string play_time_str = oss.str();
             
+            // Убираем лишние нули
+            play_time_str.erase(play_time_str.find_last_not_of('0') + 1, std::string::npos);
+            if (play_time_str.back() == '.') {
+                play_time_str.pop_back();
+            }
+            
             records_json.push_back({
                 {"name", record.name},
                 {"score", record.score},

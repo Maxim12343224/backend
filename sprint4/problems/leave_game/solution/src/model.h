@@ -331,25 +331,32 @@ namespace model {
             Initialize();
         }
 
-        void AddRetiredPlayer(const std::string& name, int score, double play_time) {
-            if (use_memory_) {
-                AddToMemory(name, score, play_time);
-                return;
+        ~RetiredPlayersRepository() {
+            // При уничтожении сохраняем все записи из памяти в БД, если она доступна
+            if (!memory_records_.empty()) {
+                TrySaveMemoryRecordsToDB();
             }
+        }
 
-            try {
-                auto conn = pool_->GetConnection();
-                pqxx::work txn(*conn);
-                txn.exec_params(
-                    "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
-                    name, score, play_time
-                );
-                txn.commit();
-            }
-            catch (const std::exception& e) {
-                std::cerr << "Failed to add retired player to PostgreSQL: " << e.what() << std::endl;
-                use_memory_ = true;
+        void AddRetiredPlayer(const std::string& name, int score, double play_time) {
+            std::lock_guard lock(mutex_);
+
+            if (use_memory_ || db_url_.empty()) {
+                // Добавляем в память
                 AddToMemory(name, score, play_time);
+
+                // Пытаемся также сохранить в БД, если она доступна
+                if (!db_url_.empty() && !use_memory_) {
+                    TrySaveToDatabase(name, score, play_time);
+                }
+            }
+            else {
+                // Пытаемся сохранить в БД
+                if (!TrySaveToDatabase(name, score, play_time)) {
+                    // Если не удалось, добавляем в память и помечаем что используем память
+                    use_memory_ = true;
+                    AddToMemory(name, score, play_time);
+                }
             }
         }
 
@@ -358,12 +365,118 @@ namespace model {
             if (max_items < 0) max_items = 100;
             if (start < 0) start = 0;
 
-            if (use_memory_) {
+            std::lock_guard lock(mutex_);
+
+            if (use_memory_ || db_url_.empty()) {
                 return GetFromMemory(start, max_items);
             }
 
+            // Пытаемся получить данные из БД
+            auto db_records = TryGetFromDatabase(start, max_items);
+            if (!db_records) {
+                // Если не удалось, возвращаем из памяти
+                return GetFromMemory(start, max_items);
+            }
+
+            return *db_records;
+        }
+
+        // Проверка соединения с БД
+        bool CheckConnection() {
+            if (db_url_.empty()) {
+                return false;
+            }
+
             try {
-                auto conn = pool_->GetConnection();
+                auto conn = std::make_unique<pqxx::connection>(db_url_);
+                if (conn->is_open()) {
+                    pqxx::work txn(*conn);
+                    txn.exec("SELECT 1");
+                    return true;
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Database connection check failed: " << e.what() << std::endl;
+            }
+
+            return false;
+        }
+
+    private:
+        void Initialize() {
+            if (db_url_.empty()) {
+                use_memory_ = true;
+                return;
+            }
+
+            try {
+                // Проверяем соединение с БД
+                auto conn = std::make_unique<pqxx::connection>(db_url_);
+                if (!conn->is_open()) {
+                    throw std::runtime_error("Cannot open database connection");
+                }
+
+                pqxx::work txn(*conn);
+
+                // Создаем таблицу если не существует
+                txn.exec(
+                    "CREATE TABLE IF NOT EXISTS retired_players ("
+                    "id SERIAL PRIMARY KEY,"
+                    "name TEXT NOT NULL,"
+                    "score INTEGER NOT NULL,"
+                    "play_time DOUBLE PRECISION NOT NULL,"
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
+                    ")"
+                );
+
+                // Создаем индекс для быстрой сортировки
+                txn.exec(
+                    "CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players "
+                    "(score DESC, play_time ASC, name ASC)"
+                );
+
+                txn.commit();
+
+                // Успешно подключились к БД
+                use_memory_ = false;
+
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to initialize PostgreSQL connection: " << e.what() << std::endl;
+                use_memory_ = true;
+            }
+        }
+
+        bool TrySaveToDatabase(const std::string& name, int score, double play_time) {
+            try {
+                auto conn = std::make_unique<pqxx::connection>(db_url_);
+                if (!conn->is_open()) {
+                    return false;
+                }
+
+                pqxx::work txn(*conn);
+                txn.exec_params(
+                    "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3)",
+                    name, score, play_time
+                );
+                txn.commit();
+                return true;
+
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to save retired player to database: " << e.what() << std::endl;
+                return false;
+            }
+        }
+
+        std::optional<std::vector<std::tuple<std::string, int, double>>>
+            TryGetFromDatabase(int start, int max_items) {
+            try {
+                auto conn = std::make_unique<pqxx::connection>(db_url_);
+                if (!conn->is_open()) {
+                    return std::nullopt;
+                }
+
                 pqxx::work txn(*conn);
                 auto result = txn.exec_params(
                     "SELECT name, score, play_time FROM retired_players "
@@ -381,54 +494,18 @@ namespace model {
                     );
                 }
                 return records;
-            }
-            catch (const std::exception& e) {
-                std::cerr << "Failed to get records from PostgreSQL: " << e.what() << std::endl;
-                use_memory_ = true;
-                return GetFromMemory(start, max_items);
-            }
-        }
-
-    private:
-        void Initialize() {
-            if (db_url_.empty()) {
-                use_memory_ = true;
-                return;
-            }
-
-            try {
-                pool_ = std::make_unique<ConnectionPool>(5, [this] {
-                    auto conn = std::make_shared<pqxx::connection>(db_url_);
-                    return conn;
-                    });
-
-                auto conn = pool_->GetConnection();
-                pqxx::work txn(*conn);
-                txn.exec(
-                    "CREATE TABLE IF NOT EXISTS retired_players ("
-                    "id SERIAL PRIMARY KEY,"
-                    "name TEXT NOT NULL,"
-                    "score INTEGER NOT NULL,"
-                    "play_time DOUBLE PRECISION NOT NULL,"
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"
-                    ")"
-                );
-                txn.exec(
-                    "CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players (score DESC, play_time ASC, name ASC)"
-                );
-                txn.commit();
 
             }
             catch (const std::exception& e) {
-                std::cerr << "Failed to initialize PostgreSQL connection pool: " << e.what() << std::endl;
-                use_memory_ = true;
+                std::cerr << "Failed to get records from database: " << e.what() << std::endl;
+                return std::nullopt;
             }
         }
 
         void AddToMemory(const std::string& name, int score, double play_time) {
-            std::lock_guard lock(memory_mutex_);
             memory_records_.emplace_back(name, score, play_time);
 
+            // Сортируем записи в памяти
             std::sort(memory_records_.begin(), memory_records_.end(),
                 [](const auto& a, const auto& b) {
                     if (std::get<1>(a) != std::get<1>(b))
@@ -440,8 +517,6 @@ namespace model {
         }
 
         std::vector<std::tuple<std::string, int, double>> GetFromMemory(int start, int max_items) {
-            std::lock_guard lock(memory_mutex_);
-
             if (start < 0) start = 0;
             size_t start_idx = static_cast<size_t>(start);
 
@@ -464,11 +539,40 @@ namespace model {
             return result;
         }
 
+        void TrySaveMemoryRecordsToDB() {
+            if (db_url_.empty()) {
+                return;
+            }
+
+            try {
+                auto conn = std::make_unique<pqxx::connection>(db_url_);
+                if (!conn->is_open()) {
+                    return;
+                }
+
+                pqxx::work txn(*conn);
+
+                for (const auto& [name, score, play_time] : memory_records_) {
+                    txn.exec_params(
+                        "INSERT INTO retired_players (name, score, play_time) VALUES ($1, $2, $3) "
+                        "ON CONFLICT DO NOTHING",
+                        name, score, play_time
+                    );
+                }
+
+                txn.commit();
+                memory_records_.clear(); // Очищаем память после успешного сохранения
+
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Failed to save memory records to database: " << e.what() << std::endl;
+            }
+        }
+
         std::string db_url_;
-        std::unique_ptr<ConnectionPool> pool_;
         bool use_memory_ = false;
         std::vector<std::tuple<std::string, int, double>> memory_records_;
-        std::mutex memory_mutex_;
+        std::mutex mutex_;
     };
 
     struct RetiredPlayerRecord {

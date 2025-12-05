@@ -355,10 +355,6 @@ struct Event {
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
-    // Обновляем игровое время (но CheckRetiredPlayers тоже это делает,
-    // поэтому может быть двойное обновление. Лучше убрать отсюда)
-    // current_game_time_ += delta_time;
-    
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
     
@@ -483,6 +479,10 @@ void GameSession::Tick(double delta_time) {
     lost_objects_.erase(new_end, lost_objects_.end());
 }
 
+void GameSession::SetRetiredPlayersCallback(RetiredPlayersCallback callback) {
+    retired_callback_ = std::move(callback);
+}
+
 void GameSession::AddRestoredPlayer(std::shared_ptr<Player> player) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     players_.push_back(player);
@@ -499,10 +499,6 @@ void GameSession::SetNextLostObjectId(size_t id) {
 
 size_t GameSession::GetNextLostObjectId() const {
     return next_lost_object_id_.load();
-}
-
-void GameSession::SetRetiredPlayersCallback(RetiredPlayersCallback callback) {
-    retired_callback_ = std::move(callback);
 }
 
 std::vector<std::shared_ptr<Player>> Game::GetAllPlayers() const {
@@ -551,33 +547,32 @@ void Game::Tick(double delta_time) {
 }
 
 void Game::HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-    
     for (auto& player : retired_players) {
         AddRetiredPlayer(player);
     }
 }
 
 void Game::AddRetiredPlayer(std::shared_ptr<Player> player) {
-    std::lock_guard<std::recursive_mutex> lock(mutex_);
-
-    if (!retired_repo_) {
-        retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
-    }
-
     // Игровое время уже в секундах (double)
     double play_time_seconds = player->GetRetirementTime() - player->GetJoinTime();
 
     // Округляем до 3 знаков после запятой
     play_time_seconds = std::round(play_time_seconds * 1000.0) / 1000.0;
 
-    retired_repo_->AddRetiredPlayer(
-        player->GetDog().GetName(),
-        player->GetScore(),
-        play_time_seconds
-    );
+    // Добавляем в репозиторий
+    if (retired_repo_) {
+        retired_repo_->AddRetiredPlayer(
+            player->GetDog().GetName(),
+            player->GetScore(),
+            play_time_seconds
+        );
+    }
 
-    token_to_player_.erase(player->GetToken());
+    // Удаляем из mapping токенов
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        token_to_player_.erase(player->GetToken());
+    }
 }
 
 std::string DirectionToString(Direction dir) {

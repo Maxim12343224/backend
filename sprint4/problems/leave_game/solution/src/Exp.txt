@@ -675,285 +675,6 @@ namespace loot_gen {
 
 
 ===== main.cpp =====
-/*#include "sdk.h"
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/signal_set.hpp>
-#include <iostream>
-#include <thread>
-#include <boost/log/trivial.hpp>
-#include "json_loader.h"
-#include "request_handler.h"
-#include "logger.h"
-#include <boost/program_options.hpp>
-#include <filesystem>
-#include <boost/system/error_code.hpp>
-#include "state_manager.h"
-
-using namespace std::literals;
-namespace net = boost::asio;
-namespace json = boost::json;
-namespace po = boost::program_options;
-namespace fs = std::filesystem;
-
-namespace {
-
-    template <typename Fn>
-    void RunWorkers(unsigned n, const Fn& fn) {
-        n = std::max(1u, n);
-        std::vector<std::jthread> workers;
-        workers.reserve(n - 1);
-        while (--n) {
-            workers.emplace_back(fn);
-        }
-        fn();
-    }
-
-    class Ticker : public std::enable_shared_from_this<Ticker> {
-    public:
-        using Strand = net::strand<net::io_context::executor_type>;
-        using Handler = std::function<void(std::chrono::milliseconds delta)>;
-
-        Ticker(Strand strand, std::chrono::milliseconds period, Handler handler)
-            : strand_(strand)
-            , period_(period)
-            , handler_(std::move(handler)) {
-        }
-
-        void Start() {
-            net::dispatch(strand_, [self = shared_from_this()] {
-                self->last_tick_ = Clock::now();
-                self->ScheduleTick();
-            });
-        }
-
-    private:
-        void ScheduleTick() {
-            assert(strand_.running_in_this_thread());
-            timer_.expires_after(period_);
-            timer_.async_wait(net::bind_executor(
-                strand_, 
-                [self = shared_from_this()](boost::system::error_code ec) {  
-                    self->OnTick(ec);
-                }
-            ));
-        }
-
-        void OnTick(boost::system::error_code ec) {  
-            using namespace std::chrono;
-            assert(strand_.running_in_this_thread());
-
-            if (!ec) {
-                auto this_tick = Clock::now();
-                auto delta = duration_cast<milliseconds>(this_tick - last_tick_);
-                last_tick_ = this_tick;
-                try {
-                    handler_(delta);
-                } catch (...) {
-                }
-                ScheduleTick();
-            }
-        }
-
-        using Clock = std::chrono::steady_clock;
-
-        Strand strand_;
-        std::chrono::milliseconds period_;
-        net::steady_timer timer_{strand_};
-        Handler handler_;
-        std::chrono::steady_clock::time_point last_tick_;
-    };
-
-}  // namespace
-
-int main(int argc, const char* argv[]) {
-    po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help,h", "produce help message")
-        ("tick-period,t", po::value<int>(), "set tick period in milliseconds")
-        ("config-file,c", po::value<std::string>()->required(), "set config file path")
-        ("www-root,w", po::value<std::string>()->required(), "set static files root")
-        ("randomize-spawn-points", "spawn dogs at random positions")
-        ("state-file", po::value<std::string>(), "set state file path")
-        ("save-state-period", po::value<int>(), "set save state period in milliseconds");
-
-    po::variables_map vm;
-    try {
-        po::store(po::parse_command_line(argc, argv, desc), vm);
-        
-        if (vm.count("help")) {
-            std::cout << desc << "\n";
-            return 0;
-        }
-        
-        po::notify(vm);
-    } catch (const po::error& e) {
-        std::cerr << "Error: " << e.what() << "\n";
-        std::cout << desc << "\n";
-        return EXIT_FAILURE;
-    }
-
-    try {
-        if (!vm.count("config-file") || !vm.count("www-root")) {
-            std::cerr << "Error: config-file and www-root are required" << std::endl;
-            return EXIT_FAILURE;
-        }
-
-        const fs::path config_path(vm["config-file"].as<std::string>());
-        const fs::path static_path(vm["www-root"].as<std::string>());
-        
-        if (!fs::exists(config_path)) {
-            std::cerr << "Error: config file not found: " << config_path << std::endl;
-            return EXIT_FAILURE;
-        }
-        
-        if (!fs::exists(static_path)) {
-            std::cerr << "Error: static path not found: " << static_path << std::endl;
-            return EXIT_FAILURE;
-        }
-
-        const bool randomize_spawn = vm.count("randomize-spawn-points") > 0;
-        const int tick_period = vm.count("tick-period") ? vm["tick-period"].as<int>() : 0;
-        const bool is_tick_automatic = tick_period > 0;
-        
-        fs::path state_file;
-        std::chrono::milliseconds save_state_period(0);
-        
-        if (vm.count("state-file")) {
-            state_file = vm["state-file"].as<std::string>();
-        }
-        
-        if (vm.count("save-state-period")) {
-            save_state_period = std::chrono::milliseconds(vm["save-state-period"].as<int>());
-        }
-
-        logger::InitLogging();
-        
-        // Получаем URL базы данных из переменной окружения
-        const char* db_url = std::getenv("GAME_DB_URL");
-        if (!db_url) {
-            std::cerr << "Error: GAME_DB_URL environment variable is not set" << std::endl;
-            std::cerr << "Please set it with: export GAME_DB_URL=postgresql://username:password@localhost:5432/game_db" << std::endl;
-            return EXIT_FAILURE;
-        }
-
-        const char* db_url = std::getenv("GAME_DB_URL");
-        if (!db_url) {
-            std::cout << "Warning: GAME_DB_URL environment variable is not set" << std::endl;
-            std::cout << "Using in-memory storage for retired players" << std::endl;
-        } else {
-            std::cout << "Using database: " << db_url << std::endl;
-        }
-
-        std::cout << "Using database: " << db_url << std::endl;
-
-        // Создаем игру с подключением к БД
-        model::Game game;
-        if (db_url) {
-        game.SetDatabaseUrl(db_url);
-        }
-        
-        try {
-            json_loader::LoadGame(config_path, game);
-        } catch (const std::exception& e) {
-            std::cerr << "Error loading game config: " << e.what() << std::endl;
-            return EXIT_FAILURE;
-        }
-        
-        game.SetRandomizeSpawnPoints(randomize_spawn);
-
-        StateManager state_manager(game, state_file, save_state_period);
-        
-        // Загружаем состояние, если указан файл состояния
-        if (!state_file.empty()) {
-            try {
-                if (!state_manager.LoadState()) {
-                    std::cout << "Starting with clean state" << std::endl;
-                } else {
-                    std::cout << "Game state loaded successfully" << std::endl;
-                }
-            } catch (const std::exception& e) {
-                std::cerr << "Warning: Failed to load game state: " << e.what() << ". Starting with clean state." << std::endl;
-            }
-        }
-
-        const unsigned num_threads = std::thread::hardware_concurrency();
-        net::io_context ioc(num_threads);
-        auto api_strand = net::make_strand(ioc);
-
-        auto tick_handler = [&game, &state_manager](std::chrono::milliseconds delta) {
-            game.Tick(static_cast<double>(delta.count()) / 1000.0);
-            state_manager.OnTick(delta);
-        };
-
-        if (is_tick_automatic) {
-            auto ticker = std::make_shared<Ticker>(
-                api_strand, 
-                std::chrono::milliseconds(tick_period),
-                tick_handler
-            );
-            ticker->Start();
-        }
-
-        net::signal_set signals(ioc, SIGINT, SIGTERM);
-        signals.async_wait([&ioc, &state_manager](const boost::system::error_code& ec, int) {
-            if (!ec) {
-                state_manager.OnShutdown();
-                ioc.stop();
-            }
-        });
-
-        http_handler::RequestHandler base_handler{ 
-            game, static_path, is_tick_automatic, config_path, state_manager 
-        };
-        http_handler::LoggingRequestHandler handler{ std::move(base_handler) };
-
-        const auto address = net::ip::make_address("0.0.0.0");
-        constexpr net::ip::port_type port = 8080;
-        
-        std::cout << "Server starting on " << address << ":" << port << std::endl;
-        std::cout << "Static files path: " << static_path << std::endl;
-        std::cout << "Config file: " << config_path << std::endl;
-        
-        http_server::ServeHttp(ioc, { address, port }, [&handler](auto&& req, auto&& addr, auto&& send) {
-            handler(std::forward<decltype(req)>(req),
-                std::forward<decltype(addr)>(addr),
-                std::forward<decltype(send)>(send));
-        });
-
-        json::value start_data{
-            {"port", port},
-            {"address", address.to_string()},
-            {"static_path", static_path.string()},
-            {"config_path", config_path.string()},
-            {"randomize_spawn_points", randomize_spawn},
-            {"tick_period_ms", tick_period},
-            {"state_file", state_file.string()},
-            {"save_state_period_ms", save_state_period.count()},
-            {"database_url", db_url}
-        };
-        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, start_data)
-            << "server started";
-
-        RunWorkers(std::max(1u, num_threads), [&ioc] { ioc.run(); });
-
-        json::value exit_data{ {"code", 0} };
-        BOOST_LOG_TRIVIAL(info) << boost::log::add_value(logger::additional_data, exit_data)
-            << "server exited";
-        return EXIT_SUCCESS;
-    }
-    catch (const std::exception& ex) {
-        json::value exit_data{
-            {"code", EXIT_FAILURE},
-            {"exception", ex.what()}
-        };
-        BOOST_LOG_TRIVIAL(error) << boost::log::add_value(logger::additional_data, exit_data)
-            << "server exited";
-        return EXIT_FAILURE;
-    }
-}*/
-
-
-
 #include "sdk.h"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/signal_set.hpp>
@@ -1045,7 +766,7 @@ namespace {
     };
 
     // Функция для получения URL базы данных
-    std::string GetDatabaseUrl() {
+     std::string GetDatabaseUrl() {
         // 1. Проверяем переменную окружения GAME_DB_URL (основная для тестов)
         const char* env_url = std::getenv("GAME_DB_URL");
         if (env_url && strlen(env_url) > 0) {
@@ -1079,15 +800,18 @@ namespace {
             return url;
         }
         
-        // 3. Для локальной разработки - используем Docker PostgreSQL
-        std::string local_url = "postgresql://postgres:Mys3Cr3t@localhost:5432/game_db";
-        std::cout << "INFO: Using default PostgreSQL URL for local development: " << local_url << std::endl;
-        
-        return local_url;
+        // 3. Для локальной разработки - используем in-memory
+        std::cout << "INFO: No PostgreSQL URL found. Using in-memory storage for retired players." << std::endl;
+        return "";
     }
     
     // Функция для проверки подключения к PostgreSQL с повторными попытками
     bool WaitForPostgreSQL(const std::string& db_url, int max_attempts = 30) {
+        if (db_url.empty()) {
+            std::cout << "INFO: No database URL provided, skipping PostgreSQL connection." << std::endl;
+            return false;
+        }
+        
         std::cout << "INFO: Waiting for PostgreSQL to be ready..." << std::endl;
         
         for (int attempt = 1; attempt <= max_attempts; ++attempt) {
@@ -1097,18 +821,6 @@ namespace {
                 
                 if (conn.is_open()) {
                     std::cout << "SUCCESS: Connected to PostgreSQL" << std::endl;
-                    
-                    // Создаем базу данных если нужно
-                    try {
-                        pqxx::work txn(conn);
-                        txn.exec("CREATE DATABASE IF NOT EXISTS game_db");
-                        txn.commit();
-                        std::cout << "INFO: Database 'game_db' created or already exists" << std::endl;
-                    } catch (const std::exception& e) {
-                        // Игнорируем ошибки создания БД (может уже существовать)
-                        std::cout << "INFO: " << e.what() << std::endl;
-                    }
-                    
                     return true;
                 }
             } catch (const std::exception& e) {
@@ -1393,6 +1105,14 @@ std::shared_ptr<Player> Game::JoinGame(const Map::Id& map_id, std::string dog_na
                 randomize_spawn_points_, loot_generator_, bag_capacity, retirement_time_);
             session->SetLootTypesCount(loot_types_count);
             session->SetLootValues(loot_values);
+            
+            // Настраиваем callback для уведомления об ушедших игроках
+            session->SetRetiredPlayersCallback(
+                [this](const auto& retired_players) {
+                    HandlePlayerRetirement(retired_players);
+                }
+            );
+            
             map_id_to_session_[map_id] = session;
         }
     }
@@ -1467,6 +1187,10 @@ std::shared_ptr<Player> GameSession::AddPlayer(std::string dog_name) {
             bag_capacity_
         );
 
+        // Устанавливаем временные метки
+        player->SetJoinTime(current_game_time_);
+        player->SetLastMoveTime(current_game_time_);
+
         std::lock_guard<std::recursive_mutex> lock(mutex_);
         players_.push_back(player);
         return player;
@@ -1498,6 +1222,8 @@ void GameSession::SetPlayerAction(const Player::Token& token, const std::string&
         } else if (move == "") {
             dog.SetSpeed({0.0, 0.0});
         }
+        // Обновляем время последнего движения при любой команде
+        player->SetLastMoveTime(current_game_time_);
         break;
     }
 }
@@ -1573,14 +1299,14 @@ std::vector<std::shared_ptr<Player>> GameSession::GetActivePlayers() const {
     return active_players;
 }
 
-std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
-    std::vector<std::shared_ptr<Player>> newly_retired_players;
-    
-    auto current_time = std::chrono::steady_clock::now();
-    
+void GameSession::CheckRetiredPlayers(double delta_time_seconds) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     
+    // Обновляем игровое время
+    current_game_time_ += delta_time_seconds;
+    
     std::vector<std::shared_ptr<Player>> active_players;
+    std::vector<std::shared_ptr<Player>> newly_retired_players;
     
     for (auto& player : players_) {
         if (player->IsRetired()) {
@@ -1589,26 +1315,21 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
         
         const auto& dog = player->GetDog();
         
+        // Проверяем, движется ли собака
         bool is_moving = (dog.GetSpeed().x != 0.0 || dog.GetSpeed().y != 0.0);
         
         if (is_moving) {
+            // Собака движется - обновляем время последнего движения
+            player->SetLastMoveTime(current_game_time_);
             active_players.push_back(player);
         } else {
-            std::chrono::steady_clock::time_point start_time;
+            // Собака стоит на месте
+            double time_since_last_move = current_game_time_ - player->GetLastMoveTime();
+            double retirement_time_seconds = retirement_time_.count() / 1000.0;
             
-            if (dog.HasEverMoved()) {
-                start_time = dog.GetLastZeroSpeedTime();
-            } else {
-                start_time = player->GetJoinTime();
-            }
-            
-            auto inactivity_duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                current_time - start_time);
-            
-            bool should_retire = (inactivity_duration >= retirement_time_);
-            
-            if (should_retire) {
-                player->Retire();
+            if (time_since_last_move >= retirement_time_seconds) {
+                // Игрок должен уйти на пенсию
+                player->Retire(current_game_time_);
                 newly_retired_players.push_back(player);
             } else {
                 active_players.push_back(player);
@@ -1618,7 +1339,10 @@ std::vector<std::shared_ptr<Player>> GameSession::CheckRetiredPlayers() {
     
     players_ = std::move(active_players);
     
-    return newly_retired_players;
+    // Если есть новые вышедшие игроки, добавляем их в репозиторий
+    if (!newly_retired_players.empty() && retired_callback_) {
+        retired_callback_(newly_retired_players);
+    }
 }
 
 namespace {
@@ -1665,6 +1389,10 @@ struct Event {
 
 void GameSession::Tick(double delta_time) {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    // Обновляем игровое время (но CheckRetiredPlayers тоже это делает,
+    // поэтому может быть двойное обновление. Лучше убрать отсюда)
+    // current_game_time_ += delta_time;
     
     std::vector<Point> start_positions;
     std::vector<Point> end_positions;
@@ -1808,6 +1536,10 @@ size_t GameSession::GetNextLostObjectId() const {
     return next_lost_object_id_.load();
 }
 
+void GameSession::SetRetiredPlayersCallback(RetiredPlayersCallback callback) {
+    retired_callback_ = std::move(callback);
+}
+
 std::vector<std::shared_ptr<Player>> Game::GetAllPlayers() const {
     std::lock_guard<std::recursive_mutex> lock(mutex_);
     std::vector<std::shared_ptr<Player>> players;
@@ -1836,6 +1568,53 @@ void Game::RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_p
     token_to_player_[token] = player;
 }
 
+void Game::Tick(double delta_time) {
+    std::vector<std::shared_ptr<GameSession>> sessions;
+    {
+        std::lock_guard<std::recursive_mutex> lock(mutex_);
+        for (const auto& [map_id, session] : map_id_to_session_) {
+            sessions.push_back(session);
+        }
+    }
+
+    for (auto& session : sessions) {
+        session->Tick(delta_time);
+        
+        // Проверяем игроков на выход из игры
+        session->CheckRetiredPlayers(delta_time);
+    }
+}
+
+void Game::HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+    
+    for (auto& player : retired_players) {
+        AddRetiredPlayer(player);
+    }
+}
+
+void Game::AddRetiredPlayer(std::shared_ptr<Player> player) {
+    std::lock_guard<std::recursive_mutex> lock(mutex_);
+
+    if (!retired_repo_) {
+        retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
+    }
+
+    // Игровое время уже в секундах (double)
+    double play_time_seconds = player->GetRetirementTime() - player->GetJoinTime();
+
+    // Округляем до 3 знаков после запятой
+    play_time_seconds = std::round(play_time_seconds * 1000.0) / 1000.0;
+
+    retired_repo_->AddRetiredPlayer(
+        player->GetDog().GetName(),
+        player->GetScore(),
+        play_time_seconds
+    );
+
+    token_to_player_.erase(player->GetToken());
+}
+
 std::string DirectionToString(Direction dir) {
     switch (dir) {
         case Direction::North: return "U";
@@ -1845,8 +1624,7 @@ std::string DirectionToString(Direction dir) {
     }
     return "U";
 }
-
-}  // namespace model
+}
 
 
 ===== model.h =====
@@ -2012,9 +1790,7 @@ namespace model {
             : name_(std::move(name)),
             position_(start_pos),
             speed_{ 0.0, 0.0 },
-            direction_(start_dir),
-            last_zero_speed_time_(std::chrono::steady_clock::now()),
-            has_ever_moved_(false) {
+            direction_(start_dir) {
         }
 
         const std::string& GetName() const noexcept { return name_; }
@@ -2023,43 +1799,20 @@ namespace model {
         Direction GetDirection() const noexcept { return direction_; }
 
         void SetSpeed(Point speed) noexcept {
-            Point old_speed = speed_;
             speed_ = speed;
-
-            // ���� ������ ��������� �������
-            if ((old_speed.x == 0.0 && old_speed.y == 0.0) &&
-                (speed.x != 0.0 || speed.y != 0.0)) {
-                has_ever_moved_ = true;
-            }
-
-            // ���� ������������ ����� ��������
-            if (has_ever_moved_ &&
-                (old_speed.x != 0.0 || old_speed.y != 0.0) &&
-                (speed.x == 0.0 && speed.y == 0.0)) {
-                last_zero_speed_time_ = std::chrono::steady_clock::now();
-            }
         }
 
         void SetDirection(Direction dir) noexcept { direction_ = dir; }
 
         void SetPosition(Point p) noexcept {
             position_ = p;
-            // �� ��������� ����� ��� ��������� �������!
         }
-
-        std::chrono::steady_clock::time_point GetLastZeroSpeedTime() const noexcept {
-            return last_zero_speed_time_;
-        }
-
-        bool HasEverMoved() const noexcept { return has_ever_moved_; }
 
     private:
         std::string name_;
         Point position_;
         Point speed_;
         Direction direction_;
-        std::chrono::steady_clock::time_point last_zero_speed_time_;
-        bool has_ever_moved_;
     };
 
     struct LostObject {
@@ -2079,7 +1832,7 @@ namespace model {
         Player(std::shared_ptr<GameSession> session, Dog dog, uint32_t id, std::string token, size_t bag_capacity)
             : id_(Id{ id }), token_(Token{ std::move(token) }), dog_(std::move(dog)),
             session_(std::move(session)), bag_capacity_(bag_capacity),
-            join_time_(std::chrono::steady_clock::now()) {
+            join_time_(0.0), last_move_time_(0.0), retirement_time_(0.0), is_retired_(false) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -2092,14 +1845,19 @@ namespace model {
         bool IsBagFull() const noexcept { return bag_.size() >= bag_capacity_; }
         int GetScore() const noexcept { return score_; }
 
-        std::chrono::steady_clock::time_point GetJoinTime() const noexcept { return join_time_; }
-        std::chrono::steady_clock::time_point GetRetirementTime() const noexcept { return retirement_time_; }
-        void SetRetirementTime(std::chrono::steady_clock::time_point time) noexcept { retirement_time_ = time; }
+        double GetJoinTime() const noexcept { return join_time_; }
+        double GetLastMoveTime() const noexcept { return last_move_time_; }
+        double GetRetirementTime() const noexcept { return retirement_time_; }
+
+        void SetJoinTime(double time) noexcept { join_time_ = time; }
+        void SetLastMoveTime(double time) noexcept { last_move_time_ = time; }
+        void SetRetirementTime(double time) noexcept { retirement_time_ = time; }
+
         bool IsRetired() const noexcept { return is_retired_; }
 
-        void Retire() noexcept {
+        void Retire(double current_time) noexcept {
             is_retired_ = true;
-            retirement_time_ = std::chrono::steady_clock::now();
+            retirement_time_ = current_time;
         }
 
         bool AddItemToBag(const LostObject& item) {
@@ -2119,9 +1877,10 @@ namespace model {
         std::vector<LostObject> bag_;
         size_t bag_capacity_;
         int score_ = 0;
-        std::chrono::steady_clock::time_point join_time_;
-        std::chrono::steady_clock::time_point retirement_time_;
-        bool is_retired_ = false;
+        double join_time_;
+        double last_move_time_;
+        double retirement_time_;
+        bool is_retired_;
     };
 
     class ConnectionPool {
@@ -2354,13 +2113,14 @@ namespace model {
     class GameSession : public std::enable_shared_from_this<GameSession> {
     public:
         using Id = util::Tagged<uint32_t, GameSession>;
+        using RetiredPlayersCallback = std::function<void(const std::vector<std::shared_ptr<Player>>&)>;
 
         explicit GameSession(Map map, uint32_t id, double dog_speed, bool randomize_spawn_points,
             std::shared_ptr<loot_gen::LootGenerator> loot_generator, size_t bag_capacity,
             std::chrono::milliseconds retirement_time)
             : id_(Id{ id }), map_(std::move(map)), dog_speed_(dog_speed),
             randomize_spawn_points_(randomize_spawn_points), loot_generator_(std::move(loot_generator)),
-            bag_capacity_(bag_capacity), retirement_time_(retirement_time) {
+            bag_capacity_(bag_capacity), retirement_time_(retirement_time), current_game_time_(0.0) {
         }
 
         const Id& GetId() const noexcept { return id_; }
@@ -2370,18 +2130,20 @@ namespace model {
         const std::vector<LostObject>& GetLostObjects() const noexcept { return lost_objects_; }
         double GetDogSpeed() const noexcept { return dog_speed_; }
         std::chrono::milliseconds GetRetirementTime() const noexcept { return retirement_time_; }
+        double GetCurrentGameTime() const noexcept { return current_game_time_; }
 
         size_t GetLootTypesCount() const noexcept { return loot_types_count_; }
         void SetLootTypesCount(size_t count) noexcept { loot_types_count_ = count; }
         void SetLootValues(const std::vector<int>& values) { loot_values_ = values; }
+        void SetRetiredPlayersCallback(RetiredPlayersCallback callback);
 
         Point GenerateRandomPosition() const;
         std::shared_ptr<Player> AddPlayer(std::string dog_name);
         void SetPlayerAction(const Player::Token& token, const std::string& move);
         void GenerateLoot(std::chrono::milliseconds delta_time);
         void Tick(double delta_time);
-
-        std::vector<std::shared_ptr<Player>> CheckRetiredPlayers();
+        void UpdateGameTime(double delta_time_seconds);
+        void CheckRetiredPlayers(double delta_time_seconds);
 
         void AddRestoredPlayer(std::shared_ptr<Player> player);
         void AddRestoredLostObject(const LostObject& obj);
@@ -2402,18 +2164,25 @@ namespace model {
         size_t bag_capacity_;
         std::vector<int> loot_values_;
         std::chrono::milliseconds retirement_time_;
+        double current_game_time_;
+        RetiredPlayersCallback retired_callback_;
     };
 
     class Game {
     public:
         using Maps = std::vector<Map>;
 
-        Game() : default_dog_speed_(1.0), default_bag_capacity_(3) {}
+        Game() : default_dog_speed_(1.0), default_bag_capacity_(3) {
+            retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
+        }
 
         explicit Game(const std::string& db_url, double default_dog_speed, size_t default_bag_capacity = 3)
             : default_dog_speed_(default_dog_speed), default_bag_capacity_(default_bag_capacity) {
             if (!db_url.empty()) {
                 retired_repo_ = std::make_unique<RetiredPlayersRepository>(db_url);
+            }
+            else {
+                retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
             }
         }
 
@@ -2526,30 +2295,9 @@ namespace model {
 
         std::vector<std::shared_ptr<Player>> GetAllPlayers() const;
 
-        void AddRetiredPlayer(std::shared_ptr<Player> player) {
-            std::lock_guard<std::recursive_mutex> lock(mutex_);
+        void AddRetiredPlayer(std::shared_ptr<Player> player);
 
-            if (!retired_repo_) {
-                retired_repo_ = std::make_unique<RetiredPlayersRepository>("");
-            }
-
-            auto retirement_time = player->GetRetirementTime();
-            auto join_time = player->GetJoinTime();
-
-            auto play_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-                retirement_time - join_time);
-            double play_time_seconds = play_time.count() / 1000.0;
-
-            play_time_seconds = std::round(play_time_seconds * 1000.0) / 1000.0;
-
-            retired_repo_->AddRetiredPlayer(
-                player->GetDog().GetName(),
-                player->GetScore(),
-                play_time_seconds
-            );
-
-            token_to_player_.erase(player->GetToken());
-        }
+        void HandlePlayerRetirement(const std::vector<std::shared_ptr<Player>>& retired_players);
 
         std::vector<RetiredPlayerRecord> GetRetiredPlayers(int start = 0, int max_items = 100) {
             if (!retired_repo_) {
@@ -2575,24 +2323,7 @@ namespace model {
             }
         }
 
-        void Tick(double delta_time) {
-            std::vector<std::shared_ptr<GameSession>> sessions;
-            {
-                std::lock_guard<std::recursive_mutex> lock(mutex_);
-                for (const auto& [map_id, session] : map_id_to_session_) {
-                    sessions.push_back(session);
-                }
-            }
-
-            for (auto& session : sessions) {
-                session->Tick(delta_time);
-
-                auto retired_players = session->CheckRetiredPlayers();
-                for (auto& player : retired_players) {
-                    AddRetiredPlayer(player);
-                }
-            }
-        }
+        void Tick(double delta_time);
 
         void AddRestoredSession(const Map::Id& map_id, std::shared_ptr<GameSession> session);
         void RestoreTokenToPlayerMapping(const Player::Token& token, std::shared_ptr<Player> player);
@@ -2981,20 +2712,30 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
         }
 
         auto time_delta = json_body.as_object()["timeDelta"];
-        if (!time_delta.is_int64()) {
+        if (!time_delta.is_number()) {
             return MakeErrorResponse(http::status::bad_request,
-                "invalidArgument", "timeDelta must be integer", req);
+                "invalidArgument", "timeDelta must be a number", req);
         }
 
-        auto delta = time_delta.as_int64();
-        if (delta < 0) {
+        double delta_seconds = 0.0;
+        if (time_delta.is_int64()) {
+            delta_seconds = static_cast<double>(time_delta.as_int64()) / 1000.0;
+        } else if (time_delta.is_double()) {
+            delta_seconds = time_delta.as_double() / 1000.0;
+        } else if (time_delta.is_uint64()) {
+            delta_seconds = static_cast<double>(time_delta.as_uint64()) / 1000.0;
+        }
+        
+        if (delta_seconds < 0) {
             return MakeErrorResponse(http::status::bad_request,
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        auto delta_ms = std::chrono::milliseconds(delta);
-        game_.Tick(static_cast<double>(delta) / 1000.0);
-        state_manager_.OnTick(delta_ms);
+        // Выполняем тик игры с заданной дельтой времени
+        game_.Tick(delta_seconds);
+        
+        // Сохраняем состояние, если это необходимо
+        state_manager_.OnTick(std::chrono::milliseconds(static_cast<int>(delta_seconds * 1000)));
 
         return MakeStringResponse(http::status::ok, "{}", req);
     } catch (const std::exception& e) {
@@ -3784,6 +3525,10 @@ json::value GameSerializer::SerializeGame(const model::Game& game) {
     }
     state["token_to_player"] = token_map;
     
+    // Сохраняем время выхода на пенсию
+    auto retirement_time = std::chrono::duration_cast<std::chrono::milliseconds>(game.GetRetirementTime());
+    state["retirement_time_ms"] = retirement_time.count();
+    
     return state;
 }
 
@@ -3798,13 +3543,6 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
     const auto& obj = data.as_object();
     std::cout << "DEBUG: JSON object has " << obj.size() << " fields" << std::endl;
 
-    // Выводим все ключи для отладки
-    std::cout << "DEBUG: JSON keys: ";
-    for (const auto& field : obj) {
-        std::cout << field.key() << " ";
-    }
-    std::cout << std::endl;
-
     try {
         if (obj.contains("default_dog_speed")) {
             game.SetDefaultDogSpeed(obj.at("default_dog_speed").as_double());
@@ -3814,6 +3552,13 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
         if (obj.contains("default_bag_capacity")) {
             game.SetDefaultBagCapacity(SafeGetUint64(obj.at("default_bag_capacity")));
             std::cout << "DEBUG: Set default_bag_capacity: " << SafeGetUint64(obj.at("default_bag_capacity")) << std::endl;
+        }
+
+        // Восстанавливаем время выхода на пенсию
+        if (obj.contains("retirement_time_ms")) {
+            auto retirement_time = std::chrono::milliseconds(SafeGetUint64(obj.at("retirement_time_ms")));
+            game.SetRetirementTime(retirement_time);
+            std::cout << "DEBUG: Set retirement_time: " << retirement_time.count() << "ms" << std::endl;
         }
 
         // Создаем временный mapping для восстановления токенов
@@ -3839,18 +3584,25 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                     throw std::runtime_error("Map not found: " + ser_session.map_id);
                 }
 
-                // ИСПРАВЛЕНИЕ: Добавляем retirement_time как седьмой параметр
+                // Создаем сессию с временем выхода на пенсию
                 auto session = std::make_shared<model::GameSession>(
                     *map, ser_session.id, ser_session.dog_speed, false, 
                     game.GetLootGenerator(), game.GetMapBagCapacity(model::Map::Id{ser_session.map_id}),
-                    game.GetRetirementTime()  // Добавлен седьмой параметр
+                    game.GetRetirementTime()
+                );
+
+                // Настраиваем callback для уведомления об ушедших игроках
+                session->SetRetiredPlayersCallback(
+                    [&game](const auto& retired_players) {
+                        game.HandlePlayerRetirement(retired_players);
+                    }
                 );
 
                 session->SetLootTypesCount(game.GetMapLootTypesCount(model::Map::Id{ser_session.map_id}));
                 session->SetLootValues(game.GetMapLootValues(model::Map::Id{ser_session.map_id}));
                 session->SetNextLostObjectId(ser_session.next_lost_object_id);
 
-                // Восстанавливаем игроков и сохраняем их в mapping
+                // Восстанавливаем игроков
                 std::cout << "DEBUG: Restoring " << ser_session.players.size() << " players" << std::endl;
                 for (size_t player_idx = 0; player_idx < ser_session.players.size(); ++player_idx) {
                     const auto& ser_player = ser_session.players[player_idx];
@@ -3862,6 +3614,10 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                         session, std::move(dog), ser_player.id, ser_player.token, ser_player.bag_capacity
                     );
 
+                    // Устанавливаем временные метки
+                    player->SetJoinTime(0.0);  // Время входа будет установлено позже
+                    player->SetLastMoveTime(0.0);  // Время последнего движения
+                    
                     player->AddScore(ser_player.score);
 
                     for (const auto& ser_item : ser_player.bag) {
@@ -4148,6 +3904,8 @@ namespace serializer {
         int score;
         size_t bag_capacity;
         std::vector<SerLostObject> bag;
+        double join_time;
+        double last_move_time;
 
         static SerPlayer FromModel(const std::shared_ptr<model::Player>& player) {
             std::vector<SerLostObject> ser_bag;
@@ -4161,7 +3919,9 @@ namespace serializer {
                 SerDog::FromModel(player->GetDog()),
                 player->GetScore(),
                 player->GetBagCapacity(),
-                ser_bag
+                ser_bag,
+                player->GetJoinTime(),
+                player->GetLastMoveTime()
             };
         }
     };
