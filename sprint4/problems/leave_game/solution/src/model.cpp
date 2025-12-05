@@ -25,6 +25,7 @@ void Map::AddOffice(Office office) {
     }
 }
 
+
 void Game::AddMap(Map map) {
     const size_t index = maps_.size();
     if (auto [it, inserted] = map_id_to_index_.emplace(map.GetId(), index); !inserted) {
