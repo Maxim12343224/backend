@@ -69,7 +69,7 @@ namespace {
             {"offsetY", serialize_number(office.GetOffset().dy)}
         };
     }
-} // namespace
+}
 
 StringResponse RequestHandler::MakeStringResponse(http::status status, std::string_view body,
                                                 const StringRequest& req, 
@@ -374,10 +374,10 @@ StringResponse RequestHandler::HandleTick(StringRequest&& req) {
                 "invalidArgument", "timeDelta must be non-negative", req);
         }
 
-        // Выполняем тик игры с заданной дельтой времени
+       
         game_.Tick(delta_seconds);
         
-        // Сохраняем состояние, если это необходимо
+        
         state_manager_.OnTick(std::chrono::milliseconds(static_cast<int>(delta_seconds * 1000)));
 
         return MakeStringResponse(http::status::ok, "{}", req);
@@ -398,15 +398,15 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
     int start = 0;
     int max_items = 100;
     
-    // Парсим URL с query-параметрами
+    
     std::string target = req.target().to_string();
     
-    // Убираем путь до records
+    
     if (target.starts_with("/api/v1/game/records")) {
         target = target.substr(std::string("/api/v1/game/records").length());
     }
     
-    // Парсим query-параметры
+    
     size_t query_start = target.find('?');
     if (query_start != std::string::npos) {
         std::string query_str = target.substr(query_start + 1);
@@ -424,7 +424,7 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
                         start = std::stoi(value);
                         if (start < 0) start = 0;
                     } catch (...) {
-                        // Используем значение по умолчанию
+                        
                     }
                 } else if (key == "maxItems") {
                     try {
@@ -435,7 +435,7 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
                                 "badRequest", "Max items cannot exceed 100", req);
                         }
                     } catch (...) {
-                        // Используем значение по умолчанию
+                        
                     }
                 }
             }
@@ -447,12 +447,12 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
         
         json::array records_json;
         for (const auto& record : records) {
-            // Форматируем playTime с 3 знаками после запятой
+            
             std::ostringstream oss;
             oss << std::fixed << std::setprecision(3) << record.play_time;
             std::string play_time_str = oss.str();
             
-            // Убираем лишние нули
+            
             play_time_str.erase(play_time_str.find_last_not_of('0') + 1, std::string::npos);
             if (play_time_str.back() == '.') {
                 play_time_str.pop_back();
@@ -479,7 +479,7 @@ StringResponse RequestHandler::HandleGetRecords(StringRequest&& req) {
 StringResponse RequestHandler::HandleApiRequest(StringRequest&& req) {
     std::string target_str = req.target().to_string();
     
-    // Проверяем, запрашиваются ли records
+    
     if (target_str.starts_with("/api/v1/game/records")) {
         return HandleGetRecords(std::move(req));
     }
@@ -743,4 +743,4 @@ bool RequestHandler::IsSubPath(const fs::path& path, const fs::path& base) {
         return false;
     }
 }
-}  // namespace http_handler
+}

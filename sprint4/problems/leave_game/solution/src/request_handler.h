@@ -185,4 +185,4 @@ namespace http_handler {
     private:
         RequestHandler base_handler_;
     };
-}  // namespace http_handler
+}

@@ -88,14 +88,14 @@ namespace {
         std::chrono::steady_clock::time_point last_tick_;
     };
 
-    // Функция для получения URL базы данных
+    
      std::string GetDatabaseUrl() {
-        // 1. Проверяем переменную окружения GAME_DB_URL (основная для тестов)
+        
         const char* env_url = std::getenv("GAME_DB_URL");
         if (env_url && strlen(env_url) > 0) {
             std::string url(env_url);
             
-            // Тесты могут использовать postgres:// вместо postgresql://
+            
             if (url.find("postgres://") == 0) {
                 url = "postgresql://" + url.substr(11);
                 std::cout << "INFO: Fixed URL format: " << url << std::endl;
@@ -105,7 +105,7 @@ namespace {
             return url;
         }
         
-        // 2. Проверяем другие переменные тестов
+        
         const char* postgres_host = std::getenv("POSTGRES_HOST");
         const char* postgres_user = std::getenv("POSTGRES_USER");
         const char* postgres_password = std::getenv("POSTGRES_PASSWORD");
@@ -123,12 +123,12 @@ namespace {
             return url;
         }
         
-        // 3. Для локальной разработки - используем in-memory
+        
         std::cout << "INFO: No PostgreSQL URL found. Using in-memory storage for retired players." << std::endl;
         return "";
     }
     
-    // Функция для проверки подключения к PostgreSQL с повторными попытками
+    
     bool WaitForPostgreSQL(const std::string& db_url, int max_attempts = 30) {
         if (db_url.empty()) {
             std::cout << "INFO: No database URL provided, skipping PostgreSQL connection." << std::endl;
@@ -149,7 +149,7 @@ namespace {
             } catch (const std::exception& e) {
                 std::cout << "WARNING: PostgreSQL not ready yet: " << e.what() << std::endl;
                 
-                // Ждем перед следующей попыткой
+                
                 if (attempt < max_attempts) {
                     std::this_thread::sleep_for(std::chrono::seconds(1));
                 }
@@ -160,7 +160,7 @@ namespace {
         return false;
     }
 
-}  // namespace
+}  
 
 int main(int argc, const char* argv[]) {
     po::options_description desc("Allowed options");
@@ -225,11 +225,11 @@ int main(int argc, const char* argv[]) {
 
         logger::InitLogging();
         
-        // Получаем URL базы данных
+        
         std::string db_url = GetDatabaseUrl();
         std::cout << "INFO: Final database URL: " << db_url << std::endl;
         
-        // Ждем пока PostgreSQL будет готов (особенно важно для тестов)
+        
         bool db_connected = WaitForPostgreSQL(db_url);
         
         if (!db_connected) {
@@ -238,7 +238,7 @@ int main(int argc, const char* argv[]) {
             std::cout << "WARNING: Records will not persist between server restarts" << std::endl;
         }
 
-        // Создаем игру
+        
         model::Game game;
         if (db_connected) {
             game.SetDatabaseUrl(db_url);
@@ -258,7 +258,7 @@ int main(int argc, const char* argv[]) {
 
         StateManager state_manager(game, state_file, save_state_period);
         
-        // Загружаем состояние, если указан файл состояния
+        
         if (!state_file.empty()) {
             try {
                 if (!state_manager.LoadState()) {

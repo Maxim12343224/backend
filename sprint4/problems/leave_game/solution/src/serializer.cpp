@@ -7,7 +7,7 @@ namespace serializer {
 
 namespace json = boost::json;
 
-// Безопасные методы для чтения чисел из JSON
+
 uint32_t SafeGetUint32(const json::value& value) {
     if (value.is_uint64()) {
         return static_cast<uint32_t>(value.as_uint64());
@@ -44,7 +44,7 @@ int SafeGetInt(const json::value& value) {
     }
 }
 
-// Сериализация DTO классов
+
 json::value SerializePoint(const model::Point& point) {
     return json::array{point.x, point.y};
 }
@@ -73,7 +73,7 @@ model::Direction DeserializeDirection(const json::value& dir_val) {
     return model::Direction::North;
 }
 
-// Сериализация DTO объектов
+
 json::value SerializeDog(const SerDog& dog) {
     return {
         {"name", dog.name},
@@ -193,7 +193,7 @@ SerGameSession DeserializeSession(const json::value& session_val) {
     };
 }
 
-// Основные методы сериализации/десериализации игры
+
 json::value GameSerializer::SerializeGame(const model::Game& game) {
     json::object state;
     
@@ -202,7 +202,7 @@ json::value GameSerializer::SerializeGame(const model::Game& game) {
     
     json::array sessions_json;
     
-    // Получаем все сессии
+    
     std::vector<std::shared_ptr<model::GameSession>> all_sessions;
     {
         auto& mutable_game = const_cast<model::Game&>(game);
@@ -219,7 +219,7 @@ json::value GameSerializer::SerializeGame(const model::Game& game) {
     }
     state["sessions"] = sessions_json;
     
-    // Сериализуем mapping токенов
+    
     json::object token_map;
     auto players = game.GetAllPlayers();
     for (const auto& player : players) {
@@ -227,7 +227,7 @@ json::value GameSerializer::SerializeGame(const model::Game& game) {
     }
     state["token_to_player"] = token_map;
     
-    // Сохраняем время выхода на пенсию
+    
     auto retirement_time = std::chrono::duration_cast<std::chrono::milliseconds>(game.GetRetirementTime());
     state["retirement_time_ms"] = retirement_time.count();
     
@@ -256,14 +256,14 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
             std::cout << "DEBUG: Set default_bag_capacity: " << SafeGetUint64(obj.at("default_bag_capacity")) << std::endl;
         }
 
-        // Восстанавливаем время выхода на пенсию
+        
         if (obj.contains("retirement_time_ms")) {
             auto retirement_time = std::chrono::milliseconds(SafeGetUint64(obj.at("retirement_time_ms")));
             game.SetRetirementTime(retirement_time);
             std::cout << "DEBUG: Set retirement_time: " << retirement_time.count() << "ms" << std::endl;
         }
 
-        // Создаем временный mapping для восстановления токенов
+        
         std::unordered_map<uint32_t, std::shared_ptr<model::Player>> player_id_to_player;
         std::vector<std::pair<std::string, std::shared_ptr<model::GameSession>>> sessions_to_add;
         
@@ -286,14 +286,14 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                     throw std::runtime_error("Map not found: " + ser_session.map_id);
                 }
 
-                // Создаем сессию с временем выхода на пенсию
+                
                 auto session = std::make_shared<model::GameSession>(
                     *map, ser_session.id, ser_session.dog_speed, false, 
                     game.GetLootGenerator(), game.GetMapBagCapacity(model::Map::Id{ser_session.map_id}),
                     game.GetRetirementTime()
                 );
 
-                // Настраиваем callback для уведомления об ушедших игроках
+                
                 session->SetRetiredPlayersCallback(
                     [&game](const auto& retired_players) {
                         game.HandlePlayerRetirement(retired_players);
@@ -304,7 +304,7 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                 session->SetLootValues(game.GetMapLootValues(model::Map::Id{ser_session.map_id}));
                 session->SetNextLostObjectId(ser_session.next_lost_object_id);
 
-                // Восстанавливаем игроков
+                
                 std::cout << "DEBUG: Restoring " << ser_session.players.size() << " players" << std::endl;
                 for (size_t player_idx = 0; player_idx < ser_session.players.size(); ++player_idx) {
                     const auto& ser_player = ser_session.players[player_idx];
@@ -316,9 +316,9 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                         session, std::move(dog), ser_player.id, ser_player.token, ser_player.bag_capacity
                     );
 
-                    // Устанавливаем временные метки
-                    player->SetJoinTime(0.0);  // Время входа будет установлено позже
-                    player->SetLastMoveTime(0.0);  // Время последнего движения
+                    
+                    player->SetJoinTime(0.0);
+                    player->SetLastMoveTime(0.0);
                     
                     player->AddScore(ser_player.score);
 
@@ -334,7 +334,7 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
                               << ", Stored in mapping: " << (player_id_to_player.count(ser_player.id) > 0) << std::endl;
                 }
 
-                // Восстанавливаем потерянные предметы
+                
                 for (const auto& ser_obj : ser_session.lost_objects) {
                     session->AddRestoredLostObject(ser_obj.ToModel());
                 }
@@ -346,7 +346,7 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
             std::cout << "DEBUG: No sessions found in JSON" << std::endl;
         }
 
-        // Восстанавливаем mapping токенов
+        
         if (obj.contains("token_to_player")) {
             const auto& token_map = obj.at("token_to_player").as_object();
             std::cout << "DEBUG: Found token_to_player with " << token_map.size() << " entries" << std::endl;
@@ -379,7 +379,7 @@ void GameSerializer::DeserializeGame(model::Game& game, const json::value& data)
             std::cout << "DEBUG: WARNING - No token_to_player found in saved state" << std::endl;
         }
 
-        // Добавляем сессии в игру
+        
         std::cout << "DEBUG: Adding " << sessions_to_add.size() << " sessions to game" << std::endl;
         for (auto& [map_id, session] : sessions_to_add) {
             game.AddRestoredSession(model::Map::Id{map_id}, session);
@@ -406,12 +406,12 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
             return false;
         }
 
-        // Создаем временный файл
+        
         auto temp_path = path;
         temp_path += ".tmp";
         std::cout << "DEBUG: Temp path: " << temp_path << std::endl;
         
-        // Проверяем и создаем родительскую директорию
+        
         auto parent_dir = temp_path.parent_path();
         std::cout << "DEBUG: Parent directory: " << parent_dir << std::endl;
         
@@ -428,7 +428,7 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
             }
         }
         
-        // Открываем временный файл для записи
+        
         std::cout << "DEBUG: Opening temp file for writing..." << std::endl;
         std::ofstream file(temp_path, std::ios::binary);
         if (!file.is_open()) {
@@ -438,17 +438,17 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         }
         std::cout << "DEBUG: Temp file opened successfully" << std::endl;
         
-        // Сериализуем состояние игры
+        
         std::cout << "DEBUG: Serializing game state..." << std::endl;
         auto state = SerializeGame(game);
         std::string json_str = json::serialize(state);
         std::cout << "DEBUG: JSON data size: " << json_str.size() << " bytes" << std::endl;
         
-        // Записываем данные во временный файл
+        
         std::cout << "DEBUG: Writing data to temp file..." << std::endl;
         file.write(json_str.c_str(), json_str.size());
         
-        // Проверяем успешность записи
+        
         if (!file.good()) {
             std::cout << "DEBUG: Write operation failed - cleaning up and returning false" << std::endl;
             file.close();
@@ -461,7 +461,7 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         file.close();
         std::cout << "DEBUG: Data written successfully to temp file" << std::endl;
         
-        // Проверяем, что временный файл создан
+        
         if (!std::filesystem::exists(temp_path)) {
             std::cout << "DEBUG: Temp file doesn't exist after writing - returning false" << std::endl;
             return false;
@@ -470,12 +470,12 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
         auto temp_file_size = std::filesystem::file_size(temp_path);
         std::cout << "DEBUG: Temp file size: " << temp_file_size << " bytes" << std::endl;
         
-        // Атомарно переименовываем временный файл в целевой
+        
         std::cout << "DEBUG: Renaming temp file to target..." << std::endl;
         std::filesystem::rename(temp_path, path);
         std::cout << "DEBUG: File renamed successfully" << std::endl;
         
-        // Проверяем, что целевой файл создан
+        
         if (!std::filesystem::exists(path)) {
             std::cout << "DEBUG: Target file doesn't exist after rename - returning false" << std::endl;
             return false;
@@ -490,7 +490,7 @@ bool GameSerializer::SaveToFile(const model::Game& game, const std::filesystem::
     } catch (const std::exception& e) {
         std::cout << "DEBUG: Exception in SaveToFile: " << e.what() << std::endl;
         try {
-            // Пытаемся удалить временный файл в случае ошибки
+            
             if (std::filesystem::exists(path.string() + ".tmp")) {
                 std::filesystem::remove(path.string() + ".tmp");
             }
@@ -545,4 +545,4 @@ bool GameSerializer::LoadFromFile(model::Game& game, const std::filesystem::path
     }
 }
 
-} // namespace serializer
+} 

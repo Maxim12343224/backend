@@ -333,7 +333,7 @@ namespace model {
         }
 
         ~RetiredPlayersRepository() {
-            // При уничтожении сохраняем все записи из памяти в БД, если она доступна
+            
             if (!memory_records_.empty()) {
                 TrySaveMemoryRecordsToDB();
             }
@@ -343,18 +343,18 @@ namespace model {
             std::lock_guard lock(mutex_);
 
             if (use_memory_ || db_url_.empty()) {
-                // Добавляем в память
+                
                 AddToMemory(name, score, play_time);
 
-                // Пытаемся также сохранить в БД, если она доступна
+                
                 if (!db_url_.empty() && !use_memory_) {
                     TrySaveToDatabase(name, score, play_time);
                 }
             }
             else {
-                // Пытаемся сохранить в БД
+                
                 if (!TrySaveToDatabase(name, score, play_time)) {
-                    // Если не удалось, добавляем в память и помечаем что используем память
+                    
                     use_memory_ = true;
                     AddToMemory(name, score, play_time);
                 }
@@ -372,17 +372,17 @@ namespace model {
                 return GetFromMemory(start, max_items);
             }
 
-            // Пытаемся получить данные из БД
+            
             auto db_records = TryGetFromDatabase(start, max_items);
             if (!db_records) {
-                // Если не удалось, возвращаем из памяти
+                
                 return GetFromMemory(start, max_items);
             }
 
             return *db_records;
         }
 
-        // Проверка соединения с БД
+        
         bool CheckConnection() {
             if (db_url_.empty()) {
                 return false;
@@ -411,7 +411,7 @@ namespace model {
             }
 
             try {
-                // Проверяем соединение с БД
+                
                 auto conn = std::make_unique<pqxx::connection>(db_url_);
                 if (!conn->is_open()) {
                     throw std::runtime_error("Cannot open database connection");
@@ -419,7 +419,7 @@ namespace model {
 
                 pqxx::work txn(*conn);
 
-                // Создаем таблицу если не существует
+                
                 txn.exec(
                     "CREATE TABLE IF NOT EXISTS retired_players ("
                     "id SERIAL PRIMARY KEY,"
@@ -430,7 +430,7 @@ namespace model {
                     ")"
                 );
 
-                // Создаем индекс для быстрой сортировки
+                
                 txn.exec(
                     "CREATE INDEX IF NOT EXISTS idx_retired_players_score ON retired_players "
                     "(score DESC, play_time ASC, name ASC)"
@@ -438,7 +438,7 @@ namespace model {
 
                 txn.commit();
 
-                // Успешно подключились к БД
+                
                 use_memory_ = false;
 
             }
@@ -506,7 +506,7 @@ namespace model {
         void AddToMemory(const std::string& name, int score, double play_time) {
             memory_records_.emplace_back(name, score, play_time);
 
-            // Сортируем записи в памяти
+            
             std::sort(memory_records_.begin(), memory_records_.end(),
                 [](const auto& a, const auto& b) {
                     if (std::get<1>(a) != std::get<1>(b))
@@ -562,7 +562,7 @@ namespace model {
                 }
 
                 txn.commit();
-                memory_records_.clear(); // Очищаем память после успешного сохранения
+                memory_records_.clear();
 
             }
             catch (const std::exception& e) {
@@ -826,4 +826,4 @@ namespace model {
 
     std::string DirectionToString(Direction dir);
 
-}  // namespace model
+}
