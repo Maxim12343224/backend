@@ -18,6 +18,7 @@
 #include <boost/shared_ptr.hpp>
 #include <boost/make_shared.hpp>
 
+
 namespace logger {
     namespace logging = boost::log;
     namespace sinks = boost::log::sinks;
