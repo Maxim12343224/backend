@@ -19,6 +19,7 @@ namespace http_server {
             beast::bind_front_handler(&Session::OnRead, shared_from_this()));
     }
 
+    
     void Session::OnRead(beast::error_code ec, std::size_t bytes_read) {
         if (ec == http::error::end_of_stream) {
             return Close();
