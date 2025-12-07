@@ -20,6 +20,7 @@ namespace http_server {
         std::string remote_address,
         std::function<void(http::response<http::string_body>&&)>&& send)>;
 
+
     class Session : public std::enable_shared_from_this<Session> {
     public:
         template <typename Handler>
