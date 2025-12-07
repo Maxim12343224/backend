@@ -16,6 +16,7 @@ namespace json_loader {
                 model::Point start{
                     static_cast<model::Coord>(road_obj.at("x0").as_int64()),
                     static_cast<model::Coord>(road_obj.at("y0").as_int64())
+                    
                 };
                 return model::Road(model::Road::HORIZONTAL, start,
                     static_cast<model::Coord>(road_obj.at("x1").as_int64()));
